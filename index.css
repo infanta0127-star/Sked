@@ -1213,3 +1213,114 @@ body {
   font-weight: 600;
   box-shadow: 0 3px 12px rgba(216, 0, 255, 0.3);
 }
+
+/* Tab 1 Native Mitigation Planner Styling */
+.party-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.party-grid select {
+  background-color: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: #fff;
+  padding: 6px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  width: 100%;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.party-grid select:focus {
+  border-color: var(--color-gcd);
+}
+
+.player-track-wrapper {
+  display: flex;
+  min-height: 58px;
+  position: relative;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.player-track-header {
+  width: 180px;
+  min-width: 180px;
+  background-color: var(--bg-sidebar);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  padding: 0 15px;
+  gap: 10px;
+  flex-shrink: 0;
+  z-index: 2;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-main);
+  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.player-track-header img {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  background-color: rgba(0, 0, 0, 0.2);
+}
+
+.player-track-content {
+  flex: 1;
+  height: 58px;
+  position: relative;
+  background-color: rgba(255, 255, 255, 0.005);
+}
+
+.player-track-content.drag-hover {
+  background-color: rgba(0, 240, 255, 0.04);
+}
+
+.placed-mit-pill {
+  position: absolute;
+  top: 12px;
+  height: 34px;
+  background: linear-gradient(135deg, rgba(216, 0, 255, 0.2), rgba(0, 240, 255, 0.2));
+  border: 1.5px solid var(--color-role);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  gap: 6px;
+  cursor: grab;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
+  user-select: none;
+  z-index: 4;
+}
+
+.placed-mit-pill:active {
+  cursor: grabbing;
+}
+
+.placed-mit-pill:hover {
+  border-color: #fff;
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.4);
+  z-index: 10;
+}
+
+.placed-mit-pill img {
+  width: 20px;
+  height: 20px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.placed-mit-pill-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

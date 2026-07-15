@@ -256,26 +256,29 @@ function setupEventListeners() {
   // Import from team mitigation planner event listener
   if (btnImportMit) {
     btnImportMit.addEventListener('click', () => {
-      const rawData = localStorage.getItem('ffxiv_planner_data');
-      if (!rawData) {
-        alert('在團隊減排頁籤中尚未有任何排減傷存檔資料！請先在團隊減傷頁排好減傷。');
+      if (!window.mitParty || !window.mitTimelineSkills) {
+        alert('尚未在團隊減排頁籤中規劃減傷，請先在「團隊減傷排軸」中規劃。');
         return;
       }
-      try {
-        const teamData = JSON.parse(rawData);
-        // Translate key fields from ffxiv_planner_data to matching keys for import
-        const mappedData = {
-          duty: teamData.selectedDutyKey,
-          party: teamData.party,
-          mits: teamData.mitMap,
-          selectedVariants: teamData.selectedVariants,
-          customRowsByDuty: teamData.customRowsByDuty
-        };
-        importFfxivMitigationPlan(mappedData);
-      } catch (err) {
-        alert(`同步團隊減排失敗: ${err.message}`);
-      }
+      const mappedData = {
+        duty: document.getElementById('mit-duty-select').value,
+        party: window.mitParty,
+        mits: window.mitTimelineSkills,
+        customMechanics: window.mitBossMechanics || []
+      };
+      importFfxivMitigationPlan(mappedData);
     });
+  }
+
+  // Hook up Tab 2 Cloud Save & Load
+  const btnCloudSave = document.getElementById('btn-cloud-save');
+  const btnCloudLoad = document.getElementById('btn-cloud-load');
+
+  if (btnCloudSave) {
+    btnCloudSave.addEventListener('click', saveIndivPlanToSupabase);
+  }
+  if (btnCloudLoad) {
+    btnCloudLoad.addEventListener('click', loadIndivPlansModal);
   }
 
   // Job selection change
@@ -1533,40 +1536,11 @@ async function importFfxivMitigationPlan(data) {
       console.warn('無法載入副本詳細資料:', e);
     }
   }
-  
-  const partySkills = {};
-  for (const key in data.mits) {
-    if (!key.startsWith(`${dutyKey}-`)) continue;
-    
-    const match = key.match(/-p(\d+)-/);
-    if (!match) continue;
-    
-    const partyIdx = parseInt(match[1], 10);
-    const jobAbbrev = data.party[partyIdx];
-    if (!jobAbbrev) continue;
-    
-    const skillPartMatch = key.match(/-p\d+-(.+)$/);
-    if (!skillPartMatch) continue;
-    const skillKey = skillPartMatch[1];
-    
-    const casts = data.mits[key];
-    if (!Array.isArray(casts) || casts.length === 0) continue;
-    
-    if (!partySkills[partyIdx]) {
-      partySkills[partyIdx] = {
-        jobAbbrev: jobAbbrev,
-        skills: []
-      };
-    }
-    partySkills[partyIdx].skills.push({
-      key: skillKey,
-      casts: casts
-    });
-  }
-  
+
   const activePartyMembers = [];
   data.party.forEach((jobAbbrev, idx) => {
-    if (partySkills[idx]) {
+    const hasCasts = data.mits.some(c => c.slotIndex === idx);
+    if (hasCasts) {
       activePartyMembers.push({
         index: idx,
         jobAbbrev: jobAbbrev,
@@ -1574,99 +1548,68 @@ async function importFfxivMitigationPlan(data) {
       });
     }
   });
-  
+
   if (activePartyMembers.length === 0) {
-    alert('此排軸檔案中沒有任何特職的減傷排招資料！');
+    alert('團隊減排計畫中沒有任何特職的減傷施放紀錄！');
     return;
   }
-  
+
   showJobSelectionModal(activePartyMembers, async (selectedMember) => {
     const jobInfo = selectedMember.jobInfo;
     const jobId = jobInfo.id;
-    const partyIdx = selectedMember.index;
     
     currentJobId = jobId;
     jobSelect.value = jobId;
     loadJobSkills(jobId);
     
+    // Setup Boss Mechanics
     if (dutyObj && dutyData) {
       currentDutyFile = dutyObj.file;
       dutySelect.value = currentDutyFile;
       loadDutyTimeline(dutyData);
-      
-      if (data.customRowsByDuty && data.customRowsByDuty[dutyKey]) {
-        data.customRowsByDuty[dutyKey].forEach(row => {
-          const time = parseDutyTime(row.hitTime || row.castingTime);
-          const id = row.id || ('mech_custom_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5));
-          if (!bossMechanics.some(m => m.time === time && m.name === row.skill)) {
-            bossMechanics.push({
-              id,
-              time,
-              name: row.skill
-            });
-          }
-        });
-        bossMechanics.sort((a, b) => a.time - b.time);
-      }
     } else {
       currentDutyFile = '';
       dutySelect.value = '';
       bossMechanics = [];
     }
     
-    timelineSkills = [];
-    const jobSkills = partySkills[partyIdx].skills;
-    const jobDb = skillsDatabase[jobId];
+    // Also copy custom mechanics from the team plan
+    if (data.customMechanics && data.customMechanics.length > 0) {
+      bossMechanics = JSON.parse(JSON.stringify(data.customMechanics));
+      bossMechanics.sort((a, b) => a.time - b.time);
+    }
     
+    timelineSkills = [];
+    const jobDb = skillsDatabase[jobId];
     if (jobDb) {
-      let combinedTimeline = [];
-      if (dutyData && dutyData.timeline) {
-        combinedTimeline = getCombinedTimeline(
-          dutyData.timeline, 
-          data.customRowsByDuty ? data.customRowsByDuty[dutyKey] : null
-        );
-      }
-      
-      jobSkills.forEach(js => {
-        const internalSkillName = SKILL_NAME_MAP[js.key];
-        if (!internalSkillName) {
-          console.warn('未知的減傷技能縮寫:', js.key);
-          return;
-        }
-        
-        const skill = jobDb.skills.find(s => s.name === internalSkillName);
+      // Filter casts for selected player slot
+      const casts = data.mits.filter(c => c.slotIndex === selectedMember.index);
+      casts.forEach(c => {
+        const chineseName = SKILL_NAME_MAP[c.skillKey] || c.skillKey;
+        const skill = jobDb.skills.find(s => s.name === chineseName);
         if (!skill) {
-          console.warn('在技能資料庫中找不到技能:', internalSkillName);
+          console.warn('在技能資料庫中找不到技能:', chineseName);
           return;
         }
         
-        const parsedRecast = parseTimeToSeconds(skill.recast);
         const parsedCast = parseTimeToSeconds(skill.cast);
         const isGcd = (skill.classification === '戰技' || skill.classification === '魔法');
+        const instanceId = 'skill_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
         
-        js.casts.forEach(castIdx => {
-          let startTime = 0;
-          if (combinedTimeline.length > 0) {
-            startTime = getEventTimeByIndex(combinedTimeline, castIdx);
-          }
-          
-          const instanceId = 'skill_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-          
-          timelineSkills.push({
-            instanceId,
-            skillId: skill.id,
-            name: skill.name,
-            icon: skill.icon,
-            classification: skill.classification,
-            cast: skill.cast,
-            recast: skill.recast,
-            startTime: startTime,
-            duration: Math.max(parsedCast, isGcd ? timelineGCDDuration : 0.6),
-            track: isGcd ? 'gcd' : 'ogcd',
-            parentGcdId: null,
-            relativeOffset: 0,
-            clip: 0
-          });
+        timelineSkills.push({
+          instanceId,
+          skillId: skill.id,
+          name: skill.name,
+          icon: skill.icon,
+          classification: skill.classification,
+          cast: skill.cast,
+          recast: skill.recast,
+          startTime: c.startTime,
+          duration: Math.max(parsedCast, isGcd ? timelineGCDDuration : 0.6),
+          track: isGcd ? 'gcd' : 'ogcd',
+          parentGcdId: null,
+          relativeOffset: 0,
+          clip: 0
         });
       });
     }
@@ -1674,7 +1617,7 @@ async function importFfxivMitigationPlan(data) {
     recalculateTimeline();
     renderTimeline();
     autoSave();
-    alert(`成功匯入 ${jobInfo.name} 的減傷排招！`);
+    alert(`已成功將團隊減傷中 ${jobInfo.name} (Slot ${selectedMember.index + 1}) 的減傷排招載入到個人時間軸！`);
   });
 }
 
@@ -2036,4 +1979,173 @@ function showTooltip(e, skill) {
 
 function hideTooltip() {
   tooltip.style.display = 'none';
+}
+
+// ── Supabase Integration for Individual Plans ──
+let currentIndivPlanId = null;
+let currentIndivEditToken = null;
+let currentIndivReadToken = null;
+let currentIndivPlanName = '未命名個人排軸';
+
+async function saveIndivPlanToSupabase() {
+  const sb = window.supabaseClient;
+  if (!sb) {
+    alert('資料庫尚未就緒！請先於團隊減排頁簽中登入 Discord。');
+    return;
+  }
+  
+  // Retrieve user session
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) {
+    alert('請先在團隊減傷排軸頁面登入 Discord 帳號，才能儲存個人排軸至雲端！');
+    return;
+  }
+
+  const name = prompt('請輸入個人技能排軸計畫名稱:', currentIndivPlanName);
+  if (name === null) return;
+  if (name.trim() === '') {
+    alert('計畫名稱不能為空！');
+    return;
+  }
+  currentIndivPlanName = name.trim();
+
+  try {
+    if (currentIndivPlanId) {
+      // Update existing plan
+      const { error } = await sb.from('individual_plans')
+        .update({
+          name: currentIndivPlanName,
+          skills: timelineSkills,
+          gcd: timelineGCDDuration,
+          updated_at: new Date()
+        })
+        .eq('id', currentIndivPlanId);
+
+      if (error) throw error;
+      alert('雲端個人排軸更新成功！');
+    } else {
+      // Create new individual plan
+      const { data, error } = await sb.from('individual_plans')
+        .insert({
+          owner_id: session.user.id,
+          job_id: currentJobId,
+          name: currentIndivPlanName,
+          skills: timelineSkills,
+          gcd: timelineGCDDuration
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      currentIndivPlanId = data.id;
+      currentIndivEditToken = data.edit_token;
+      currentIndivReadToken = data.read_token;
+      alert('雲端個人排軸建立成功！');
+    }
+  } catch (err) {
+    alert(`雲端儲存失敗: ${err.message}`);
+  }
+}
+
+async function loadIndivPlansModal() {
+  const sb = window.supabaseClient;
+  if (!sb) {
+    alert('資料庫尚未就緒！請先於團隊減排頁簽中登入 Discord。');
+    return;
+  }
+
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) {
+    alert('請先在團隊減傷排軸頁面登入 Discord 以讀取您的雲端個人排軸！');
+    return;
+  }
+
+  try {
+    const { data: plans, error } = await sb.from('individual_plans')
+      .select('id, name, job_id, updated_at')
+      .eq('owner_id', session.user.id)
+      .order('updated_at', { ascending: false });
+
+    if (error) throw error;
+
+    const savesModal = document.getElementById('saves-modal');
+    const savesList = document.getElementById('saves-list');
+    
+    savesList.innerHTML = '';
+    if (plans.length === 0) {
+      savesList.innerHTML = '<li class="empty-state">尚無雲端儲存紀錄</li>';
+    } else {
+      plans.forEach(plan => {
+        const li = document.createElement('li');
+        li.style.display = 'flex';
+        li.style.justifyContent = 'space-between';
+        li.style.padding = '8px 12px';
+        li.style.borderBottom = '1px solid var(--border-color)';
+        
+        li.innerHTML = `
+          <div style="cursor:pointer; flex:1;">
+            <strong>${plan.name}</strong><br/>
+            <span style="font-size:10px; color:var(--color-text-muted);">職業: ${plan.job_id} | 更新於 ${new Date(plan.updated_at).toLocaleString()}</span>
+          </div>
+          <button class="btn btn-danger btn-mini" style="padding: 2px 6px;" title="刪除"><i class="fa-solid fa-trash"></i></button>
+        `;
+        
+        li.querySelector('div').addEventListener('click', async () => {
+          await loadIndivPlanById(plan.id);
+          savesModal.classList.remove('active');
+        });
+        
+        li.querySelector('button').addEventListener('click', async (e) => {
+          e.stopPropagation();
+          if (confirm(`確定要刪除「${plan.name}」嗎？`)) {
+            const { error: delErr } = await sb.from('individual_plans').delete().eq('id', plan.id);
+            if (delErr) {
+              alert('刪除失敗');
+            } else {
+              li.remove();
+            }
+          }
+        });
+        
+        savesList.appendChild(li);
+      });
+    }
+    
+    savesModal.classList.add('active');
+  } catch (err) {
+    alert(`讀取雲端清單失敗: ${err.message}`);
+  }
+}
+
+async function loadIndivPlanById(planId) {
+  const sb = window.supabaseClient;
+  if (!sb) return;
+
+  try {
+    const { data: plan, error } = await sb.from('individual_plans')
+      .select('*')
+      .eq('id', planId)
+      .single();
+
+    if (error) throw error;
+
+    currentIndivPlanId = plan.id;
+    currentIndivEditToken = plan.edit_token;
+    currentIndivReadToken = plan.read_token;
+    currentIndivPlanName = plan.name;
+
+    currentJobId = plan.job_id;
+    jobSelect.value = plan.job_id;
+    loadJobSkills(plan.job_id);
+
+    timelineSkills = plan.skills || [];
+    timelineGCDDuration = parseFloat(plan.gcd) || 2.50;
+
+    recalculateTimeline();
+    renderTimeline();
+    alert(`已載入個人排軸「${plan.name}」！`);
+  } catch (err) {
+    alert(`載入計畫失敗: ${err.message}`);
+  }
 }

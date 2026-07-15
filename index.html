@@ -69,6 +69,8 @@
         <div class="btn-group">
           <button id="btn-save" class="btn btn-primary" title="存檔至瀏覽器"><i class="fa-solid fa-floppy-disk"></i> 儲存</button>
           <button id="btn-load-list" class="btn btn-secondary" title="開啟已存檔案"><i class="fa-solid fa-folder-open"></i> 開啟</button>
+          <button id="btn-cloud-save" class="btn btn-primary" title="儲存至雲端資料庫"><i class="fa-solid fa-cloud-arrow-up"></i> 雲端儲存</button>
+          <button id="btn-cloud-load" class="btn btn-secondary" title="讀取雲端存檔"><i class="fa-solid fa-cloud-arrow-down"></i> 雲端讀取</button>
           <button id="btn-import-mit" class="btn btn-accent" title="從團隊減排頁籤載入規劃"><i class="fa-solid fa-rotate"></i> 從團隊減排載入</button>
           <button id="btn-export-json" class="btn btn-secondary" title="匯出 JSON 檔"><i class="fa-solid fa-file-export"></i> 匯出</button>
           <button id="btn-import-json" class="btn btn-secondary" title="匯入 JSON 檔"><i class="fa-solid fa-file-import"></i> 匯入</button>
@@ -79,9 +81,87 @@
       </div>
     </header>
 
-    <!-- Tab 1 View: Mitigation Planner iframe -->
-    <div id="mit-planning-view" class="iframe-container">
-      <iframe id="mit-planning-iframe" src="./mit_planning/index.html"></iframe>
+    <!-- Tab 1 View: Native Mitigation Planner Workspace -->
+    <div id="mit-planning-view" class="app-workspace">
+      
+      <!-- Left Sidebar: Party Comp & Mitigation Skills -->
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <h2>隊伍組成 (Party)</h2>
+          <div class="party-grid" id="party-select-grid">
+            <!-- 8 Dropdowns will be dynamically populated in mit_timeline.js -->
+          </div>
+          <h2 style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 15px;">全隊減排技能</h2>
+          <div class="search-box">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="mit-skill-search" placeholder="搜尋減傷技能...">
+          </div>
+        </div>
+        <div class="skills-list-container" id="mit-skills-list">
+          <div class="empty-state">
+            <i class="fa-solid fa-arrow-up"></i>
+            <p>請先設定隊伍組成，以載入減傷技能</p>
+          </div>
+        </div>
+      </aside>
+      
+      <!-- Center: Mitigation Timeline Editor -->
+      <section class="timeline-section">
+        
+        <!-- Tab 1 Toolbar (Specific to Mitigation Planner) -->
+        <div class="toolbar" style="border-bottom: 1px solid var(--border-color); padding: 10px 20px; border-radius: 0;">
+          <div class="control-group">
+            <label for="mit-duty-select"><i class="fa-solid fa-crosshairs"></i> 選擇副本:</label>
+            <select id="mit-duty-select" class="custom-select">
+              <option value="">無副本 (自訂時間軸)</option>
+            </select>
+          </div>
+          
+          <div class="divider"></div>
+          
+          <div class="btn-group">
+            <button id="mit-btn-save" class="btn btn-primary" title="儲存至雲端資料庫"><i class="fa-solid fa-cloud-arrow-up"></i> 儲存至雲端</button>
+            <button id="mit-btn-load" class="btn btn-secondary" title="開啟已儲存的雲端計畫"><i class="fa-solid fa-cloud-arrow-down"></i> 讀取雲端</button>
+            <button id="mit-btn-share" class="btn btn-accent" title="生成分享連結"><i class="fa-solid fa-share-nodes"></i> 分享連結</button>
+          </div>
+        </div>
+        
+        <!-- Timeline Workspace Area -->
+        <div class="timeline-container-outer">
+          <div class="timeline-editor" id="mit-timeline-editor">
+            
+            <!-- Time Ruler Header -->
+            <div class="timeline-ruler" id="mit-timeline-ruler"></div>
+            
+            <!-- Boss Mechanic Track -->
+            <div class="timeline-track-wrapper boss-track-wrapper">
+              <div class="track-info">
+                <span class="track-title"><i class="fa-solid fa-skull-crossbones"></i> 首領機制 (Boss)</span>
+                <button id="mit-btn-add-mechanic" class="btn-mini-add" title="新增機制"><i class="fa-solid fa-plus"></i></button>
+              </div>
+              <div class="timeline-track track-content" id="mit-boss-track" data-track-type="boss"></div>
+            </div>
+            
+            <!-- Player Mitigation Tracks Container -->
+            <div id="mit-player-tracks-container">
+              <!-- 8 Player Tracks will be dynamically rendered here -->
+            </div>
+            
+            <!-- Active Playhead Line -->
+            <div class="playhead" id="mit-playhead"></div>
+          </div>
+        </div>
+        
+        <!-- Timeline Status / Trash Bin -->
+        <div class="timeline-bottom-bar">
+          <div class="timeline-status-info">
+            <span id="mit-timeline-length-display"><i class="fa-regular fa-clock"></i> 軸總長: 0s</span>
+          </div>
+          <div class="drag-trash" id="mit-drag-trash">
+            <i class="fa-solid fa-trash"></i> 拖曳至此處刪除技能 / 機制
+          </div>
+        </div>
+      </section>
     </div>
     
     <!-- Tab 2 View: Timeline Workspace -->
@@ -232,5 +312,6 @@
 
   <!-- Main JavaScript File -->
   <script src="timeline.js"></script>
+  <script type="module" src="mit_timeline.js"></script>
 </body>
 </html>
