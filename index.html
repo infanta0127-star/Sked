@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FFXIV 戰鬥技能排軸時間軸工具</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <!-- FontAwesome for Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Vanilla CSS Stylesheet -->
+  <link rel="stylesheet" href="index.css">
+</head>
+<body>
+  <div class="app-container">
+    
+    <!-- Top Navigation Header -->
+    <header class="app-header">
+      <div class="logo-area">
+        <i class="fa-solid fa-timeline logo-icon"></i>
+        <h1>FFXIV 戰鬥排軸助手 <span class="version-tag">v1.0 (Patch 7.1)</span></h1>
+        
+        <!-- Tab Switcher -->
+        <div class="header-tabs">
+          <button id="tab-btn-mit" class="header-tab-btn active"><i class="fa-solid fa-users"></i> 團隊減傷排軸</button>
+          <button id="tab-btn-timeline" class="header-tab-btn"><i class="fa-solid fa-user-ninja"></i> 個人技能排軸</button>
+        </div>
+      </div>
+      
+      <!-- Toolbar Controls (Starts hidden because Tab 1 is default) -->
+      <div id="timeline-toolbar" class="toolbar hidden">
+        <div class="control-group">
+          <label for="job-select"><i class="fa-solid fa-shield-halved"></i> 選擇職業:</label>
+          <select id="job-select" class="custom-select">
+            <option value="" disabled selected>請選擇特職...</option>
+            <optgroup label="防護職業 (Tank)" id="tank-group"></optgroup>
+            <optgroup label="治療職業 (Healer)" id="healer-group"></optgroup>
+            <optgroup label="近戰職業 (Melee DPS)" id="melee-group"></optgroup>
+            <optgroup label="遠程物理 (Physical Ranged)" id="ranged-group"></optgroup>
+            <optgroup label="遠程魔法 (Magical Ranged)" id="caster-group"></optgroup>
+          </select>
+        </div>
+        
+        <div class="control-group">
+          <label for="duty-select"><i class="fa-solid fa-crosshairs"></i> 選擇副本:</label>
+          <select id="duty-select" class="custom-select">
+            <option value="" selected>無副本 (自訂時間軸)</option>
+          </select>
+        </div>
+        
+        <div class="control-group">
+          <label for="gcd-input"><i class="fa-solid fa-clock"></i> 玩家 GCD (秒):</label>
+          <input type="number" id="gcd-input" class="custom-input" value="2.50" step="0.01" min="1.50" max="3.00">
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="btn-group">
+          <button id="btn-play" class="btn btn-secondary" title="播放預覽"><i class="fa-solid fa-play"></i> 播放</button>
+          <button id="btn-stop" class="btn btn-secondary" title="停止"><i class="fa-solid fa-stop"></i></button>
+          <button id="btn-zoom-in" class="btn btn-icon" title="放大"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
+          <button id="btn-zoom-out" class="btn btn-icon" title="縮小"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="btn-group">
+          <button id="btn-save" class="btn btn-primary" title="存檔至瀏覽器"><i class="fa-solid fa-floppy-disk"></i> 儲存</button>
+          <button id="btn-load-list" class="btn btn-secondary" title="開啟已存檔案"><i class="fa-solid fa-folder-open"></i> 開啟</button>
+          <button id="btn-import-mit" class="btn btn-accent" title="從團隊減排頁籤載入規劃"><i class="fa-solid fa-rotate"></i> 從團隊減排載入</button>
+          <button id="btn-export-json" class="btn btn-secondary" title="匯出 JSON 檔"><i class="fa-solid fa-file-export"></i> 匯出</button>
+          <button id="btn-import-json" class="btn btn-secondary" title="匯入 JSON 檔"><i class="fa-solid fa-file-import"></i> 匯入</button>
+          <button id="btn-export-text" class="btn btn-secondary" title="複製文字排軸"><i class="fa-solid fa-copy"></i> 複製文字軸</button>
+          <button id="btn-export-img" class="btn btn-accent" title="下載排軸圖片"><i class="fa-solid fa-image"></i> 匯出長圖</button>
+          <button id="btn-clear" class="btn btn-danger" title="清空時間軸"><i class="fa-solid fa-trash-can"></i></button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Tab 1 View: Mitigation Planner iframe -->
+    <div id="mit-planning-view" class="iframe-container">
+      <iframe id="mit-planning-iframe" src="./mit_planning/index.html"></iframe>
+    </div>
+    
+    <!-- Tab 2 View: Timeline Workspace -->
+    <div id="timeline-workspace-view" class="hidden">
+      <!-- Main Content Workspace -->
+      <main class="app-workspace">
+      
+      <!-- Left Sidebar: Skill List & Filters -->
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <h2>技能列表</h2>
+          <div class="search-box">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="skill-search" placeholder="搜尋技能名稱...">
+          </div>
+          <div class="filter-tabs">
+            <button class="tab-btn active" data-filter="all">全部</button>
+            <button class="tab-btn" data-filter="gcd">GCD</button>
+            <button class="tab-btn" data-filter="ogcd">oGCD</button>
+            <button class="tab-btn" data-filter="role">職能</button>
+          </div>
+        </div>
+        <div class="skills-list-container" id="skills-list">
+          <div class="empty-state">
+            <i class="fa-solid fa-arrow-up"></i>
+            <p>請先在上方選擇特職，以載入技能列表</p>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Center & Right: Timeline Editor -->
+      <section class="timeline-section">
+        
+        <!-- Timeline Workspace Area -->
+        <div class="timeline-container-outer">
+          
+          <!-- Timeline View Ruler and tracks -->
+          <div class="timeline-editor" id="timeline-editor">
+            
+            <!-- Time Ruler Header -->
+            <div class="timeline-ruler" id="timeline-ruler">
+              <!-- Dynamically populated seconds tick markers -->
+            </div>
+            
+            <!-- Boss Mechanic Track -->
+            <div class="timeline-track-wrapper boss-track-wrapper">
+              <div class="track-info">
+                <span class="track-title"><i class="fa-solid fa-skull-crossbones"></i> 首領機制 (Boss)</span>
+                <button id="btn-add-mechanic" class="btn-mini-add" title="新增機制"><i class="fa-solid fa-plus"></i></button>
+              </div>
+              <div class="timeline-track track-content" id="boss-track" data-track-type="boss">
+                <!-- Boss mechanics markers are placed here -->
+              </div>
+            </div>
+
+            <!-- Buff Alignment Track -->
+            <div class="timeline-track-wrapper buff-track-wrapper">
+              <div class="track-info">
+                <span class="track-title"><i class="fa-solid fa-wand-magic-sparkles"></i> 團輔覆蓋 (Buffs)</span>
+              </div>
+              <div class="timeline-track track-content" id="buff-track" data-track-type="buff">
+                <!-- Group Buff spans are overlayed here -->
+              </div>
+            </div>
+
+            <!-- GCD Skill Track -->
+            <div class="timeline-track-wrapper gcd-track-wrapper">
+              <div class="track-info">
+                <span class="track-title"><i class="fa-solid fa-bolt"></i> 戰技 / 魔法 (GCD)</span>
+              </div>
+              <div class="timeline-track track-content" id="gcd-track" data-track-type="gcd">
+                <!-- GCD skills are slotted here -->
+                <div class="gcd-slots-bg" id="gcd-slots-bg"></div>
+              </div>
+            </div>
+
+            <!-- oGCD Skill Track -->
+            <div class="timeline-track-wrapper ogcd-track-wrapper">
+              <div class="track-info">
+                <span class="track-title"><i class="fa-solid fa-hourglass-start"></i> 能力技 (oGCD)</span>
+              </div>
+              <div class="timeline-track track-content" id="ogcd-track" data-track-type="ogcd">
+                <!-- oGCD skills are placed here -->
+              </div>
+            </div>
+
+            <!-- Active Playhead Line -->
+            <div class="playhead" id="playhead"></div>
+          </div>
+        </div>
+
+        <!-- Drag-Drop Trash Bin Area -->
+        <div class="timeline-bottom-bar">
+          <div class="timeline-status-info">
+            <span id="timeline-length-display"><i class="fa-regular fa-clock"></i> 軸總長: 0s</span>
+            <span id="gcd-clip-display" class="safe"><i class="fa-solid fa-circle-check"></i> GCD 無卡頓</span>
+          </div>
+          <div class="drag-trash" id="drag-trash">
+            <i class="fa-solid fa-trash"></i> 拖曳至此處刪除技能 / 機制
+          </div>
+        </div>
+      </section>
+
+      </main>
+    </div>
+    
+    <!-- Skill Tooltip Popup (Custom styled card) -->
+    <div class="skill-tooltip" id="skill-tooltip">
+      <div class="tooltip-header">
+        <img class="tooltip-icon" src="" alt="">
+        <div>
+          <h4 class="tooltip-name">技能名稱</h4>
+          <span class="tooltip-badge">戰技</span>
+        </div>
+      </div>
+      <div class="tooltip-meta">
+        <div><strong>學習條件:</strong> <span class="tooltip-lv">Lv.1</span></div>
+        <div><strong>消費 MP:</strong> <span class="tooltip-mp">-</span></div>
+        <div><strong>詠唱 / 冷卻:</strong> <span class="tooltip-times">即時 / 2.5s</span></div>
+        <div><strong>距離 / 範圍:</strong> <span class="tooltip-range">3m / 0m</span></div>
+      </div>
+      <div class="tooltip-description">
+        技能效果敘述文字。
+      </div>
+    </div>
+
+    <!-- Modal for Saved Timelines List -->
+    <div class="modal" id="saves-modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3><i class="fa-solid fa-folder-open"></i> 已儲存的排軸</h3>
+          <span class="modal-close" id="saves-modal-close">&times;</span>
+        </div>
+        <div class="modal-body">
+          <ul class="saves-list" id="saves-list">
+            <!-- List of stored timeline plans -->
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hidden Input for Import JSON File -->
+    <input type="file" id="file-import-input" accept=".json" style="display: none;">
+
+    <!-- Hidden Canvas for Image Export -->
+    <canvas id="export-canvas" style="display: none;"></canvas>
+  </div>
+
+  <!-- Main JavaScript File -->
+  <script src="timeline.js"></script>
+</body>
+</html>

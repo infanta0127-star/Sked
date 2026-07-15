@@ -1,0 +1,157 @@
+{
+  "duty": "u_eden_P1",
+  "party": [
+    "DRK",
+    "PLD",
+    "AST",
+    "SGE",
+    "RPR",
+    "SAM",
+    "BRD",
+    "PCT"
+  ],
+  "mits": {
+    "m4s-p1-pld_rep": [
+      1,
+      15
+    ],
+    "m4s-p1-war_rep": [
+      20,
+      230
+    ],
+    "m4s-p1-war_sio": [
+      20,
+      230
+    ],
+    "m4s-p2-pld_rep": [
+      20
+    ],
+    "m4s-p0-brd_troub": [
+      20,
+      230
+    ],
+    "m4s-p3-pct_addle": [
+      20,
+      230
+    ],
+    "m4s-p6-rpr_feint": [
+      20,
+      230
+    ],
+    "m4s-p0-brd_nature": [
+      230
+    ],
+    "u_eden_P1-p0-drk_rep": [
+      1,
+      29
+    ],
+    "u_eden_P1-p1-pld_div": [
+      10,
+      38
+    ],
+    "u_eden_P1-p1-pld_poa": [
+      29
+    ],
+    "u_eden_P1-p1-pld_rep": [
+      4,
+      37
+    ],
+    "u_eden_P1-p2-ast_colt": [
+      4,
+      29
+    ],
+    "u_eden_P1-p3-sge_kera": [
+      4,
+      27,
+      34,
+      48
+    ],
+    "u_eden_P1-p3-sge_holos": [
+      33
+    ],
+    "u_eden_P1-p3-sge_panha": [
+      29
+    ],
+    "u_eden_P1-p3-sge_philo": [
+      29
+    ],
+    "u_eden_P1-p3-sge_tauro": [
+      9
+    ],
+    "u_eden_P1-p4-rpr_feint": [
+      4,
+      37
+    ],
+    "u_eden_P1-p5-sam_feint": [
+      29
+    ],
+    "u_eden_P1-p6-brd_troub": [
+      4,
+      37
+    ],
+    "u_eden_P1-p7-pct_addle": [
+      29
+    ],
+    "u_ultima_P4-p1-war_sio": [
+      19
+    ],
+    "u_ultima_P4-p2-pld_div": [
+      51
+    ],
+    "u_ultima_P4-p2-pld_poa": [
+      19
+    ],
+    "u_ultima_P4-p4-sge_ep2": [
+      19,
+      51
+    ],
+    "u_eden_P1-p0-drk_dmissi": [
+      4,
+      34
+    ],
+    "u_eden_P1-p2-ast_netl_S": [
+      33
+    ],
+    "u_eden_P1-p6-brd_nature": [
+      15
+    ],
+    "u_ultima_P4-p4-sge_kera": [
+      19,
+      51
+    ],
+    "u_eden_P1-p2-ast_sunsign": [
+      34
+    ],
+    "u_ultima_P4-p0-dnc_samba": [
+      19
+    ],
+    "u_eden_P1-p2-ast_macromos": [
+      33
+    ]
+  },
+  "selectedVariants": {
+    "m4s-14": 0,
+    "m4s-31": 0,
+    "m4s-63": 0,
+    "m4s-115": 0,
+    "m4s-123": 0
+  },
+  "customRowsByDuty": {
+    "m4s": [
+      {
+        "id": "cr17798696875601",
+        "phase": "",
+        "skill": "減傷提早開",
+        "hitTime": "0:05"
+      }
+    ],
+    "u_eden_P1": [
+      {
+        "id": "cr17834065720110",
+        "phase": "",
+        "skill": "煎餃CD好就放",
+        "hitTime": "0:45"
+      }
+    ]
+  }
+}
