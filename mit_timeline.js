@@ -430,11 +430,13 @@ function parseTimelineData(timelineList) {
         }
         
         // Determine damage type
-        let dmgType = 'physical';
+        let dmgType = '';
         const typeStr = m.type || (m.damage && m.damage[0] && m.damage[0].type) || '';
-        if (typeStr.includes('魔') || typeStr.toLowerCase().includes('magic')) {
+        if (typeStr.includes('物') || typeStr.toLowerCase().includes('physical')) {
+            dmgType = 'physical';
+        } else if (typeStr.includes('魔') || typeStr.toLowerCase().includes('magic')) {
             dmgType = 'magic';
-        } else if (typeStr.includes('暗') || typeStr.toLowerCase().includes('darkness') || typeStr.includes('無')) {
+        } else if (typeStr.includes('暗') || typeStr.toLowerCase().includes('darkness') || typeStr.includes('無') || typeStr.includes('真') || typeStr.includes('闇')) {
             dmgType = 'darkness';
         }
         
@@ -1366,7 +1368,7 @@ function addNewBossMechanic() {
         id: `custom-mech-${Date.now()}`,
         time: time,
         name: name.trim(),
-        dmgType: 'physical'
+        dmgType: ''
     });
     
     mitBossMechanics.sort((a, b) => a.time - b.time);
@@ -1817,7 +1819,7 @@ function importTeamPlanJSON(e) {
                         id: cr.id || `custom-imported-${idx}-${Date.now()}`,
                         time: time,
                         name: cr.skill || '未命名自訂機制',
-                        dmgType: cr.dmgType || 'physical',
+                        dmgType: cr.dmgType || '',
                         rawDamage: cr.rawDamage || 0
                     });
                 });
