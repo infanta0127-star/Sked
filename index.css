@@ -1595,6 +1595,11 @@ body {
   min-width: 70px;
 }
 
+.mit-grid-table th.sticky-time {
+  z-index: 30 !important;
+  background-color: #171b26 !important;
+}
+
 .mit-grid-table .sticky-name {
   position: sticky;
   left: 70px; /* width of sticky-time */
@@ -1603,6 +1608,11 @@ body {
   text-align: left;
   min-width: 150px;
   border-right: 2px solid rgba(255, 255, 255, 0.15) !important;
+}
+
+.mit-grid-table th.sticky-name {
+  z-index: 30 !important;
+  background-color: #171b26 !important;
 }
 
 /* Sticky Column on Right (Estimated Damage) */
@@ -1615,6 +1625,12 @@ body {
   border-left: 2px solid rgba(255, 255, 255, 0.15) !important;
   min-width: 100px;
 }
+
+.mit-grid-table th.sticky-damage {
+  z-index: 30 !important;
+  background-color: #171b26 !important;
+}
+
 
 /* Headers styling */
 .mit-grid-table .player-header-cell {

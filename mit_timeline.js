@@ -16,6 +16,7 @@ let mitTimelineSkills = []; // [{ id, slotIndex, jobAbbrev, skillKey, startTime,
 let mitBossMechanics = [];
 let currentMitDutyFile = '';
 let mitLayoutMode = 'vertical'; // 'vertical' or 'horizontal'
+let mitGridExpanded = [false, false, false, false, false, false, false, false]; // whether player grid columns are expanded
 
 // Cloud State Variables
 let currentTeamPlanId = null;
@@ -441,14 +442,48 @@ function formatTime(sec) {
     return `${m}:${s}`;
 }
 
-function getPlayerMitSkills(jobKey) {
+function getPlayerMitSkills(jobKey, slotIndex) {
     const jobData = mitSkillsDatabase[jobKey];
     if (!jobData) return [];
-    return jobData.skills.filter(s => 
+    
+    const allSkills = jobData.skills.filter(s => 
         s.tags && 
         (s.tags.includes('減傷') || s.tags.includes('護盾') || s.tags.includes('無敵')) && 
         !s.personal
     );
+    
+    // Check if slot index is valid. If not, just return all utility skills
+    if (slotIndex === undefined || slotIndex < 0 || slotIndex >= 8) {
+        return allSkills;
+    }
+    
+    const isExpanded = mitGridExpanded[slotIndex] === true;
+    if (isExpanded) {
+        return allSkills;
+    }
+    
+    // Collapsed: show at most 3 skills.
+    // 1. Get skills currently used by this slot
+    const usedSkillIds = new Set(
+        mitTimelineSkills.filter(c => c.slotIndex === slotIndex).map(c => c.skillKey)
+    );
+    
+    // 2. Put used skills first
+    const visible = allSkills.filter(s => usedSkillIds.has(s.id));
+    
+    // 3. Fill up to 3 with unused skills
+    if (visible.length < 3) {
+        const unused = allSkills.filter(s => !usedSkillIds.has(s.id));
+        for (const s of unused) {
+            if (visible.length >= 3) break;
+            visible.push(s);
+        }
+    }
+    
+    // Keep consistent relative order
+    visible.sort((a, b) => allSkills.indexOf(a) - allSkills.indexOf(b));
+    
+    return visible;
 }
 
 function toggleMitGridSkill(slotIndex, jobKey, skillId, startTime, isChecked) {
@@ -540,13 +575,24 @@ function renderMitVerticalGrid(container) {
     
     const tr2 = document.createElement('tr');
     
+    // Save list of visible skills for each player to align tbody columns correctly
+    const playerSkillsList = [];
+    
     for (let i = 0; i < 8; i++) {
         const jobKey = mitParty[i];
         const jobData = mitSkillsDatabase[jobKey];
-        if (!jobData) continue;
+        if (!jobData) {
+            playerSkillsList.push([]);
+            continue;
+        }
         
-        const skills = getPlayerMitSkills(jobKey);
+        const allSkills = getPlayerMitSkills(jobKey); // all utility skills
+        const skills = getPlayerMitSkills(jobKey, i); // visible skills (collapsed or expanded)
+        playerSkillsList.push(skills);
+        
         const colspan = Math.max(1, skills.length);
+        const isExpanded = mitGridExpanded[i] === true;
+        const hasExpandOption = allSkills.length > 3;
         
         const th1 = document.createElement('th');
         th1.colSpan = colspan;
@@ -556,8 +602,26 @@ function renderMitVerticalGrid(container) {
                 <span style="font-size: 9px; font-weight: bold; background: rgba(255, 255, 255, 0.1); padding: 1px 4px; border-radius: 3px;">${slotLabels[i]}</span>
                 <img src="${jobData.icon}" />
                 <span>${jobData.name}</span>
+                ${hasExpandOption ? `
+                    <button class="grid-expand-btn" data-slot="${i}" style="background:none; border:none; color:var(--color-text-muted); cursor:pointer; font-size:10px; padding:2px; display:inline-flex; align-items:center;" title="${isExpanded ? '收合技能' : '展開更多'}">
+                        <i class="fa-solid fa-${isExpanded ? 'chevron-left' : 'chevron-right'}"></i>
+                    </button>
+                ` : ''}
             </div>
         `;
+        
+        // Attach toggle expand listener
+        if (hasExpandOption) {
+            const btn = th1.querySelector('.grid-expand-btn');
+            if (btn) {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    mitGridExpanded[i] = !mitGridExpanded[i];
+                    renderMitTimeline();
+                });
+            }
+        }
+        
         tr1.appendChild(th1);
         
         if (skills.length === 0) {
@@ -607,7 +671,7 @@ function renderMitVerticalGrid(container) {
         
         for (let i = 0; i < 8; i++) {
             const jobKey = mitParty[i];
-            const skills = getPlayerMitSkills(jobKey);
+            const skills = playerSkillsList[i];
             
             if (skills.length === 0) {
                 const td = document.createElement('td');
