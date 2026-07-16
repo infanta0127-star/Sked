@@ -1626,28 +1626,17 @@ function createShareModal() {
                 </select>
             </div>
             <div class="share-form-group">
-                <label for="share-password">分享密碼 (可留空)</label>
+                <label for="share-password">分享密碼 (必須為 8 碼)</label>
                 <div class="share-password-wrapper">
                     <input type="text" id="share-password" class="share-password-input" placeholder="輸入或生成 8 碼英數字" maxlength="8" style="text-transform:uppercase;">
-                    <button id="share-btn-generate" class="share-btn-secondary">生成密碼</button>
+                    <button id="share-btn-password-action" class="share-btn-secondary" style="white-space:nowrap; min-width:100px;">生成密碼</button>
                 </div>
             </div>
-            <button id="share-btn-apply" class="share-btn-primary">套用並產生連結</button>
-            
-            <div id="share-result-section" style="display:none; margin-top:20px; padding:15px; background:rgba(255,255,255,0.05); border-radius:10px; border:1px solid rgba(255,255,255,0.08);">
-                <div class="share-form-group" style="margin-bottom:12px;">
-                    <label>分享網址</label>
-                    <div class="share-password-wrapper">
-                        <input type="text" id="share-result-url" class="share-password-input" readonly style="background:rgba(0,0,0,0.2); font-size:12px;">
-                        <button id="share-btn-copy-url" class="share-btn-secondary" style="white-space:nowrap; min-width:80px;">複製網址</button>
-                    </div>
-                </div>
-                <div class="share-form-group" id="share-result-pwd-group" style="margin-bottom:0;">
-                    <label>分享密碼</label>
-                    <div class="share-password-wrapper">
-                        <input type="text" id="share-result-pwd" class="share-password-input" readonly style="background:rgba(0,0,0,0.2); font-size:12px;">
-                        <button id="share-btn-copy-pwd" class="share-btn-secondary" style="white-space:nowrap; min-width:80px;">複製密碼</button>
-                    </div>
+            <div class="share-form-group" style="margin-bottom:10px;">
+                <label for="share-url">分享網址</label>
+                <div class="share-password-wrapper">
+                    <input type="text" id="share-url" class="share-password-input" placeholder="請先完成密碼設定" readonly style="background:rgba(0,0,0,0.2); font-size:12px;">
+                    <button id="share-btn-url-action" class="share-btn-primary" style="width: auto; white-space: nowrap; min-width: 100px;" disabled>生成網址</button>
                 </div>
             </div>
         </div>
@@ -1655,52 +1644,84 @@ function createShareModal() {
     document.body.appendChild(overlay);
     
     // Close events
-    overlay.addEventListener('click', e => { if (e.target === overlay) closeShareModal(); });
-    document.getElementById('share-modal-close').addEventListener('click', closeShareModal);
+    const overlayClose = () => closeShareModal();
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlayClose(); });
+    document.getElementById('share-modal-close').addEventListener('click', overlayClose);
     
-    // Generate password event
-    document.getElementById('share-btn-generate').addEventListener('click', () => {
-        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-        let pass = '';
-        for (let i = 0; i < 8; i++) {
-            pass += chars.charAt(Math.floor(Math.random() * chars.length));
+    const pwdInput = document.getElementById('share-password');
+    const pwdBtn = document.getElementById('share-btn-password-action');
+    const urlInput = document.getElementById('share-url');
+    const urlBtn = document.getElementById('share-btn-url-action');
+    
+    // Function to check password and update UI states
+    const updateUIState = () => {
+        const val = pwdInput.value.trim().toUpperCase();
+        pwdInput.value = val;
+        
+        // If URL has already been generated, don't allow modifying states
+        if (urlInput.value) return;
+        
+        if (val.length === 0) {
+            pwdBtn.innerText = '生成密碼';
+            urlBtn.disabled = true;
+            urlInput.placeholder = '請先完成密碼設定';
+        } else {
+            pwdBtn.innerText = '複製密碼';
+            if (val.length === 8) {
+                urlBtn.disabled = false;
+                urlInput.placeholder = '點擊右側生成網址';
+            } else {
+                urlBtn.disabled = true;
+                urlInput.placeholder = '密碼長度必須為 8 碼';
+            }
         }
-        document.getElementById('share-password').value = pass;
+    };
+    
+    pwdInput.addEventListener('input', updateUIState);
+    
+    // Password button click action
+    pwdBtn.addEventListener('click', async () => {
+        const val = pwdInput.value.trim().toUpperCase();
+        if (pwdBtn.innerText.startsWith('生成密碼') || val.length === 0) {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            let pass = '';
+            for (let i = 0; i < 8; i++) {
+                pass += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            pwdInput.value = pass;
+            updateUIState();
+        } else {
+            // Copy mode
+            await navigator.clipboard.writeText(pwdInput.value);
+            const origText = pwdBtn.innerText;
+            pwdBtn.innerText = '已複製！';
+            pwdBtn.style.borderColor = '#4ade80';
+            pwdBtn.style.color = '#4ade80';
+            setTimeout(() => {
+                pwdBtn.innerText = origText;
+                pwdBtn.style.borderColor = '';
+                pwdBtn.style.color = '';
+            }, 1500);
+        }
     });
     
-    // Apply & Copy link event
-    document.getElementById('share-btn-apply').addEventListener('click', handleShareApply);
-    
-    // Copy URL event
-    document.getElementById('share-btn-copy-url').addEventListener('click', async () => {
-        const urlInput = document.getElementById('share-result-url');
-        await navigator.clipboard.writeText(urlInput.value);
-        const btn = document.getElementById('share-btn-copy-url');
-        const origText = btn.innerText;
-        btn.innerText = '已複製！';
-        btn.style.borderColor = '#4ade80';
-        btn.style.color = '#4ade80';
-        setTimeout(() => {
-            btn.innerText = origText;
-            btn.style.borderColor = '';
-            btn.style.color = '';
-        }, 1500);
-    });
-
-    // Copy Password event
-    document.getElementById('share-btn-copy-pwd').addEventListener('click', async () => {
-        const pwdInput = document.getElementById('share-result-pwd');
-        await navigator.clipboard.writeText(pwdInput.value);
-        const btn = document.getElementById('share-btn-copy-pwd');
-        const origText = btn.innerText;
-        btn.innerText = '已複製！';
-        btn.style.borderColor = '#4ade80';
-        btn.style.color = '#4ade80';
-        setTimeout(() => {
-            btn.innerText = origText;
-            btn.style.borderColor = '';
-            btn.style.color = '';
-        }, 1500);
+    // URL button click action
+    urlBtn.addEventListener('click', async () => {
+        if (urlBtn.innerText.startsWith('生成網址')) {
+            await handleShareApply();
+        } else {
+            // Copy mode
+            await navigator.clipboard.writeText(urlInput.value);
+            const origText = urlBtn.innerText;
+            urlBtn.innerText = '已複製！';
+            urlBtn.style.borderColor = '#4ade80';
+            urlBtn.style.color = '#4ade80';
+            setTimeout(() => {
+                urlBtn.innerText = origText;
+                urlBtn.style.borderColor = '';
+                urlBtn.style.color = '';
+            }, 1500);
+        }
     });
 }
 
@@ -1710,9 +1731,35 @@ function openShareModal() {
         return;
     }
     createShareModal();
-    document.getElementById('share-permission').value = 'view';
-    document.getElementById('share-password').value = '';
-    document.getElementById('share-result-section').style.display = 'none';
+    
+    const permissionSelect = document.getElementById('share-permission');
+    const pwdInput = document.getElementById('share-password');
+    const pwdBtn = document.getElementById('share-btn-password-action');
+    const urlInput = document.getElementById('share-url');
+    const urlBtn = document.getElementById('share-btn-url-action');
+    
+    // Reset all elements to initial state
+    permissionSelect.value = 'view';
+    permissionSelect.disabled = false;
+    
+    pwdInput.value = '';
+    pwdInput.disabled = false;
+    pwdInput.placeholder = '輸入或生成 8 碼英數字';
+    
+    pwdBtn.innerText = '生成密碼';
+    pwdBtn.disabled = false;
+    pwdBtn.style.borderColor = '';
+    pwdBtn.style.color = '';
+    
+    urlInput.value = '';
+    urlInput.placeholder = '請先完成密碼設定';
+    
+    urlBtn.innerText = '生成網址';
+    urlBtn.disabled = true;
+    urlBtn.style.backgroundColor = '';
+    urlBtn.style.borderColor = '';
+    urlBtn.style.color = '';
+    
     document.getElementById('share-modal-overlay').style.display = 'flex';
 }
 
@@ -1725,14 +1772,14 @@ async function handleShareApply() {
     const permission = document.getElementById('share-permission').value;
     const password = document.getElementById('share-password').value.trim().toUpperCase();
     
-    if (password.length > 0 && password.length !== 8) {
+    if (password.length !== 8) {
         alert('分享密碼必須為 8 碼英數字！');
         return;
     }
     
     try {
         const { error } = await sb.from('team_plans')
-            .update({ share_password: password || null })
+            .update({ share_password: password })
             .eq('id', currentTeamPlanId);
             
         if (error) throw error;
@@ -1750,32 +1797,30 @@ async function handleShareApply() {
         // Auto-copy the share URL
         await navigator.clipboard.writeText(shareUrl);
         
-        // Populate and show the result section
-        document.getElementById('share-result-url').value = shareUrl;
+        // Display share URL in input
+        const urlInput = document.getElementById('share-url');
+        urlInput.value = shareUrl;
         
-        const pwdGroup = document.getElementById('share-result-pwd-group');
-        if (password) {
-            pwdGroup.style.display = 'block';
-            document.getElementById('share-result-pwd').value = password;
-        } else {
-            pwdGroup.style.display = 'none';
-        }
+        // Change URL button to Copy button
+        const urlBtn = document.getElementById('share-btn-url-action');
+        urlBtn.innerText = '複製網址';
         
-        document.getElementById('share-result-section').style.display = 'block';
+        // Disable password input & permission select to prevent edits
+        document.getElementById('share-password').disabled = true;
+        document.getElementById('share-permission').disabled = true;
         
-        // Update the apply button state temporarily to show success
-        const applyBtn = document.getElementById('share-btn-apply');
-        const origText = applyBtn.innerText;
-        applyBtn.innerText = '已成功產生並複製連結！';
-        applyBtn.style.backgroundColor = '#16a34a'; // Green bg
+        // Temporarily highlight the URL button green to show success
+        const origBg = urlBtn.style.backgroundColor;
+        urlBtn.style.backgroundColor = '#16a34a'; // Green bg
+        urlBtn.style.color = '#fff';
         setTimeout(() => {
-            applyBtn.innerText = origText;
-            applyBtn.style.backgroundColor = '';
-        }, 2000);
+            urlBtn.style.backgroundColor = origBg;
+        }, 1500);
         
     } catch (err) {
         alert(`設定分享密碼失敗: ${err.message}`);
     }
+}
 }
 
 async function handleUrlSharingTokens() {
