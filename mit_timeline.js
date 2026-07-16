@@ -671,11 +671,6 @@ function renderMitVerticalGrid(container) {
                     <img src="${jobData.icon}" />
                 </div>
                 <div class="player-header-name">${jobData.name}</div>
-                ${hasExpandOption ? `
-                    <span class="grid-expand-indicator" style="color:var(--color-text-muted); font-size:10px; padding:2px; display:inline-flex; align-items:center;">
-                        <i class="fa-solid fa-${isExpanded ? 'chevron-left' : 'chevron-right'}"></i>
-                    </span>
-                ` : ''}
             </div>
         `;
         
@@ -1795,6 +1790,7 @@ async function handleUrlSharingTokens() {
             window.mitParty = mitParty;
         } catch (err) {
             console.error('Error loading shared token plan:', err);
+            alert(`載入分享計畫失敗: ${err.message || err}`);
         }
     }
 }
