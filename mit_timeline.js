@@ -1638,7 +1638,7 @@ async function handleUrlSharingTokens() {
             // 2. Loop password prompt if required and incorrect
             let pwd = null;
             while (data.password_required && !data.password_correct) {
-                pwd = prompt('此減排計畫設有密碼保護，請輸入 8 碼分享密碼：');
+                pwd = prompt('請輸入 8 碼分享密碼：');
                 if (pwd === null) {
                     alert('拒絕存取：您必須輸入正確密碼才能查看本計畫。');
                     openAuthModal('login', true); // Force persistent auth overlay
