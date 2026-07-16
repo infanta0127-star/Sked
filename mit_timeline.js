@@ -72,13 +72,36 @@ document.addEventListener('DOMContentLoaded', async () => {
         sb.auth.onAuthStateChange((event, session) => {
             currentUser = session?.user || null;
             updateAuthUI();
+            
             if (event === 'PASSWORD_RECOVERY') {
                 openAuthModal('reset-password');
+                return;
+            }
+            
+            const params = new URLSearchParams(window.location.search);
+            const hasShareToken = params.has('mit_view') || params.has('mit_edit');
+            
+            if (!currentUser && !hasShareToken) {
+                openAuthModal('login', true);
+            } else {
+                isAuthModalPersistent = false;
+                closeAuthModal();
             }
         });
 
         // Check if there are sharing tokens in the URL
-        await handleUrlSharingTokens();
+        const params = new URLSearchParams(window.location.search);
+        const hasShareToken = params.has('mit_view') || params.has('mit_edit');
+        if (hasShareToken) {
+            await handleUrlSharingTokens();
+        } else {
+            const { data: { session } } = await sb.auth.getSession();
+            currentUser = session?.user || null;
+            updateAuthUI();
+            if (!currentUser) {
+                openAuthModal('login', true);
+            }
+        }
 
         // Render timeline initially
         renderMitTimeline();
@@ -121,6 +144,8 @@ function updateAuthUI() {
 const _authInputStyle = 'width:100%; box-sizing:border-box; background:#0d0d1a; border:1px solid #333; border-radius:8px; padding:10px 12px; color:#fff; font-size:14px; outline:none; transition:border-color .2s;';
 const _authBtnStyle = 'width:100%; padding:11px; background:linear-gradient(135deg,#4f6ef7,#7c9ef8); border:none; border-radius:8px; color:#fff; font-size:14px; font-weight:600; cursor:pointer; transition:opacity .2s;';
 
+let isAuthModalPersistent = false;
+
 function createAuthModal() {
     if (document.getElementById('auth-modal-overlay')) return;
     const overlay = document.createElement('div');
@@ -133,17 +158,34 @@ function createAuthModal() {
         </div>
     `;
     document.body.appendChild(overlay);
-    overlay.addEventListener('click', e => { if (e.target === overlay) closeAuthModal(); });
-    document.getElementById('auth-modal-close').addEventListener('click', closeAuthModal);
+    overlay.addEventListener('click', e => { 
+        if (e.target === overlay && !isAuthModalPersistent) {
+            closeAuthModal(); 
+        }
+    });
+    document.getElementById('auth-modal-close').addEventListener('click', () => {
+        if (!isAuthModalPersistent) {
+            closeAuthModal();
+        }
+    });
 }
 
-function openAuthModal(view = 'login') {
+function openAuthModal(view = 'login', persistent = false) {
+    isAuthModalPersistent = persistent;
     createAuthModal();
-    document.getElementById('auth-modal-overlay').style.display = 'flex';
+    const overlay = document.getElementById('auth-modal-overlay');
+    if (overlay) {
+        overlay.style.display = 'flex';
+    }
+    const closeBtn = document.getElementById('auth-modal-close');
+    if (closeBtn) {
+        closeBtn.style.display = persistent ? 'none' : 'block';
+    }
     renderAuthView(view);
 }
 
 function closeAuthModal() {
+    if (isAuthModalPersistent) return;
     const overlay = document.getElementById('auth-modal-overlay');
     if (overlay) overlay.style.display = 'none';
 }
@@ -1193,7 +1235,7 @@ function setupMitEventListeners() {
     // Save, Load, and Share button clicks
     mitBtnSave.addEventListener('click', saveTeamPlanToSupabase);
     mitBtnLoad.addEventListener('click', loadTeamPlansModal);
-    mitBtnShare.addEventListener('click', generateTeamShareUrl);
+    mitBtnShare.addEventListener('click', openShareModal);
     mitBtnAddMechanic.addEventListener('click', addNewBossMechanic);
 
     // Layout select change event
@@ -1475,20 +1517,105 @@ async function loadTeamPlanById(planId) {
     }
 }
 
-async function generateTeamShareUrl() {
-    if (!currentTeamReadToken) {
+function createShareModal() {
+    if (document.getElementById('share-modal-overlay')) return;
+    const overlay = document.createElement('div');
+    overlay.id = 'share-modal-overlay';
+    overlay.innerHTML = `
+        <div id="share-modal">
+            <button id="share-modal-close" style="position:absolute; top:14px; right:18px; background:none; border:none; color:#555; font-size:20px; cursor:pointer; line-height:1;">✕</button>
+            <h3>分享減排計畫</h3>
+            <div class="share-form-group">
+                <label for="share-permission">權限設定</label>
+                <select id="share-permission" class="share-select">
+                    <option value="view">僅查看 (唯讀模式)</option>
+                    <option value="edit">可編輯 (共同編輯模式)</option>
+                </select>
+            </div>
+            <div class="share-form-group">
+                <label for="share-password">分享密碼 (可留空)</label>
+                <div class="share-password-wrapper">
+                    <input type="text" id="share-password" class="share-password-input" placeholder="輸入或生成 8 碼英數字" maxlength="8" style="text-transform:uppercase;">
+                    <button id="share-btn-generate" class="share-btn-secondary">生成密碼</button>
+                </div>
+            </div>
+            <button id="share-btn-apply" class="share-btn-primary">套用並複製連結</button>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    
+    // Close events
+    overlay.addEventListener('click', e => { if (e.target === overlay) closeShareModal(); });
+    document.getElementById('share-modal-close').addEventListener('click', closeShareModal);
+    
+    // Generate password event
+    document.getElementById('share-btn-generate').addEventListener('click', () => {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        let pass = '';
+        for (let i = 0; i < 8; i++) {
+            pass += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        document.getElementById('share-password').value = pass;
+    });
+    
+    // Apply & Copy link event
+    document.getElementById('share-btn-apply').addEventListener('click', handleShareApply);
+}
+
+function openShareModal() {
+    if (!currentTeamPlanId) {
         alert('請先點選「儲存至雲端」以儲存本計畫後，方可生成分享連結！');
         return;
     }
-    const shareUrl = `${window.location.origin}${window.location.pathname}?mit_view=${currentTeamReadToken}`;
-    const editUrl = currentTeamEditToken ? `${window.location.origin}${window.location.pathname}?mit_edit=${currentTeamEditToken}` : '';
+    createShareModal();
+    document.getElementById('share-permission').value = 'view';
+    document.getElementById('share-password').value = '';
+    document.getElementById('share-modal-overlay').style.display = 'flex';
+}
+
+function closeShareModal() {
+    const overlay = document.getElementById('share-modal-overlay');
+    if (overlay) overlay.style.display = 'none';
+}
+
+async function handleShareApply() {
+    const permission = document.getElementById('share-permission').value;
+    const password = document.getElementById('share-password').value.trim().toUpperCase();
     
-    // Copy read url to clipboard
+    if (password.length > 0 && password.length !== 8) {
+        alert('分享密碼必須為 8 碼英數字！');
+        return;
+    }
+    
     try {
+        const { error } = await sb.from('team_plans')
+            .update({ share_password: password || null })
+            .eq('id', currentTeamPlanId);
+            
+        if (error) throw error;
+        
+        const token = (permission === 'edit') ? currentTeamEditToken : currentTeamReadToken;
+        const paramName = (permission === 'edit') ? 'mit_edit' : 'mit_view';
+        
+        if (!token) {
+            alert('無法獲取分享憑證！請重新儲存本計畫後再試。');
+            return;
+        }
+        
+        const shareUrl = `${window.location.origin}${window.location.pathname}?${paramName}=${token}`;
+        
         await navigator.clipboard.writeText(shareUrl);
-        alert(`分享連結已複製到剪貼簿！\n\n閱讀模式: ${shareUrl}\n\n協同編輯模式: ${editUrl || '無'}`);
+        
+        let msg = `分享連結已套用並複製到剪貼簿！\n\n權限: ${permission === 'edit' ? '可編輯' : '僅查看'}`;
+        if (password) {
+            msg += `\n開啟密碼: ${password}`;
+        } else {
+            msg += `\n密碼保護: 無`;
+        }
+        alert(msg);
+        closeShareModal();
     } catch (err) {
-        prompt('請手動複製分享連結:', shareUrl);
+        alert(`設定分享密碼失敗: ${err.message}`);
     }
 }
 
@@ -1500,12 +1627,35 @@ async function handleUrlSharingTokens() {
     
     if (token) {
         try {
-            // Call RPC function to read team plan by token
-            const { data, error } = await sb.rpc('get_team_plan_by_token', { p_token: token }).maybeSingle();
+            // 1. Initial trial call without password
+            let { data, error } = await sb.rpc('get_team_plan_by_token', { p_token: token, p_password: null }).maybeSingle();
             if (error) throw error;
             if (!data) {
                 alert('分享連結無效或該減排計畫已遭刪除！');
                 return;
+            }
+            
+            // 2. Loop password prompt if required and incorrect
+            let pwd = null;
+            while (data.password_required && !data.password_correct) {
+                pwd = prompt('此減排計畫設有密碼保護，請輸入 8 碼分享密碼：');
+                if (pwd === null) {
+                    alert('拒絕存取：您必須輸入正確密碼才能查看本計畫。');
+                    openAuthModal('login', true); // Force persistent auth overlay
+                    return;
+                }
+                
+                const ret = await sb.rpc('get_team_plan_by_token', { p_token: token, p_password: pwd.trim().toUpperCase() }).maybeSingle();
+                if (ret.error) {
+                    alert(`驗證密碼失敗: ${ret.error.message}`);
+                    continue;
+                }
+                
+                if (ret.data && ret.data.password_correct) {
+                    data = ret.data;
+                } else {
+                    alert('密碼錯誤！請重新輸入。');
+                }
             }
 
             currentTeamPlanId = data.id;

@@ -1808,5 +1808,111 @@ body {
   transition: background-color 0.15s ease, box-shadow 0.15s ease;
 }
 
+/* Share Modal Overlay & Form */
+#share-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(6px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+#share-modal {
+  background: #12121f;
+  border: 1px solid #2a2a3f;
+  border-radius: 18px;
+  padding: 30px 28px;
+  width: 400px;
+  max-width: 92vw;
+  position: relative;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.6);
+  color: #fff;
+}
+
+#share-modal h3 {
+  font-size: 18px;
+  margin-bottom: 20px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #7c9ef8, #b6c9f0);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.share-form-group {
+  margin-bottom: 20px;
+}
+
+.share-form-group label {
+  display: block;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.share-select {
+  width: 100%;
+  background: #0d0d1a;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #fff;
+  font-size: 14px;
+  outline: none;
+  cursor: pointer;
+}
+
+.share-password-wrapper {
+  display: flex;
+  gap: 10px;
+}
+
+.share-password-input {
+  flex: 1;
+  background: #0d0d1a;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #fff;
+  font-size: 14px;
+  outline: none;
+}
+
+.share-btn-secondary {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff;
+  padding: 10px 15px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+
+.share-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.share-btn-primary {
+  width: 100%;
+  padding: 12px;
+  background: linear-gradient(135deg, #4f6ef7, #7c9ef8);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.share-btn-primary:hover {
+  opacity: 0.9;
+}
+
+
 
 
