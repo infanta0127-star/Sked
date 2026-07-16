@@ -1604,12 +1604,12 @@ body {
   background-color: #171b26;
   z-index: 20;
   border-bottom: 1px solid var(--border-color);
-  height: 54px;
+  height: 60px;
 }
 
 .mit-grid-table thead tr:nth-child(2) th {
   position: sticky;
-  top: 54px; /* offset by first header row height */
+  top: 60px; /* offset by first header row height */
   background-color: #1a1f2c;
   z-index: 20;
   border-bottom: 2px solid var(--border-color);
@@ -1675,6 +1675,7 @@ body {
   font-weight: 600;
   font-size: 13px;
   border-bottom: 2px solid var(--color-gcd);
+  padding: 4px 2px !important;
 }
 
 .mit-grid-table .player-header-content {
