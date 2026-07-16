@@ -1632,7 +1632,24 @@ function createShareModal() {
                     <button id="share-btn-generate" class="share-btn-secondary">生成密碼</button>
                 </div>
             </div>
-            <button id="share-btn-apply" class="share-btn-primary">套用並複製連結</button>
+            <button id="share-btn-apply" class="share-btn-primary">套用並產生連結</button>
+            
+            <div id="share-result-section" style="display:none; margin-top:20px; padding:15px; background:rgba(255,255,255,0.05); border-radius:10px; border:1px solid rgba(255,255,255,0.08);">
+                <div class="share-form-group" style="margin-bottom:12px;">
+                    <label>分享網址</label>
+                    <div class="share-password-wrapper">
+                        <input type="text" id="share-result-url" class="share-password-input" readonly style="background:rgba(0,0,0,0.2); font-size:12px;">
+                        <button id="share-btn-copy-url" class="share-btn-secondary" style="white-space:nowrap; min-width:80px;">複製網址</button>
+                    </div>
+                </div>
+                <div class="share-form-group" id="share-result-pwd-group" style="margin-bottom:0;">
+                    <label>分享密碼</label>
+                    <div class="share-password-wrapper">
+                        <input type="text" id="share-result-pwd" class="share-password-input" readonly style="background:rgba(0,0,0,0.2); font-size:12px;">
+                        <button id="share-btn-copy-pwd" class="share-btn-secondary" style="white-space:nowrap; min-width:80px;">複製密碼</button>
+                    </div>
+                </div>
+            </div>
         </div>
     `;
     document.body.appendChild(overlay);
@@ -1653,6 +1670,38 @@ function createShareModal() {
     
     // Apply & Copy link event
     document.getElementById('share-btn-apply').addEventListener('click', handleShareApply);
+    
+    // Copy URL event
+    document.getElementById('share-btn-copy-url').addEventListener('click', async () => {
+        const urlInput = document.getElementById('share-result-url');
+        await navigator.clipboard.writeText(urlInput.value);
+        const btn = document.getElementById('share-btn-copy-url');
+        const origText = btn.innerText;
+        btn.innerText = '已複製！';
+        btn.style.borderColor = '#4ade80';
+        btn.style.color = '#4ade80';
+        setTimeout(() => {
+            btn.innerText = origText;
+            btn.style.borderColor = '';
+            btn.style.color = '';
+        }, 1500);
+    });
+
+    // Copy Password event
+    document.getElementById('share-btn-copy-pwd').addEventListener('click', async () => {
+        const pwdInput = document.getElementById('share-result-pwd');
+        await navigator.clipboard.writeText(pwdInput.value);
+        const btn = document.getElementById('share-btn-copy-pwd');
+        const origText = btn.innerText;
+        btn.innerText = '已複製！';
+        btn.style.borderColor = '#4ade80';
+        btn.style.color = '#4ade80';
+        setTimeout(() => {
+            btn.innerText = origText;
+            btn.style.borderColor = '';
+            btn.style.color = '';
+        }, 1500);
+    });
 }
 
 function openShareModal() {
@@ -1663,6 +1712,7 @@ function openShareModal() {
     createShareModal();
     document.getElementById('share-permission').value = 'view';
     document.getElementById('share-password').value = '';
+    document.getElementById('share-result-section').style.display = 'none';
     document.getElementById('share-modal-overlay').style.display = 'flex';
 }
 
@@ -1697,16 +1747,32 @@ async function handleShareApply() {
         
         const shareUrl = `${window.location.origin}${window.location.pathname}?${paramName}=${token}`;
         
+        // Auto-copy the share URL
         await navigator.clipboard.writeText(shareUrl);
         
-        let msg = `分享連結已套用並複製到剪貼簿！\n\n權限: ${permission === 'edit' ? '可編輯' : '僅查看'}`;
+        // Populate and show the result section
+        document.getElementById('share-result-url').value = shareUrl;
+        
+        const pwdGroup = document.getElementById('share-result-pwd-group');
         if (password) {
-            msg += `\n開啟密碼: ${password}`;
+            pwdGroup.style.display = 'block';
+            document.getElementById('share-result-pwd').value = password;
         } else {
-            msg += `\n密碼保護: 無`;
+            pwdGroup.style.display = 'none';
         }
-        alert(msg);
-        closeShareModal();
+        
+        document.getElementById('share-result-section').style.display = 'block';
+        
+        // Update the apply button state temporarily to show success
+        const applyBtn = document.getElementById('share-btn-apply');
+        const origText = applyBtn.innerText;
+        applyBtn.innerText = '已成功產生並複製連結！';
+        applyBtn.style.backgroundColor = '#16a34a'; // Green bg
+        setTimeout(() => {
+            applyBtn.innerText = origText;
+            applyBtn.style.backgroundColor = '';
+        }, 2000);
+        
     } catch (err) {
         alert(`設定分享密碼失敗: ${err.message}`);
     }
