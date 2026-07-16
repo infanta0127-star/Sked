@@ -813,7 +813,7 @@ function populateMitDutyDropdown(dutiesData) {
 
     Object.keys(dutiesByCategory).forEach(catKey => {
         const optgroup = document.createElement('optgroup');
-        optgroup.label = categories[catKey] || catKey;
+        optgroup.label = categories[catKey]?.label || catKey;
         
         dutiesByCategory[catKey].forEach(duty => {
             const option = document.createElement('option');
