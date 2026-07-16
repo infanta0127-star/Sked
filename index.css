@@ -1035,8 +1035,6 @@ body {
   color: var(--color-text-main);
   line-height: 1.5;
   white-space: pre-line;
-  max-height: 120px;
-  overflow-y: auto;
 }
 
 /* Modals */
