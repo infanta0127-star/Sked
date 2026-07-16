@@ -1252,7 +1252,7 @@ function setupMitEventListeners() {
 
     // Save, Load, and Share button clicks
     mitBtnSave.addEventListener('click', saveTeamPlanToSupabase);
-    mitBtnLoad.addEventListener('click', loadTeamPlansModal);
+    mitBtnLoad.addEventListener('click', () => { savesModalMode = 'load'; loadTeamPlansModal(); });
     mitBtnShare.addEventListener('click', openShareModal);
     mitBtnAddMechanic.addEventListener('click', addNewBossMechanic);
     
@@ -1375,44 +1375,28 @@ function addNewBossMechanic() {
 
 // ── 9. Supabase Operations (Cloud Save/Load/Share) ──
 
+let savesModalMode = 'load'; // 'load' or 'save'
+
 async function saveTeamPlanToSupabase() {
     if (!currentUser) {
-        alert('請先登入 Google 帳號後，才能儲存減排計畫至雲端！');
+        alert('請先登入帳號後，才能保存計畫紀錄！');
         return;
     }
-
-    const name = prompt('請輸入雲端減排計畫名稱:', currentTeamPlanName);
-    if (name === null) return;
-    if (name.trim() === '') {
-        alert('計畫名稱不能為空！');
-        return;
-    }
-    currentTeamPlanName = name.trim();
 
     try {
-        const payload = {
-            dutyKey: mitDutySelect.value,
-            party: mitParty,
-            mits: mitTimelineSkills,
-            customMechanics: mitBossMechanics
-        };
-
-        if (currentTeamPlanId) {
-            // Update existing plan
-            const { error } = await sb.from('team_plans')
-                .update({
-                    name: currentTeamPlanName,
-                    party: mitParty,
-                    mits: mitTimelineSkills,
-                    custom_mechanics: mitBossMechanics,
-                    updated_at: new Date()
-                })
-                .eq('id', currentTeamPlanId);
-
-            if (error) throw error;
-            alert('雲端減排計畫更新成功！');
+        const toExisting = confirm('是否保存到現有的紀錄檔？');
+        if (toExisting) {
+            savesModalMode = 'save';
+            await loadTeamPlansModal();
         } else {
-            // Create a new team plan
+            const name = prompt('請輸入新的存檔名稱:', currentTeamPlanName);
+            if (name === null) return;
+            if (name.trim() === '') {
+                alert('計畫名稱不能為空！');
+                return;
+            }
+            currentTeamPlanName = name.trim();
+
             const { data, error } = await sb.from('team_plans')
                 .insert({
                     owner_id: currentUser.id,
@@ -1430,16 +1414,16 @@ async function saveTeamPlanToSupabase() {
             currentTeamPlanId = data.id;
             currentTeamEditToken = data.edit_token;
             currentTeamReadToken = data.read_token;
-            alert('新雲端減排計畫儲存成功！');
+            alert('新雲端排軸計畫儲存成功！');
         }
     } catch (err) {
-        alert(`雲端儲存失敗: ${err.message}`);
+        alert(`保存失敗: ${err.message}`);
     }
 }
 
 async function loadTeamPlansModal() {
     if (!currentUser) {
-        alert('請先登入 Google 以讀取您的雲端計畫！');
+        alert('請先登入以讀取您的雲端計畫！');
         return;
     }
 
@@ -1451,9 +1435,13 @@ async function loadTeamPlansModal() {
 
         if (error) throw error;
 
-        // Reuse the saves modal or alert lists
         const savesModal = document.getElementById('saves-modal');
         const savesList = document.getElementById('saves-list');
+        const savesModalTitle = document.querySelector('#saves-modal .modal-header h3');
+        
+        if (savesModalTitle) {
+            savesModalTitle.innerHTML = `<i class="fa-solid fa-folder-open"></i> ${savesModalMode === 'save' ? '選擇欲覆蓋的存檔' : '選擇讀取的雲端存檔'}`;
+        }
         
         savesList.innerHTML = '';
         if (plans.length === 0) {
@@ -1474,10 +1462,32 @@ async function loadTeamPlansModal() {
                     <button class="btn btn-danger btn-mini" style="padding: 2px 6px;" title="刪除"><i class="fa-solid fa-trash"></i></button>
                 `;
                 
-                // Click to load
+                // Click to load or overwrite
                 li.querySelector('div').addEventListener('click', async () => {
-                    await loadTeamPlanById(plan.id);
-                    savesModal.classList.remove('active');
+                    if (savesModalMode === 'save') {
+                        if (confirm(`確定要覆蓋「${plan.name}」嗎？`)) {
+                            try {
+                                const { error: updErr } = await sb.from('team_plans')
+                                    .update({
+                                        party: mitParty,
+                                        mits: mitTimelineSkills,
+                                        custom_mechanics: mitBossMechanics,
+                                        updated_at: new Date()
+                                    })
+                                    .eq('id', plan.id);
+                                if (updErr) throw updErr;
+                                alert(`「${plan.name}」覆蓋保存成功！`);
+                                currentTeamPlanId = plan.id;
+                                currentTeamPlanName = plan.name;
+                                savesModal.classList.remove('active');
+                            } catch (updErr) {
+                                alert(`覆蓋儲存失敗: ${updErr.message}`);
+                            }
+                        }
+                    } else {
+                        await loadTeamPlanById(plan.id);
+                        savesModal.classList.remove('active');
+                    }
                 });
                 
                 // Click to delete

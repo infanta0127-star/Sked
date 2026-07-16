@@ -278,7 +278,7 @@ function setupEventListeners() {
     btnCloudSave.addEventListener('click', saveIndivPlanToSupabase);
   }
   if (btnCloudLoad) {
-    btnCloudLoad.addEventListener('click', loadIndivPlansModal);
+    btnCloudLoad.addEventListener('click', () => { savesModalMode = 'load'; loadIndivPlansModal(); });
   }
 
   // Job selection change
@@ -1986,6 +1986,7 @@ let currentIndivPlanId = null;
 let currentIndivEditToken = null;
 let currentIndivReadToken = null;
 let currentIndivPlanName = '未命名個人排軸';
+let savesModalMode = 'load'; // 'load' or 'save'
 
 async function saveIndivPlanToSupabase() {
   const sb = window.supabaseClient;
@@ -1997,34 +1998,24 @@ async function saveIndivPlanToSupabase() {
   // Retrieve user session
   const { data: { session } } = await sb.auth.getSession();
   if (!session) {
-    alert('請先在團隊技能排軸頁面登入，才能儲存個人排軸至雲端！');
+    alert('請先在團隊技能排軸頁面登入，才能保存計畫紀錄！');
     return;
   }
-
-  const name = prompt('請輸入個人技能排軸計畫名稱:', currentIndivPlanName);
-  if (name === null) return;
-  if (name.trim() === '') {
-    alert('計畫名稱不能為空！');
-    return;
-  }
-  currentIndivPlanName = name.trim();
 
   try {
-    if (currentIndivPlanId) {
-      // Update existing plan
-      const { error } = await sb.from('individual_plans')
-        .update({
-          name: currentIndivPlanName,
-          skills: timelineSkills,
-          gcd: timelineGCDDuration,
-          updated_at: new Date()
-        })
-        .eq('id', currentIndivPlanId);
-
-      if (error) throw error;
-      alert('雲端個人排軸更新成功！');
+    const toExisting = confirm('是否保存到現有的紀錄檔？');
+    if (toExisting) {
+      savesModalMode = 'save';
+      await loadIndivPlansModal();
     } else {
-      // Create new individual plan
+      const name = prompt('請輸入新的存檔名稱:', currentIndivPlanName);
+      if (name === null) return;
+      if (name.trim() === '') {
+        alert('計畫名稱不能為空！');
+        return;
+      }
+      currentIndivPlanName = name.trim();
+
       const { data, error } = await sb.from('individual_plans')
         .insert({
           owner_id: session.user.id,
@@ -2044,7 +2035,7 @@ async function saveIndivPlanToSupabase() {
       alert('雲端個人排軸建立成功！');
     }
   } catch (err) {
-    alert(`雲端儲存失敗: ${err.message}`);
+    alert(`保存失敗: ${err.message}`);
   }
 }
 
@@ -2071,6 +2062,11 @@ async function loadIndivPlansModal() {
 
     const savesModal = document.getElementById('saves-modal');
     const savesList = document.getElementById('saves-list');
+    const savesModalTitle = document.querySelector('#saves-modal .modal-header h3');
+    
+    if (savesModalTitle) {
+      savesModalTitle.innerHTML = `<i class="fa-solid fa-folder-open"></i> ${savesModalMode === 'save' ? '選擇欲覆蓋的存檔' : '選擇讀取的雲端存檔'}`;
+    }
     
     savesList.innerHTML = '';
     if (plans.length === 0) {
@@ -2092,8 +2088,29 @@ async function loadIndivPlansModal() {
         `;
         
         li.querySelector('div').addEventListener('click', async () => {
-          await loadIndivPlanById(plan.id);
-          savesModal.classList.remove('active');
+          if (savesModalMode === 'save') {
+            if (confirm(`確定要覆蓋「${plan.name}」嗎？`)) {
+              try {
+                const { error: updErr } = await sb.from('individual_plans')
+                  .update({
+                    skills: timelineSkills,
+                    gcd: timelineGCDDuration,
+                    updated_at: new Date()
+                  })
+                  .eq('id', plan.id);
+                if (updErr) throw updErr;
+                alert(`「${plan.name}」覆蓋保存成功！`);
+                currentIndivPlanId = plan.id;
+                currentIndivPlanName = plan.name;
+                savesModal.classList.remove('active');
+              } catch (updErr) {
+                alert(`覆蓋儲存失敗: ${updErr.message}`);
+              }
+            }
+          } else {
+            await loadIndivPlanById(plan.id);
+            savesModal.classList.remove('active');
+          }
         });
         
         li.querySelector('button').addEventListener('click', async (e) => {
