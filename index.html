@@ -134,6 +134,8 @@
             <button id="mit-btn-save" class="btn btn-primary" title="儲存至雲端資料庫"><i class="fa-solid fa-cloud-arrow-up"></i> 儲存至雲端</button>
             <button id="mit-btn-load" class="btn btn-secondary" title="開啟已儲存的雲端計畫"><i class="fa-solid fa-cloud-arrow-down"></i> 讀取雲端</button>
             <button id="mit-btn-share" class="btn btn-accent" title="生成分享連結"><i class="fa-solid fa-share-nodes"></i> 分享連結</button>
+            <button id="mit-btn-import" class="btn btn-secondary" title="匯入 JSON 檔"><i class="fa-solid fa-file-import"></i> 匯入</button>
+            <button id="mit-btn-export" class="btn btn-secondary" title="匯出 JSON 檔"><i class="fa-solid fa-file-export"></i> 匯出</button>
           </div>
         </div>
         
@@ -316,6 +318,7 @@
 
     <!-- Hidden Input for Import JSON File -->
     <input type="file" id="file-import-input" accept=".json" style="display: none;">
+    <input type="file" id="mit-file-import" accept=".json" style="display: none;">
 
     <!-- Hidden Canvas for Image Export -->
     <canvas id="export-canvas" style="display: none;"></canvas>

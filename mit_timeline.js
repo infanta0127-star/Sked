@@ -42,6 +42,9 @@ const mitLayoutSelect = document.getElementById('mit-layout-select');
 const mitBtnSave = document.getElementById('mit-btn-save');
 const mitBtnLoad = document.getElementById('mit-btn-load');
 const mitBtnShare = document.getElementById('mit-btn-share');
+const mitBtnImport = document.getElementById('mit-btn-import');
+const mitBtnExport = document.getElementById('mit-btn-export');
+const mitFileImport = document.getElementById('mit-file-import');
 const mitBtnAddMechanic = document.getElementById('mit-btn-add-mechanic');
 
 // Tab Switching
@@ -1237,6 +1240,14 @@ function setupMitEventListeners() {
     mitBtnLoad.addEventListener('click', loadTeamPlansModal);
     mitBtnShare.addEventListener('click', openShareModal);
     mitBtnAddMechanic.addEventListener('click', addNewBossMechanic);
+    
+    if (mitBtnImport && mitFileImport) {
+        mitBtnImport.addEventListener('click', () => mitFileImport.click());
+        mitFileImport.addEventListener('change', importTeamPlanJSON);
+    }
+    if (mitBtnExport) {
+        mitBtnExport.addEventListener('click', exportTeamPlanJSON);
+    }
 
     // Layout select change event
     if (mitLayoutSelect) {
@@ -1699,4 +1710,157 @@ async function handleUrlSharingTokens() {
             console.error('Error loading shared token plan:', err);
         }
     }
+}
+
+function exportTeamPlanJSON() {
+    const data = {
+        duty: mitDutySelect.value || 'custom',
+        party: mitParty,
+        mits: mitTimelineSkills,
+        customMechanics: mitBossMechanics
+    };
+    
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${currentTeamPlanName || 'team_plan'}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+function importTeamPlanJSON(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+        try {
+            const data = JSON.parse(event.target.result);
+            if (!data.duty || !data.party || !data.mits) {
+                throw new Error('JSON 檔案格式不符合團隊減排計畫（必須包含 duty, party, mits）！');
+            }
+            
+            if (mitTimelineSkills.length > 0 || mitBossMechanics.length > 0) {
+                if (!confirm('匯入此計畫將覆蓋目前的編輯內容，確定要繼續嗎？')) {
+                    return;
+                }
+            }
+            
+            // 1. Set party
+            mitParty = data.party || [];
+            
+            // 2. Load the official duty mechanics first if a duty key is specified
+            let dutyMechs = [];
+            const dutyFile = data.duty;
+            if (dutyFile && dutyFile !== 'custom') {
+                mitDutySelect.value = dutyFile;
+                // Fetch official duty mechanics
+                try {
+                    const resp = await fetch(`./data/duties/${dutyFile}`);
+                    if (resp.ok) {
+                        const dutyData = await resp.json();
+                        dutyMechs = parseTimelineData(dutyData.timeline);
+                    }
+                } catch (err) {
+                    console.error('Failed to pre-load duty mechanics on import:', err);
+                }
+            } else {
+                mitDutySelect.value = '';
+            }
+            
+            // 3. Parse custom mechanics / imported mechanics
+            let parsedCustom = [];
+            if (data.customMechanics && Array.isArray(data.customMechanics)) {
+                parsedCustom = data.customMechanics;
+            } else if (data.customRowsByDuty && data.customRowsByDuty[data.duty]) {
+                data.customRowsByDuty[data.duty].forEach((cr, idx) => {
+                    const time = parseDutyTime(cr.hitTime || cr.castingTime || cr.hitTime);
+                    parsedCustom.push({
+                        id: cr.id || `custom-imported-${idx}-${Date.now()}`,
+                        time: time,
+                        name: cr.skill || '未命名自訂機制',
+                        dmgType: cr.dmgType || 'physical',
+                        rawDamage: cr.rawDamage || 0
+                    });
+                });
+            }
+            
+            // Merge custom mechanics with official duty mechanics
+            const dutyIds = new Set(dutyMechs.map(dm => dm.id));
+            const uniqueCustom = parsedCustom.filter(pc => !dutyIds.has(pc.id));
+            
+            // Re-match rawDamage for any custom ones that match duty mechanics by time & name
+            parsedCustom.forEach(pc => {
+                const match = dutyMechs.find(dm => dm.id === pc.id || (dm.name === pc.name && Math.abs(dm.time - pc.time) < 0.1));
+                if (match) {
+                    pc.rawDamage = match.rawDamage;
+                    pc.dmgType = match.dmgType;
+                }
+            });
+            
+            mitBossMechanics = [...dutyMechs, ...uniqueCustom];
+            
+            // 4. Parse mits
+            let parsedMits = [];
+            if (Array.isArray(data.mits)) {
+                // If it is already Format A (array of casts), use it directly but regenerate IDs to avoid duplicates
+                parsedMits = data.mits.map(c => ({
+                    ...c,
+                    id: c.id || `cast-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+                }));
+            } else if (typeof data.mits === 'object' && data.mits !== null) {
+                // Format B (dictionary of casts)
+                for (const [key, times] of Object.entries(data.mits)) {
+                    const parts = key.split('-');
+                    if (parts.length >= 3) {
+                        const dutyKey = parts[0];
+                        if (dutyKey !== data.duty) continue;
+                        
+                        const slotStr = parts[1];
+                        const slotIndex = parseInt(slotStr.replace('p', ''), 10);
+                        const skillKey = parts.slice(2).join('-');
+                        const jobKey = mitParty[slotIndex];
+                        
+                        if (Array.isArray(times) && jobKey) {
+                            times.forEach(time => {
+                                const jobData = mitSkillsDatabase[jobKey];
+                                const skill = jobData?.skills.find(s => s.id === skillKey);
+                                const duration = skill ? skill.duration : 15;
+                                
+                                parsedMits.push({
+                                    id: `cast-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                                    slotIndex: slotIndex,
+                                    jobKey: jobKey,
+                                    jobAbbrev: jobKey,
+                                    skillKey: skillKey,
+                                    startTime: time,
+                                    duration: duration
+                                });
+                            });
+                        }
+                    }
+                }
+            }
+            mitTimelineSkills = parsedMits;
+            
+            // 5. Update global window references for quick sync
+            window.mitTimelineSkills = mitTimelineSkills;
+            window.mitParty = mitParty;
+            
+            // 6. Refresh UI
+            renderPartySelector();
+            renderMitSkillsList();
+            renderMitPlayerTracks();
+            renderMitTimeline();
+            
+            alert('成功匯入團隊減排計畫！');
+        } catch (err) {
+            alert(`匯入失敗: ${err.message}`);
+        }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
 }
