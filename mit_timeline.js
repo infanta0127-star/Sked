@@ -1821,7 +1821,6 @@ async function handleShareApply() {
         alert(`設定分享密碼失敗: ${err.message}`);
     }
 }
-}
 
 async function handleUrlSharingTokens() {
     const params = new URLSearchParams(window.location.search);
