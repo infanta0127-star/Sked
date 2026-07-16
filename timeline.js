@@ -1997,7 +1997,7 @@ async function saveIndivPlanToSupabase() {
   // Retrieve user session
   const { data: { session } } = await sb.auth.getSession();
   if (!session) {
-    alert('請先在團隊減傷排軸頁面登入 Discord 帳號，才能儲存個人排軸至雲端！');
+    alert('請先在團隊減傷排軸頁面登入 Google 帳號，才能儲存個人排軸至雲端！');
     return;
   }
 
@@ -2057,7 +2057,7 @@ async function loadIndivPlansModal() {
 
   const { data: { session } } = await sb.auth.getSession();
   if (!session) {
-    alert('請先在團隊減傷排軸頁面登入 Discord 以讀取您的雲端個人排軸！');
+    alert('請先在團隊減傷排軸頁面登入 Google 以讀取您的雲端個人排軸！');
     return;
   }
 

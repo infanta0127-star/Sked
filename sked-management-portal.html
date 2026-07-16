@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sked Management Portal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg: #0a0a14;
+            --bg2: #10101e;
+            --bg3: #16162a;
+            --border: #2a2a42;
+            --accent: #5b7cf6;
+            --accent2: #7c9ef8;
+            --success: #4ade80;
+            --danger: #f87171;
+            --warning: #fbbf24;
+            --text: #e2e8f0;
+            --muted: #64748b;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        /* ── Header ── */
+        .portal-header {
+            background: var(--bg2);
+            border-bottom: 1px solid var(--border);
+            padding: 0 32px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .portal-header .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 700;
+            font-size: 16px;
+        }
+
+        .portal-header .logo i {
+            color: var(--accent);
+            font-size: 20px;
+        }
+
+        .portal-header .badge {
+            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+            color: #fff;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 20px;
+            letter-spacing: 1px;
+        }
+
+        .portal-header .user-info {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .portal-header .user-email {
+            color: var(--text);
+            font-weight: 500;
+        }
+
+        .btn-logout {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--muted);
+            padding: 5px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all .2s;
+        }
+        .btn-logout:hover { border-color: var(--danger); color: var(--danger); }
+
+        /* ── Access Denied ── */
+        #access-denied {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: calc(100vh - 60px);
+            gap: 16px;
+        }
+
+        #access-denied i { font-size: 64px; color: var(--danger); opacity: .6; }
+        #access-denied h2 { font-size: 24px; color: var(--text); }
+        #access-denied p { color: var(--muted); font-size: 14px; }
+
+        /* ── Loading ── */
+        #loading-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: calc(100vh - 60px);
+            gap: 16px;
+            color: var(--muted);
+        }
+
+        .spinner {
+            width: 36px;
+            height: 36px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin .8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ── Main Content ── */
+        #admin-content {
+            display: none;
+            padding: 32px;
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        .section {
+            background: var(--bg2);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 28px;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        .section-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 16px;
+            font-weight: 700;
+        }
+
+        .section-title i { color: var(--accent); }
+
+        /* ── Invite Code Panel ── */
+        .code-display {
+            background: var(--bg3);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin-bottom: 16px;
+        }
+
+        .code-label {
+            font-size: 11px;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+        }
+
+        .code-value {
+            font-size: 32px;
+            font-weight: 700;
+            letter-spacing: 8px;
+            color: var(--accent2);
+            font-family: monospace;
+        }
+
+        .code-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            margin-top: 8px;
+            padding: 3px 10px;
+            border-radius: 20px;
+        }
+
+        .code-status.active { background: rgba(74,222,128,.1); color: var(--success); }
+        .code-status.inactive { background: rgba(248,113,113,.1); color: var(--danger); }
+
+        .code-history {
+            margin-top: 16px;
+        }
+
+        .code-history-title {
+            font-size: 12px;
+            color: var(--muted);
+            margin-bottom: 10px;
+        }
+
+        .code-history-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 160px;
+            overflow-y: auto;
+        }
+
+        .code-history-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            background: var(--bg);
+            border-radius: 8px;
+            font-size: 13px;
+        }
+
+        .code-mono { font-family: monospace; font-weight: 700; letter-spacing: 3px; }
+
+        /* ── Buttons ── */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 9px 18px;
+            border: none;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all .2s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent), var(--accent2));
+            color: #fff;
+        }
+        .btn-primary:hover { opacity: .85; transform: translateY(-1px); }
+
+        .btn-danger {
+            background: rgba(248,113,113,.1);
+            color: var(--danger);
+            border: 1px solid rgba(248,113,113,.3);
+        }
+        .btn-danger:hover { background: rgba(248,113,113,.2); }
+
+        .btn-success {
+            background: rgba(74,222,128,.1);
+            color: var(--success);
+            border: 1px solid rgba(74,222,128,.3);
+        }
+        .btn-success:hover { background: rgba(74,222,128,.2); }
+
+        .btn-sm {
+            padding: 5px 12px;
+            font-size: 12px;
+            border-radius: 7px;
+        }
+
+        /* ── User Table ── */
+        .user-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .user-table th {
+            text-align: left;
+            padding: 10px 14px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: .5px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .user-table td {
+            padding: 14px;
+            font-size: 13px;
+            border-bottom: 1px solid rgba(42,42,66,.5);
+            vertical-align: middle;
+        }
+
+        .user-table tr:last-child td { border-bottom: none; }
+        .user-table tr:hover td { background: rgba(91,124,246,.04); }
+
+        .tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .tag-active { background: rgba(74,222,128,.1); color: var(--success); }
+        .tag-inactive { background: rgba(248,113,113,.1); color: var(--danger); }
+        .tag-admin { background: rgba(251,191,36,.1); color: var(--warning); }
+        .tag-user { background: rgba(100,116,139,.1); color: var(--muted); }
+
+        .email-cell { font-weight: 500; }
+
+        .invite-code-chip {
+            font-family: monospace;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            color: var(--accent2);
+            background: rgba(91,124,246,.1);
+            padding: 2px 8px;
+            border-radius: 6px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 48px;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        /* ── Stats ── */
+        .stats-row {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            flex: 1;
+            background: var(--bg3);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px 20px;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--accent2);
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: var(--muted);
+            margin-top: 4px;
+        }
+
+        /* ── Confirm Modal ── */
+        .confirm-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,.7);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+
+        .confirm-box {
+            background: var(--bg2);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 28px;
+            width: 360px;
+            text-align: center;
+        }
+
+        .confirm-box h3 { margin-bottom: 10px; font-size: 18px; }
+        .confirm-box p { color: var(--muted); font-size: 14px; margin-bottom: 24px; line-height: 1.6; }
+
+        .confirm-box .new-code-display {
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: 8px;
+            color: var(--success);
+            font-family: monospace;
+            background: rgba(74,222,128,.08);
+            border: 1px solid rgba(74,222,128,.2);
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 20px;
+        }
+
+        .confirm-actions { display: flex; gap: 10px; }
+        .confirm-actions button { flex: 1; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    </style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="portal-header">
+    <div class="logo">
+        <i class="fa-solid fa-shield-halved"></i>
+        <span>Sked Management Portal</span>
+        <span class="badge">ADMIN</span>
+    </div>
+    <div class="user-info">
+        <i class="fa-solid fa-circle-user" style="color: var(--accent);"></i>
+        <span class="user-email" id="header-email">載入中...</span>
+        <button class="btn-logout" id="btn-logout"><i class="fa-solid fa-right-from-bracket"></i> 登出</button>
+    </div>
+</header>
+
+<!-- Loading -->
+<div id="loading-screen">
+    <div class="spinner"></div>
+    <span>驗證身份中...</span>
+</div>
+
+<!-- Access Denied -->
+<div id="access-denied">
+    <i class="fa-solid fa-lock"></i>
+    <h2>存取遭拒</h2>
+    <p>此頁面僅限管理員使用。</p>
+    <a href="index.html" style="color: var(--accent); font-size: 14px; margin-top: 8px;">← 返回主頁</a>
+</div>
+
+<!-- Admin Content -->
+<div id="admin-content">
+
+    <!-- Stats -->
+    <div class="stats-row">
+        <div class="stat-card">
+            <div class="stat-value" id="stat-total">—</div>
+            <div class="stat-label">總用戶數</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="stat-active" style="color: var(--success);">—</div>
+            <div class="stat-label">啟用中</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="stat-inactive" style="color: var(--danger);">—</div>
+            <div class="stat-label">已停用</div>
+        </div>
+    </div>
+
+    <!-- Invite Code Section -->
+    <div class="section">
+        <div class="section-header">
+            <div class="section-title">
+                <i class="fa-solid fa-key"></i>
+                邀請碼管理
+            </div>
+            <button class="btn btn-primary" id="btn-regenerate">
+                <i class="fa-solid fa-rotate"></i> 重新生成邀請碼
+            </button>
+        </div>
+
+        <div id="invite-code-area">
+            <div class="code-display">
+                <div class="code-label">目前有效邀請碼</div>
+                <div class="code-value" id="current-code">——</div>
+                <div class="code-status active" id="code-status-badge">
+                    <i class="fa-solid fa-circle-check"></i> 有效
+                </div>
+            </div>
+
+            <div class="code-history">
+                <div class="code-history-title">歷史邀請碼</div>
+                <div class="code-history-list" id="code-history-list">
+                    <div class="empty-state" style="padding: 20px;">載入中...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Management Section -->
+    <div class="section">
+        <div class="section-header">
+            <div class="section-title">
+                <i class="fa-solid fa-users"></i>
+                用戶管理
+            </div>
+            <button class="btn btn-primary" id="btn-refresh-users" style="background: rgba(91,124,246,.15); color: var(--accent2); border: 1px solid rgba(91,124,246,.3);">
+                <i class="fa-solid fa-arrows-rotate"></i> 重新整理
+            </button>
+        </div>
+
+        <div id="user-table-area">
+            <div class="empty-state">載入中...</div>
+        </div>
+    </div>
+
+</div>
+
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+const SUPABASE_URL = 'https://bvsvmuktyhkoekjamwkm.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ2c3ZtdWt0eWhrb2VramFtd2ttIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQwODI2ODYsImV4cCI6MjA5OTY1ODY4Nn0.w2LmPAdI5pF2_IxQdgOb1bYkf6P5CbEXxRoSx1p6h94';
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let currentUser = null;
+
+// ── Init ──
+sb.auth.onAuthStateChange(async (event, session) => {
+    currentUser = session?.user || null;
+    await initPortal();
+});
+
+async function initPortal() {
+    if (!currentUser) {
+        showAccessDenied();
+        return;
+    }
+
+    document.getElementById('header-email').textContent = currentUser.email;
+    document.getElementById('btn-logout').addEventListener('click', () => sb.auth.signOut());
+
+    // Check admin role
+    const { data: profile } = await sb
+        .from('profiles')
+        .select('role')
+        .eq('id', currentUser.id)
+        .single();
+
+    if (!profile || profile.role !== 'admin') {
+        showAccessDenied();
+        return;
+    }
+
+    showAdminContent();
+    await Promise.all([loadUsers(), loadInviteCodes()]);
+}
+
+function showAccessDenied() {
+    document.getElementById('loading-screen').style.display = 'none';
+    document.getElementById('access-denied').style.display = 'flex';
+    document.getElementById('admin-content').style.display = 'none';
+}
+
+function showAdminContent() {
+    document.getElementById('loading-screen').style.display = 'none';
+    document.getElementById('access-denied').style.display = 'none';
+    document.getElementById('admin-content').style.display = 'block';
+}
+
+// ── Users ──
+async function loadUsers() {
+    const area = document.getElementById('user-table-area');
+    area.innerHTML = '<div class="empty-state">載入中...</div>';
+
+    const { data: users, error } = await sb.rpc('admin_get_all_users');
+
+    if (error || !users) {
+        area.innerHTML = `<div class="empty-state" style="color:var(--danger);">載入失敗：${error?.message}</div>`;
+        return;
+    }
+
+    const total = users.length;
+    const active = users.filter(u => u.is_active).length;
+    const inactive = total - active;
+    document.getElementById('stat-total').textContent = total;
+    document.getElementById('stat-active').textContent = active;
+    document.getElementById('stat-inactive').textContent = inactive;
+
+    if (users.length === 0) {
+        area.innerHTML = '<div class="empty-state">尚無用戶</div>';
+        return;
+    }
+
+    area.innerHTML = `
+        <table class="user-table">
+            <thead>
+                <tr>
+                    <th>電子郵件</th>
+                    <th>邀請碼</th>
+                    <th>角色</th>
+                    <th>狀態</th>
+                    <th>加入時間</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${users.map(u => `
+                    <tr data-user-id="${u.id}" data-is-active="${u.is_active}">
+                        <td class="email-cell">${u.email}</td>
+                        <td>${u.invite_code ? `<span class="invite-code-chip">${u.invite_code}</span>` : '<span style="color:var(--muted)">—</span>'}</td>
+                        <td>
+                            <span class="tag ${u.role === 'admin' ? 'tag-admin' : 'tag-user'}">
+                                ${u.role === 'admin' ? '<i class="fa-solid fa-crown"></i> 管理員' : '<i class="fa-solid fa-user"></i> 用戶'}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="tag ${u.is_active ? 'tag-active' : 'tag-inactive'}">
+                                <i class="fa-solid fa-circle${u.is_active ? '-check' : '-xmark'}"></i>
+                                ${u.is_active ? '啟用' : '停用'}
+                            </span>
+                        </td>
+                        <td style="color:var(--muted); font-size:12px;">${new Date(u.created_at).toLocaleDateString('zh-TW')}</td>
+                        <td>
+                            ${u.id !== currentUser.id ? `
+                                <button class="btn btn-sm ${u.is_active ? 'btn-danger' : 'btn-success'} toggle-user-btn"
+                                    data-user-id="${u.id}"
+                                    data-is-active="${u.is_active}">
+                                    <i class="fa-solid fa-${u.is_active ? 'ban' : 'circle-check'}"></i>
+                                    ${u.is_active ? '停用' : '啟用'}
+                                </button>
+                            ` : '<span style="color:var(--muted); font-size:12px;">（自己）</span>'}
+                        </td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+
+    area.querySelectorAll('.toggle-user-btn').forEach(btn => {
+        btn.addEventListener('click', () => toggleUser(btn.dataset.userId, btn.dataset.isActive === 'true'));
+    });
+}
+
+async function toggleUser(userId, currentActive) {
+    const newActive = !currentActive;
+    const { error } = await sb.rpc('admin_toggle_user', {
+        p_user_id: userId,
+        p_is_active: newActive
+    });
+    if (error) { alert('操作失敗：' + error.message); return; }
+    await loadUsers();
+}
+
+// ── Invite Codes ──
+async function loadInviteCodes() {
+    const { data: codes, error } = await sb.rpc('admin_get_invite_codes');
+    if (error || !codes) return;
+
+    const active = codes.find(c => c.is_active);
+    const inactive = codes.filter(c => !c.is_active);
+
+    document.getElementById('current-code').textContent = active?.code || '無';
+    const badge = document.getElementById('code-status-badge');
+    if (active) {
+        badge.className = 'code-status active';
+        badge.innerHTML = '<i class="fa-solid fa-circle-check"></i> 有效';
+    } else {
+        badge.className = 'code-status inactive';
+        badge.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> 無有效邀請碼';
+    }
+
+    const historyEl = document.getElementById('code-history-list');
+    if (inactive.length === 0) {
+        historyEl.innerHTML = '<div style="color:var(--muted); font-size:13px; padding:8px;">暫無歷史記錄</div>';
+    } else {
+        historyEl.innerHTML = inactive.map(c => `
+            <div class="code-history-item">
+                <span class="code-mono" style="color:var(--muted);">${c.code}</span>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <span style="font-size:11px; color:var(--muted);">${new Date(c.created_at).toLocaleDateString('zh-TW')}</span>
+                    <span class="tag tag-inactive" style="font-size:11px; padding:2px 8px;">已失效</span>
+                </div>
+            </div>
+        `).join('');
+    }
+}
+
+// ── Regenerate ──
+document.getElementById('btn-regenerate').addEventListener('click', async () => {
+    if (!confirm('確定要重新生成邀請碼？\n目前的邀請碼將立即失效。')) return;
+
+    const btn = document.getElementById('btn-regenerate');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 生成中...';
+
+    const { data: newCode, error } = await sb.rpc('admin_regenerate_invite_code');
+
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-rotate"></i> 重新生成邀請碼';
+
+    if (error) {
+        alert('生成失敗：' + error.message);
+        return;
+    }
+
+    showNewCodeModal(newCode);
+    await loadInviteCodes();
+});
+
+function showNewCodeModal(code) {
+    const overlay = document.createElement('div');
+    overlay.className = 'confirm-overlay';
+    overlay.innerHTML = `
+        <div class="confirm-box">
+            <h3><i class="fa-solid fa-key" style="color:var(--success);"></i> 新邀請碼已生成</h3>
+            <p>舊的邀請碼已失效。請將以下邀請碼發給玩家：</p>
+            <div class="new-code-display">${code}</div>
+            <button class="btn btn-primary" style="width:100%;" onclick="this.closest('.confirm-overlay').remove()">
+                <i class="fa-solid fa-check"></i> 確認
+            </button>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+}
+
+// ── Refresh ──
+document.getElementById('btn-refresh-users').addEventListener('click', loadUsers);
+</script>
+</body>
+</html>

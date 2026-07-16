@@ -65,10 +65,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderMitSkillsList();
         renderMitPlayerTracks();
 
-        // Restore auth session & handle oauth redirect
+        // Restore auth session & handle email auth / password recovery
         sb.auth.onAuthStateChange((event, session) => {
             currentUser = session?.user || null;
             updateAuthUI();
+            if (event === 'PASSWORD_RECOVERY') {
+                openAuthModal('reset-password');
+            }
         });
 
         // Check if there are sharing tokens in the URL
@@ -84,19 +87,15 @@ function updateAuthUI() {
     if (!profileArea) {
         profileArea = document.createElement('div');
         profileArea.id = 'user-profile-area';
-        profileArea.style.display = 'flex';
-        profileArea.style.alignItems = 'center';
-        profileArea.style.gap = '10px';
-        profileArea.style.marginLeft = 'auto';
+        profileArea.style.cssText = 'display:flex; align-items:center; gap:10px; margin-left:auto;';
         document.querySelector('.logo-area').appendChild(profileArea);
     }
 
     if (currentUser) {
-        const username = currentUser.user_metadata?.custom_claims?.global_name || currentUser.user_metadata?.full_name || currentUser.email || '已登入';
-        const avatarUrl = currentUser.user_metadata?.avatar_url;
+        const username = currentUser.email || '已登入';
         profileArea.innerHTML = `
             <div style="display:flex; align-items:center; gap:8px; background:rgba(255,255,255,0.05); padding:4px 10px; border-radius:20px; border:1px solid var(--border-color);">
-                ${avatarUrl ? `<img src="${avatarUrl}" style="width:20px; height:20px; border-radius:50%;" />` : '<i class="fa-solid fa-user"></i>'}
+                <i class="fa-solid fa-circle-user" style="color:#7c9ef8;"></i>
                 <span style="font-size:12px; color:#fff; font-weight:600;">${username}</span>
                 <button id="btn-logout" class="btn-mini" style="background:none; border:none; color:var(--color-danger); cursor:pointer;" title="登出"><i class="fa-solid fa-right-from-bracket"></i></button>
             </div>
@@ -104,16 +103,253 @@ function updateAuthUI() {
         document.getElementById('btn-logout').addEventListener('click', () => sb.auth.signOut());
     } else {
         profileArea.innerHTML = `
-            <button id="btn-login" class="btn btn-secondary" style="padding: 5px 12px; font-size:12px;"><i class="fa-brands fa-discord"></i> 登入 Discord</button>
+            <button id="btn-login" class="btn btn-secondary" style="padding:5px 14px; font-size:12px; display:flex; align-items:center; gap:6px;">
+                <i class="fa-solid fa-right-to-bracket"></i> 登入 / 註冊
+            </button>
         `;
-        document.getElementById('btn-login').addEventListener('click', () => {
-            sb.auth.signInWithOAuth({
-                provider: 'discord',
-                options: {
-                    redirectTo: window.location.origin + window.location.pathname
-                }
-            });
-        });
+        document.getElementById('btn-login').addEventListener('click', () => openAuthModal('login'));
+    }
+}
+
+// ── Auth Modal ──
+const _authInputStyle = 'width:100%; box-sizing:border-box; background:#0d0d1a; border:1px solid #333; border-radius:8px; padding:10px 12px; color:#fff; font-size:14px; outline:none; transition:border-color .2s;';
+const _authBtnStyle = 'width:100%; padding:11px; background:linear-gradient(135deg,#4f6ef7,#7c9ef8); border:none; border-radius:8px; color:#fff; font-size:14px; font-weight:600; cursor:pointer; transition:opacity .2s;';
+
+function createAuthModal() {
+    if (document.getElementById('auth-modal-overlay')) return;
+    const overlay = document.createElement('div');
+    overlay.id = 'auth-modal-overlay';
+    overlay.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.75); backdrop-filter:blur(6px); display:none; align-items:center; justify-content:center; z-index:9999;';
+    overlay.innerHTML = `
+        <div id="auth-modal" style="background:#12121f; border:1px solid #2a2a3f; border-radius:18px; padding:36px 32px; width:380px; max-width:92vw; position:relative; box-shadow:0 24px 60px rgba(0,0,0,0.6);">
+            <button id="auth-modal-close" style="position:absolute; top:14px; right:18px; background:none; border:none; color:#555; font-size:20px; cursor:pointer; line-height:1;">✕</button>
+            <div id="auth-modal-content"></div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', e => { if (e.target === overlay) closeAuthModal(); });
+    document.getElementById('auth-modal-close').addEventListener('click', closeAuthModal);
+}
+
+function openAuthModal(view = 'login') {
+    createAuthModal();
+    document.getElementById('auth-modal-overlay').style.display = 'flex';
+    renderAuthView(view);
+}
+
+function closeAuthModal() {
+    const overlay = document.getElementById('auth-modal-overlay');
+    if (overlay) overlay.style.display = 'none';
+}
+
+function renderAuthView(view) {
+    const content = document.getElementById('auth-modal-content');
+    if (!content) return;
+
+    if (view === 'login') {
+        content.innerHTML = `
+            <h3 style="margin:0 0 6px; color:#fff; font-size:20px; font-weight:700;">歡迎回來</h3>
+            <p style="margin:0 0 24px; color:#666; font-size:13px;">登入以儲存並同步你的排軸計畫</p>
+            <div style="margin-bottom:14px;">
+                <label style="font-size:12px; color:#999; display:block; margin-bottom:6px;">電子郵件</label>
+                <input id="auth-email" type="email" placeholder="your@email.com" style="${_authInputStyle}">
+            </div>
+            <div style="margin-bottom:8px;">
+                <label style="font-size:12px; color:#999; display:block; margin-bottom:6px;">密碼</label>
+                <input id="auth-password" type="password" placeholder="••••••••" style="${_authInputStyle}">
+            </div>
+            <div style="text-align:right; margin-bottom:20px;">
+                <a href="#" id="go-forgot" style="font-size:12px; color:#7c9ef8; text-decoration:none;">忘記密碼？</a>
+            </div>
+            <div id="auth-error" style="color:#ff6b6b; font-size:12px; margin-bottom:12px; display:none;"></div>
+            <button id="auth-submit" style="${_authBtnStyle}">登入</button>
+            <div style="text-align:center; margin-top:18px; font-size:13px; color:#666;">
+                還沒有帳號？ <a href="#" id="go-signup" style="color:#7c9ef8; text-decoration:none; font-weight:600;">立即註冊</a>
+            </div>
+        `;
+        document.getElementById('auth-submit').addEventListener('click', handleLogin);
+        document.getElementById('auth-email').addEventListener('keydown', e => e.key === 'Enter' && document.getElementById('auth-password').focus());
+        document.getElementById('auth-password').addEventListener('keydown', e => e.key === 'Enter' && handleLogin());
+        document.getElementById('go-forgot').addEventListener('click', e => { e.preventDefault(); renderAuthView('forgot'); });
+        document.getElementById('go-signup').addEventListener('click', e => { e.preventDefault(); renderAuthView('signup'); });
+
+    } else if (view === 'signup') {
+        content.innerHTML = `
+            <h3 style="margin:0 0 6px; color:#fff; font-size:20px; font-weight:700;">建立帳號</h3>
+            <p style="margin:0 0 24px; color:#666; font-size:13px;">註冊後收取驗證信，點擊連結即可啟用</p>
+            <div style="margin-bottom:14px;">
+                <label style="font-size:12px; color:#999; display:block; margin-bottom:6px;">電子郵件</label>
+                <input id="auth-email" type="email" placeholder="your@email.com" style="${_authInputStyle}">
+            </div>
+            <div style="margin-bottom:14px;">
+                <label style="font-size:12px; color:#999; display:block; margin-bottom:6px;">密碼（至少 6 位）</label>
+                <input id="auth-password" type="password" placeholder="••••••••" style="${_authInputStyle}">
+            </div>
+            <div style="margin-bottom:14px;">
+                <label style="font-size:12px; color:#999; display:block; margin-bottom:6px;">確認密碼</label>
+                <input id="auth-password-confirm" type="password" placeholder="••••••••" style="${_authInputStyle}">
+            </div>
+            <div style="margin-bottom:20px;">
+                <label style="font-size:12px; color:#999; display:block; margin-bottom:6px;">邀請碼</label>
+                <input id="auth-invite-code" type="text" placeholder="輸入 6 位邀請碼" maxlength="6" style="${_authInputStyle}; text-transform:uppercase; letter-spacing:4px; font-weight:700;">
+            </div>
+            <div id="auth-error" style="color:#ff6b6b; font-size:12px; margin-bottom:12px; display:none;"></div>
+            <button id="auth-submit" style="${_authBtnStyle}">發送驗證信並註冊</button>
+            <div style="text-align:center; margin-top:18px; font-size:13px; color:#666;">
+                已有帳號？ <a href="#" id="go-login" style="color:#7c9ef8; text-decoration:none; font-weight:600;">登入</a>
+            </div>
+        `;
+        document.getElementById('auth-submit').addEventListener('click', handleSignup);
+        document.getElementById('auth-invite-code').addEventListener('input', e => { e.target.value = e.target.value.toUpperCase(); });
+        document.getElementById('go-login').addEventListener('click', e => { e.preventDefault(); renderAuthView('login'); });
+
+    } else if (view === 'forgot') {
+        content.innerHTML = `
+            <h3 style="margin:0 0 6px; color:#fff; font-size:20px; font-weight:700;">重設密碼</h3>
+            <p style="margin:0 0 24px; color:#666; font-size:13px;">輸入你的電子郵件，我們會寄送重設連結。</p>
+            <div style="margin-bottom:20px;">
+                <label style="font-size:12px; color:#999; display:block; margin-bottom:6px;">電子郵件</label>
+                <input id="auth-email" type="email" placeholder="your@email.com" style="${_authInputStyle}">
+            </div>
+            <div id="auth-error" style="color:#ff6b6b; font-size:12px; margin-bottom:12px; display:none;"></div>
+            <button id="auth-submit" style="${_authBtnStyle}">發送重設信</button>
+            <div style="text-align:center; margin-top:18px; font-size:13px; color:#666;">
+                <a href="#" id="go-login" style="color:#7c9ef8; text-decoration:none;">← 返回登入</a>
+            </div>
+        `;
+        document.getElementById('auth-submit').addEventListener('click', handleForgotPassword);
+        document.getElementById('go-login').addEventListener('click', e => { e.preventDefault(); renderAuthView('login'); });
+
+    } else if (view === 'check-email') {
+        const msg = content.dataset.message || '請查看你的信箱，點擊驗證連結後即可使用。';
+        content.innerHTML = `
+            <div style="text-align:center; padding:10px 0;">
+                <i class="fa-solid fa-envelope-circle-check" style="font-size:52px; color:#7c9ef8; margin-bottom:18px; display:block;"></i>
+                <h3 style="color:#fff; margin:0 0 12px; font-size:20px;">信件已發送！</h3>
+                <p style="color:#999; font-size:14px; line-height:1.7; margin:0 0 24px;">${msg}</p>
+                <button id="go-login-btn" style="${_authBtnStyle}">返回登入</button>
+            </div>
+        `;
+        document.getElementById('go-login-btn').addEventListener('click', () => renderAuthView('login'));
+
+    } else if (view === 'reset-password') {
+        content.innerHTML = `
+            <h3 style="margin:0 0 6px; color:#fff; font-size:20px; font-weight:700;">設定新密碼</h3>
+            <p style="margin:0 0 24px; color:#666; font-size:13px;">請輸入你的新密碼。</p>
+            <div style="margin-bottom:14px;">
+                <label style="font-size:12px; color:#999; display:block; margin-bottom:6px;">新密碼（至少 6 位）</label>
+                <input id="auth-new-password" type="password" placeholder="••••••••" style="${_authInputStyle}">
+            </div>
+            <div style="margin-bottom:20px;">
+                <label style="font-size:12px; color:#999; display:block; margin-bottom:6px;">確認新密碼</label>
+                <input id="auth-new-password-confirm" type="password" placeholder="••••••••" style="${_authInputStyle}">
+            </div>
+            <div id="auth-error" style="color:#ff6b6b; font-size:12px; margin-bottom:12px; display:none;"></div>
+            <button id="auth-submit" style="${_authBtnStyle}">更新密碼</button>
+        `;
+        document.getElementById('auth-submit').addEventListener('click', handleResetPassword);
+    }
+}
+
+function showAuthError(msg) {
+    const errEl = document.getElementById('auth-error');
+    if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
+}
+
+async function handleLogin() {
+    const email = document.getElementById('auth-email')?.value.trim();
+    const password = document.getElementById('auth-password')?.value;
+    if (!email || !password) { showAuthError('請填寫所有欄位'); return; }
+    const btn = document.getElementById('auth-submit');
+    btn.textContent = '登入中...';
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) {
+        btn.textContent = '登入';
+        showAuthError(error.message.includes('Invalid') ? '帳號或密碼錯誤' : error.message);
+    } else {
+        closeAuthModal();
+    }
+}
+
+async function handleSignup() {
+    const email = document.getElementById('auth-email')?.value.trim();
+    const password = document.getElementById('auth-password')?.value;
+    const confirm = document.getElementById('auth-password-confirm')?.value;
+    const inviteCode = document.getElementById('auth-invite-code')?.value.trim().toUpperCase();
+    if (!email || !password || !confirm || !inviteCode) { showAuthError('請填寫所有欄位'); return; }
+    if (password !== confirm) { showAuthError('兩次密碼不一致'); return; }
+    if (password.length < 6) { showAuthError('密碼至少需要 6 位'); return; }
+    if (inviteCode.length !== 6) { showAuthError('邀請碼格式預析，請確認是否正確'); return; }
+
+    const btn = document.getElementById('auth-submit');
+    btn.textContent = '驗證邀請碼中...';
+
+    // Validate invite code
+    const { data: codeData, error: codeError } = await sb
+        .from('invite_codes')
+        .select('code')
+        .eq('code', inviteCode)
+        .eq('is_active', true)
+        .maybeSingle();
+
+    if (codeError || !codeData) {
+        btn.textContent = '發送驗證信並註冊';
+        showAuthError('邀請碼無效或已失效，請確認後再試');
+        return;
+    }
+
+    btn.textContent = '發送中...';
+    const { error } = await sb.auth.signUp({
+        email, password,
+        options: {
+            emailRedirectTo: window.location.origin + window.location.pathname,
+            data: { invite_code: inviteCode }
+        }
+    });
+    if (error) {
+        btn.textContent = '發送驗證信並註冊';
+        showAuthError(error.message);
+    } else {
+        const content = document.getElementById('auth-modal-content');
+        content.dataset.message = `驗證信已寄送至 ${email}，
+請點擊信中的連結完成帳號啟用。`;
+        renderAuthView('check-email');
+    }
+}
+
+async function handleForgotPassword() {
+    const email = document.getElementById('auth-email')?.value.trim();
+    if (!email) { showAuthError('請輸入電子郵件'); return; }
+    const btn = document.getElementById('auth-submit');
+    btn.textContent = '發送中...';
+    const { error } = await sb.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + window.location.pathname
+    });
+    if (error) {
+        btn.textContent = '發送重設信';
+        showAuthError(error.message);
+    } else {
+        const content = document.getElementById('auth-modal-content');
+        content.dataset.message = `重設信已寄送至 ${email}，\n請點擊信中的連結設定新密碼。`;
+        renderAuthView('check-email');
+    }
+}
+
+async function handleResetPassword() {
+    const newPw = document.getElementById('auth-new-password')?.value;
+    const confirmPw = document.getElementById('auth-new-password-confirm')?.value;
+    if (!newPw || !confirmPw) { showAuthError('請填寫所有欄位'); return; }
+    if (newPw !== confirmPw) { showAuthError('兩次密碼不一致'); return; }
+    if (newPw.length < 6) { showAuthError('密碼至少需要 6 位'); return; }
+    const btn = document.getElementById('auth-submit');
+    btn.textContent = '更新中...';
+    const { error } = await sb.auth.updateUser({ password: newPw });
+    if (error) {
+        btn.textContent = '更新密碼';
+        showAuthError(error.message);
+    } else {
+        closeAuthModal();
+        alert('密碼已成功更新！');
     }
 }
 
@@ -614,7 +850,7 @@ function addNewBossMechanic() {
 
 async function saveTeamPlanToSupabase() {
     if (!currentUser) {
-        alert('請先登入 Discord 帳號後，才能儲存減排計畫至雲端！');
+        alert('請先登入 Google 帳號後，才能儲存減排計畫至雲端！');
         return;
     }
 
@@ -676,7 +912,7 @@ async function saveTeamPlanToSupabase() {
 
 async function loadTeamPlansModal() {
     if (!currentUser) {
-        alert('請先登入 Discord 以讀取您的雲端計畫！');
+        alert('請先登入 Google 以讀取您的雲端計畫！');
         return;
     }
 
