@@ -823,25 +823,8 @@ function populateMitDutyDropdown(dutiesData, selectedValue = '') {
         dutiesByCategory[duty.category].push(duty);
     });
 
-    // Find the active category containing selectedValue
-    let activeCatKey = null;
-    if (selectedValue) {
-        const activeDuty = duties.find(duty => duty.file === selectedValue);
-        if (activeDuty) {
-            activeCatKey = activeDuty.category;
-        }
-    }
-
-    // Collect category keys, sorting the active category to the top
-    const catKeys = Object.keys(dutiesByCategory);
-    if (activeCatKey && catKeys.includes(activeCatKey)) {
-        const index = catKeys.indexOf(activeCatKey);
-        catKeys.splice(index, 1);
-        catKeys.unshift(activeCatKey);
-    }
-
-    // Append optgroups in the sorted order
-    catKeys.forEach(catKey => {
+    // Append optgroups in original order
+    Object.keys(dutiesByCategory).forEach(catKey => {
         const optgroup = document.createElement('optgroup');
         optgroup.label = categories[catKey]?.label || catKey;
         
@@ -856,6 +839,11 @@ function populateMitDutyDropdown(dutiesData, selectedValue = '') {
         });
         mitDutySelect.appendChild(optgroup);
     });
+
+    // Sync with custom dropdown
+    if (typeof window.syncCustomDropdown === 'function') {
+        window.syncCustomDropdown(mitDutySelect, dutiesData);
+    }
 }
 
 // ── 7. Render functions ──

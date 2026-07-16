@@ -1972,6 +1972,119 @@ body {
   opacity: 0.9;
 }
 
+/* Custom Dropdown Styles */
+.custom-dropdown-container {
+  position: relative;
+  width: 200px;
+  user-select: none;
+}
+
+.custom-dropdown-trigger {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #1a1e2b;
+  border: 1px solid var(--border-color);
+  color: var(--color-text-main);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  height: 32px;
+  box-sizing: border-box;
+  transition: all 0.2s ease;
+}
+
+.custom-dropdown-trigger:hover {
+  border-color: #555;
+}
+
+.custom-dropdown-container.active .custom-dropdown-trigger {
+  border-color: var(--color-gcd);
+  box-shadow: 0 0 8px rgba(0, 240, 255, 0.2);
+}
+
+.custom-dropdown-trigger-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  text-align: left;
+}
+
+.custom-dropdown-trigger i {
+  margin-left: 10px;
+  font-size: 12px;
+  color: var(--color-text-muted, #777);
+  transition: transform 0.2s;
+}
+
+.custom-dropdown-container.active .custom-dropdown-trigger i {
+  transform: rotate(180deg);
+}
+
+.custom-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 100%;
+  max-height: 250px;
+  overflow-y: auto;
+  background: #121224;
+  border: 1px solid #2a2a3f;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  display: none;
+}
+
+.custom-dropdown-container.active .custom-dropdown-menu {
+  display: block;
+}
+
+/* Scrollbar styles for dropdown menu */
+.custom-dropdown-menu::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-dropdown-menu::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-dropdown-menu::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+.custom-dropdown-menu::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.custom-dropdown-header {
+  padding: 8px 12px 4px;
+  font-size: 11px;
+  color: #7c9ef8;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  background: rgba(124, 158, 248, 0.03);
+}
+
+.custom-dropdown-item {
+  padding: 6px 18px;
+  font-size: 13px;
+  color: #ccc;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.custom-dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+}
+
+.custom-dropdown-item.selected {
+  background: rgba(124, 158, 248, 0.15);
+  color: #fff;
+  font-weight: 500;
+}
+
 
 
 

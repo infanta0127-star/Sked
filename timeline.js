@@ -261,26 +261,9 @@ function populateDutyDropdown(dutiesData, selectedValue = '') {
     }
     dutiesByCategory[duty.category].push(duty);
   });
-
-  // Find the active category containing selectedValue
-  let activeCatKey = null;
-  if (selectedValue) {
-    const activeDuty = duties.find(duty => duty.file === selectedValue);
-    if (activeDuty) {
-      activeCatKey = activeDuty.category;
-    }
-  }
-
-  // Collect category keys, sorting the active category to the top
-  const catKeys = Object.keys(dutiesByCategory);
-  if (activeCatKey && catKeys.includes(activeCatKey)) {
-    const index = catKeys.indexOf(activeCatKey);
-    catKeys.splice(index, 1);
-    catKeys.unshift(activeCatKey);
-  }
   
-  // Create grouped options under optgroups
-  catKeys.forEach(catKey => {
+  // Create grouped options under optgroups (in original category order)
+  Object.keys(dutiesByCategory).forEach(catKey => {
     const catLabel = categories[catKey]?.label || catKey;
     const optgroup = document.createElement('optgroup');
     optgroup.label = catLabel;
@@ -297,6 +280,9 @@ function populateDutyDropdown(dutiesData, selectedValue = '') {
     
     dutySelect.appendChild(optgroup);
   });
+
+  // Sync with our custom dropdown
+  syncCustomDropdown(dutySelect, dutiesData);
 }
 
 // Helper: Parse MM:SS to seconds
@@ -2333,3 +2319,140 @@ async function loadIndivPlanById(planId) {
     alert(`載入計畫失敗: ${err.message}`);
   }
 }
+
+function syncCustomDropdown(selectEl, dutiesData) {
+  if (!selectEl) return;
+  
+  let containerId = selectEl.id + '-custom-container';
+  let container = document.getElementById(containerId);
+  
+  if (!container) {
+    container = document.createElement('div');
+    container.id = containerId;
+    container.className = 'custom-dropdown-container';
+    
+    const trigger = document.createElement('div');
+    trigger.className = 'custom-dropdown-trigger';
+    trigger.innerHTML = `
+      <span class="custom-dropdown-trigger-text"></span>
+      <i class="fa-solid fa-chevron-down"></i>
+    `;
+    container.appendChild(trigger);
+    
+    const menu = document.createElement('div');
+    menu.className = 'custom-dropdown-menu';
+    container.appendChild(menu);
+    
+    selectEl.parentNode.insertBefore(container, selectEl.nextSibling);
+    selectEl.style.display = 'none';
+    
+    trigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isActive = container.classList.contains('active');
+      
+      document.querySelectorAll('.custom-dropdown-container').forEach(c => {
+        if (c !== container) c.classList.remove('active');
+      });
+      
+      container.classList.toggle('active');
+      
+      if (!isActive) {
+        const val = selectEl.value;
+        const activeItem = menu.querySelector(`.custom-dropdown-item[data-value="${val}"]`);
+        if (activeItem) {
+          const catKey = activeItem.dataset.category;
+          if (catKey) {
+            const header = menu.querySelector(`.custom-dropdown-header[data-category="${catKey}"]`);
+            if (header) {
+              // Scroll the menu container so that the active category header is at the top
+              menu.scrollTop = header.offsetTop;
+            }
+          } else {
+            menu.scrollTop = 0;
+          }
+        }
+      }
+    });
+    
+    document.addEventListener('click', () => {
+      container.classList.remove('active');
+    });
+    
+    selectEl.addEventListener('change', () => {
+      updateCustomDropdownSelection(selectEl, container);
+    });
+  }
+  
+  const menu = container.querySelector('.custom-dropdown-menu');
+  menu.innerHTML = '';
+  
+  const defaultItem = document.createElement('div');
+  defaultItem.className = 'custom-dropdown-item';
+  defaultItem.dataset.value = '';
+  defaultItem.textContent = '無副本 (自訂時間軸)';
+  defaultItem.addEventListener('click', (e) => {
+    e.stopPropagation();
+    selectEl.value = '';
+    selectEl.dispatchEvent(new Event('change'));
+    container.classList.remove('active');
+  });
+  menu.appendChild(defaultItem);
+  
+  const categories = dutiesData.categories || {};
+  const duties = dutiesData.duties || [];
+  
+  const dutiesByCategory = {};
+  duties.forEach(duty => {
+    if (!dutiesByCategory[duty.category]) {
+      dutiesByCategory[duty.category] = [];
+    }
+    dutiesByCategory[duty.category].push(duty);
+  });
+  
+  Object.keys(dutiesByCategory).forEach(catKey => {
+    const catLabel = categories[catKey]?.label || catKey;
+    const header = document.createElement('div');
+    header.className = 'custom-dropdown-header';
+    header.dataset.category = catKey;
+    header.textContent = catLabel;
+    menu.appendChild(header);
+    
+    dutiesByCategory[catKey].forEach(duty => {
+      const item = document.createElement('div');
+      item.className = 'custom-dropdown-item';
+      item.dataset.value = duty.file;
+      item.dataset.category = catKey;
+      item.textContent = duty.name;
+      item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectEl.value = duty.file;
+        selectEl.dispatchEvent(new Event('change'));
+        container.classList.remove('active');
+      });
+      menu.appendChild(item);
+    });
+  });
+  
+  updateCustomDropdownSelection(selectEl, container);
+}
+
+function updateCustomDropdownSelection(selectEl, container) {
+  const val = selectEl.value;
+  const triggerText = container.querySelector('.custom-dropdown-trigger-text');
+  const items = container.querySelectorAll('.custom-dropdown-item');
+  
+  let foundText = '無副本 (自訂時間軸)';
+  items.forEach(item => {
+    if (item.dataset.value === val) {
+      item.classList.add('selected');
+      foundText = item.textContent;
+    } else {
+      item.classList.remove('selected');
+    }
+  });
+  
+  triggerText.textContent = foundText;
+}
+
+window.syncCustomDropdown = syncCustomDropdown;
+
