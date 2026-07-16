@@ -58,6 +58,42 @@ window.showCustomPrompt = function(title, placeholder, defaultValue = '') {
   });
 };
 
+window.showCustomSaveChoices = function() {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.75); backdrop-filter:blur(6px); display:flex; align-items:center; justify-content:center; z-index:10000;';
+    overlay.innerHTML = `
+      <div style="background:#12121f; border:1px solid #2a2a3f; border-radius:16px; padding:28px 24px; width:380px; max-width:90vw; color:#fff; box-shadow:0 24px 60px rgba(0,0,0,0.6); position:relative;">
+        <button id="custom-save-close" style="position:absolute; top:14px; right:18px; background:none; border:none; color:#555; font-size:20px; cursor:pointer; line-height:1;">✕</button>
+        <h3 style="margin:0 0 16px; font-size:16px; font-weight:700; color:#fff;">保存紀錄</h3>
+        <p style="margin:0 0 24px; font-size:14px; color:#aaa; line-height:1.5;">請選擇您的儲存方式：</p>
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          <button id="custom-save-existing" style="width:100%; padding:12px; background:linear-gradient(135deg,#4f6ef7,#7c9ef8); border:none; border-radius:8px; color:#fff; cursor:pointer; font-weight:600; font-size:14px; transition:opacity 0.2s;">保存至現有紀錄</button>
+          <button id="custom-save-new" style="width:100%; padding:12px; background:rgba(255, 255, 255, 0.05); border:1px solid rgba(255, 255, 255, 0.1); border-radius:8px; color:#fff; cursor:pointer; font-weight:600; font-size:14px; transition:background 0.2s;">保存成新的紀錄</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    
+    const cleanup = (val) => {
+      document.body.removeChild(overlay);
+      resolve(val);
+    };
+    
+    overlay.querySelector('#custom-save-close').addEventListener('click', () => cleanup(null));
+    overlay.querySelector('#custom-save-existing').addEventListener('click', () => cleanup('existing'));
+    overlay.querySelector('#custom-save-new').addEventListener('click', () => cleanup('new'));
+    
+    const handleEsc = (e) => {
+      if (e.key === 'Escape') {
+        cleanup(null);
+        window.removeEventListener('keydown', handleEsc);
+      }
+    };
+    window.addEventListener('keydown', handleEsc);
+  });
+};
+
 // Globals and State
 const PREPULL_TIME = 10; // Pre-pull time in seconds (allows pre-casting skills before combat starts)
 const TRACK_INFO_WIDTH = 180; // Width of the sticky left track info panel in pixels
@@ -2067,11 +2103,13 @@ async function saveIndivPlanToSupabase() {
   }
 
   try {
-    const toExisting = await window.showCustomConfirm('保存紀錄', '是否保存到現有的紀錄檔？');
-    if (toExisting) {
+    const choice = await window.showCustomSaveChoices();
+    if (choice === null) return;
+
+    if (choice === 'existing') {
       savesModalMode = 'save';
       await loadIndivPlansModal();
-    } else {
+    } else if (choice === 'new') {
       const name = await window.showCustomPrompt('保存紀錄', '請輸入新的存檔名稱：', currentIndivPlanName);
       if (name === null) return;
       if (name.trim() === '') {

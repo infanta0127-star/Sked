@@ -1384,11 +1384,13 @@ async function saveTeamPlanToSupabase() {
     }
 
     try {
-        const toExisting = await window.showCustomConfirm('保存紀錄', '是否保存到現有的紀錄檔？');
-        if (toExisting) {
+        const choice = await window.showCustomSaveChoices();
+        if (choice === null) return;
+
+        if (choice === 'existing') {
             savesModalMode = 'save';
             await loadTeamPlansModal();
-        } else {
+        } else if (choice === 'new') {
             const name = await window.showCustomPrompt('保存紀錄', '請輸入新的存檔名稱：', currentTeamPlanName);
             if (name === null) return;
             if (name.trim() === '') {
