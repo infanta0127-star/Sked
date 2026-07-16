@@ -891,6 +891,10 @@ function renderPartySelector() {
         wrapper.appendChild(label);
         wrapper.appendChild(select);
         partyGrid.appendChild(wrapper);
+        
+        if (typeof window.syncCustomDropdown === 'function') {
+            window.syncCustomDropdown(select);
+        }
     }
 }
 

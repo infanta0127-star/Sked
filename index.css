@@ -1975,8 +1975,26 @@ body {
 /* Custom Dropdown Styles */
 .custom-dropdown-container {
   position: relative;
-  width: 200px;
+  width: 100%;
+  max-width: 200px;
   user-select: none;
+}
+
+.party-grid .custom-dropdown-container {
+  max-width: none;
+  width: 100%;
+}
+
+.party-grid .custom-dropdown-trigger {
+  background-color: rgba(0, 0, 0, 0.35);
+  padding: 6px 8px;
+  font-size: 11px;
+  height: 28px;
+}
+
+.party-grid .custom-dropdown-item {
+  padding: 6px 12px;
+  font-size: 12px;
 }
 
 .custom-dropdown-trigger {

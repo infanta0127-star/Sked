@@ -241,6 +241,8 @@ function populateJobDropdown() {
       groups[job.category].appendChild(opt);
     }
   });
+  
+  syncCustomDropdown(jobSelect);
 }
 
 // 1b. Setup Duty Dropdown List
@@ -2320,10 +2322,17 @@ async function loadIndivPlanById(planId) {
   }
 }
 
-function syncCustomDropdown(selectEl, dutiesData) {
+function syncCustomDropdown(selectEl) {
   if (!selectEl) return;
   
-  let containerId = selectEl.id + '-custom-container';
+  let containerId = selectEl.id ? (selectEl.id + '-custom-container') : null;
+  if (!containerId) {
+    if (!selectEl.dataset.customId) {
+      selectEl.dataset.customId = 'custom-select-' + Math.random().toString(36).substring(2, 9);
+    }
+    containerId = selectEl.dataset.customId + '-container';
+  }
+  
   let container = document.getElementById(containerId);
   
   if (!container) {
@@ -2364,11 +2373,10 @@ function syncCustomDropdown(selectEl, dutiesData) {
           if (catKey) {
             const header = menu.querySelector(`.custom-dropdown-header[data-category="${catKey}"]`);
             if (header) {
-              // Scroll the menu container so that the active category header is at the top
               menu.scrollTop = header.offsetTop;
             }
           } else {
-            menu.scrollTop = 0;
+            menu.scrollTop = activeItem.offsetTop - 10;
           }
         }
       }
@@ -2386,51 +2394,46 @@ function syncCustomDropdown(selectEl, dutiesData) {
   const menu = container.querySelector('.custom-dropdown-menu');
   menu.innerHTML = '';
   
-  const defaultItem = document.createElement('div');
-  defaultItem.className = 'custom-dropdown-item';
-  defaultItem.dataset.value = '';
-  defaultItem.textContent = '無副本 (自訂時間軸)';
-  defaultItem.addEventListener('click', (e) => {
-    e.stopPropagation();
-    selectEl.value = '';
-    selectEl.dispatchEvent(new Event('change'));
-    container.classList.remove('active');
-  });
-  menu.appendChild(defaultItem);
-  
-  const categories = dutiesData.categories || {};
-  const duties = dutiesData.duties || [];
-  
-  const dutiesByCategory = {};
-  duties.forEach(duty => {
-    if (!dutiesByCategory[duty.category]) {
-      dutiesByCategory[duty.category] = [];
-    }
-    dutiesByCategory[duty.category].push(duty);
-  });
-  
-  Object.keys(dutiesByCategory).forEach(catKey => {
-    const catLabel = categories[catKey]?.label || catKey;
-    const header = document.createElement('div');
-    header.className = 'custom-dropdown-header';
-    header.dataset.category = catKey;
-    header.textContent = catLabel;
-    menu.appendChild(header);
-    
-    dutiesByCategory[catKey].forEach(duty => {
+  // Parse options and optgroups from the select element
+  Array.from(selectEl.children).forEach(child => {
+    if (child.tagName === 'OPTION') {
+      // Skip disabled placeholder option if there are other options
+      if (child.disabled && selectEl.children.length > 1) return;
+      
       const item = document.createElement('div');
       item.className = 'custom-dropdown-item';
-      item.dataset.value = duty.file;
-      item.dataset.category = catKey;
-      item.textContent = duty.name;
+      item.dataset.value = child.value;
+      item.textContent = child.textContent;
       item.addEventListener('click', (e) => {
         e.stopPropagation();
-        selectEl.value = duty.file;
+        selectEl.value = child.value;
         selectEl.dispatchEvent(new Event('change'));
         container.classList.remove('active');
       });
       menu.appendChild(item);
-    });
+    } else if (child.tagName === 'OPTGROUP') {
+      const catKey = child.label || child.id || Math.random().toString();
+      const header = document.createElement('div');
+      header.className = 'custom-dropdown-header';
+      header.dataset.category = catKey;
+      header.textContent = child.label;
+      menu.appendChild(header);
+      
+      Array.from(child.children).forEach(opt => {
+        const item = document.createElement('div');
+        item.className = 'custom-dropdown-item';
+        item.dataset.value = opt.value;
+        item.dataset.category = catKey;
+        item.textContent = opt.textContent;
+        item.addEventListener('click', (e) => {
+          e.stopPropagation();
+          selectEl.value = opt.value;
+          selectEl.dispatchEvent(new Event('change'));
+          container.classList.remove('active');
+        });
+        menu.appendChild(item);
+      });
+    }
   });
   
   updateCustomDropdownSelection(selectEl, container);
@@ -2441,11 +2444,12 @@ function updateCustomDropdownSelection(selectEl, container) {
   const triggerText = container.querySelector('.custom-dropdown-trigger-text');
   const items = container.querySelectorAll('.custom-dropdown-item');
   
-  let foundText = '無副本 (自訂時間軸)';
+  const selectedOpt = selectEl.querySelector(`option[value="${val}"]`) || selectEl.querySelector('option:checked') || selectEl.querySelector('option');
+  let foundText = selectedOpt ? selectedOpt.textContent : '請選擇...';
+  
   items.forEach(item => {
     if (item.dataset.value === val) {
       item.classList.add('selected');
-      foundText = item.textContent;
     } else {
       item.classList.remove('selected');
     }
