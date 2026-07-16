@@ -809,7 +809,7 @@ function getPixelsPerSecond() {
     return window.pixelsPerSecond || 15;
 }
 
-function populateMitDutyDropdown(dutiesData) {
+function populateMitDutyDropdown(dutiesData, selectedValue = '') {
     mitDutySelect.innerHTML = '<option value="">無副本 (自訂時間軸)</option>';
     const duties = dutiesData.duties || [];
     
@@ -823,7 +823,25 @@ function populateMitDutyDropdown(dutiesData) {
         dutiesByCategory[duty.category].push(duty);
     });
 
-    Object.keys(dutiesByCategory).forEach(catKey => {
+    // Find the active category containing selectedValue
+    let activeCatKey = null;
+    if (selectedValue) {
+        const activeDuty = duties.find(duty => duty.file === selectedValue);
+        if (activeDuty) {
+            activeCatKey = activeDuty.category;
+        }
+    }
+
+    // Collect category keys, sorting the active category to the top
+    const catKeys = Object.keys(dutiesByCategory);
+    if (activeCatKey && catKeys.includes(activeCatKey)) {
+        const index = catKeys.indexOf(activeCatKey);
+        catKeys.splice(index, 1);
+        catKeys.unshift(activeCatKey);
+    }
+
+    // Append optgroups in the sorted order
+    catKeys.forEach(catKey => {
         const optgroup = document.createElement('optgroup');
         optgroup.label = categories[catKey]?.label || catKey;
         
@@ -831,6 +849,9 @@ function populateMitDutyDropdown(dutiesData) {
             const option = document.createElement('option');
             option.value = duty.file;
             option.text = duty.name;
+            if (duty.file === selectedValue) {
+                option.selected = true;
+            }
             optgroup.appendChild(option);
         });
         mitDutySelect.appendChild(optgroup);
@@ -1329,6 +1350,7 @@ function setupMitEventListeners() {
     // Duty dropdown load events
     mitDutySelect.addEventListener('change', async (e) => {
         const dutyFile = e.target.value;
+        populateMitDutyDropdown(mitDutiesDatabase, dutyFile);
         if (!dutyFile) {
             mitBossMechanics = [];
             renderMitTimeline();
@@ -1627,6 +1649,7 @@ async function loadTeamPlanById(planId) {
 
         // Apply state
         mitDutySelect.value = plan.duty_key || '';
+        populateMitDutyDropdown(mitDutiesDatabase, plan.duty_key || '');
         mitParty = plan.party || [];
         mitTimelineSkills = plan.mits || [];
         
@@ -1920,6 +1943,7 @@ async function handleUrlSharingTokens() {
 
             // Apply state
             mitDutySelect.value = data.duty_key || '';
+            populateMitDutyDropdown(mitDutiesDatabase, data.duty_key || '');
             mitParty = data.party || [];
             mitTimelineSkills = data.mits || [];
             
@@ -2008,6 +2032,7 @@ function importTeamPlanJSON(e) {
             
             if (dutyFile && dutyFile !== 'custom') {
                 mitDutySelect.value = dutyFile;
+                populateMitDutyDropdown(mitDutiesDatabase, dutyFile);
                 // Fetch official duty mechanics
                 try {
                     const resp = await fetch(`./data/duties/${dutyFile}`);
@@ -2020,6 +2045,7 @@ function importTeamPlanJSON(e) {
                 }
             } else {
                 mitDutySelect.value = '';
+                populateMitDutyDropdown(mitDutiesDatabase, '');
             }
             
             // 3. Parse custom mechanics / imported mechanics

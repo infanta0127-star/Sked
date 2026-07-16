@@ -244,7 +244,7 @@ function populateJobDropdown() {
 }
 
 // 1b. Setup Duty Dropdown List
-function populateDutyDropdown(dutiesData) {
+function populateDutyDropdown(dutiesData, selectedValue = '') {
   if (!dutySelect) return;
   
   // Clear existing options except default one
@@ -261,9 +261,26 @@ function populateDutyDropdown(dutiesData) {
     }
     dutiesByCategory[duty.category].push(duty);
   });
+
+  // Find the active category containing selectedValue
+  let activeCatKey = null;
+  if (selectedValue) {
+    const activeDuty = duties.find(duty => duty.file === selectedValue);
+    if (activeDuty) {
+      activeCatKey = activeDuty.category;
+    }
+  }
+
+  // Collect category keys, sorting the active category to the top
+  const catKeys = Object.keys(dutiesByCategory);
+  if (activeCatKey && catKeys.includes(activeCatKey)) {
+    const index = catKeys.indexOf(activeCatKey);
+    catKeys.splice(index, 1);
+    catKeys.unshift(activeCatKey);
+  }
   
   // Create grouped options under optgroups
-  Object.keys(dutiesByCategory).forEach(catKey => {
+  catKeys.forEach(catKey => {
     const catLabel = categories[catKey]?.label || catKey;
     const optgroup = document.createElement('optgroup');
     optgroup.label = catLabel;
@@ -272,6 +289,9 @@ function populateDutyDropdown(dutiesData) {
       const opt = document.createElement('option');
       opt.value = duty.file;
       opt.textContent = duty.name;
+      if (duty.file === selectedValue) {
+        opt.selected = true;
+      }
       optgroup.appendChild(opt);
     });
     
@@ -398,8 +418,10 @@ function setupEventListeners() {
   // Duty selection change
   dutySelect.addEventListener('change', async (e) => {
     const dutyFile = e.target.value;
+    populateDutyDropdown(dutiesDatabase, dutyFile);
     if (bossMechanics.length > 0 && !confirm('載入新副本將清空目前首領機制軌道，確定要繼續嗎？')) {
       dutySelect.value = currentDutyFile;
+      populateDutyDropdown(dutiesDatabase, currentDutyFile);
       return;
     }
     
@@ -422,6 +444,7 @@ function setupEventListeners() {
       alert('載入副本失敗: ' + err.message);
       dutySelect.value = '';
       currentDutyFile = '';
+      populateDutyDropdown(dutiesDatabase, '');
     }
   });
 
@@ -1241,6 +1264,7 @@ function loadPlanData(data) {
   currentDutyFile = data.dutyFile || '';
   if (dutySelect) {
     dutySelect.value = currentDutyFile;
+    populateDutyDropdown(dutiesDatabase, currentDutyFile);
   }
   
   loadJobSkills(currentJobId);
@@ -1666,10 +1690,12 @@ async function importFfxivMitigationPlan(data) {
     if (dutyObj && dutyData) {
       currentDutyFile = dutyObj.file;
       dutySelect.value = currentDutyFile;
+      populateDutyDropdown(dutiesDatabase, currentDutyFile);
       loadDutyTimeline(dutyData);
     } else {
       currentDutyFile = '';
       dutySelect.value = '';
+      populateDutyDropdown(dutiesDatabase, '');
       bossMechanics = [];
     }
     
