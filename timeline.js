@@ -256,6 +256,7 @@ function setupEventListeners() {
   // Import from team mitigation planner event listener
   if (btnImportMit) {
     btnImportMit.addEventListener('click', () => {
+      if (!window.mitParty || !window.mitTimelineSkills) {
         alert('尚未在團隊排軸頁籤中規劃技能，請先在「團隊技能排軸」中規劃。');
         return;
       }
