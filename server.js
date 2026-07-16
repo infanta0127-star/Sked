@@ -2,6 +2,7 @@ import http from 'http';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import os from 'os';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -55,6 +56,21 @@ const server = http.createServer((req, res) => {
   });
 });
 
+function getNetworkIp() {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const net of interfaces[name]) {
+      if (net.family === 'IPv4' && !net.internal) {
+        return net.address;
+      }
+    }
+  }
+  return '127.0.0.1';
+}
+
 server.listen(PORT, () => {
-  console.log(`Local development server running at: http://localhost:${PORT}/`);
+  const networkIp = getNetworkIp();
+  console.log(`Local development server running at:`);
+  console.log(`  - Local:   http://localhost:${PORT}/`);
+  console.log(`  - Network: http://${networkIp}:${PORT}/`);
 });

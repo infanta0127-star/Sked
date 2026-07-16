@@ -15,6 +15,7 @@ let mitParty = ['PLD', 'DRK', 'WHM', 'SGE', 'SAM', 'RPR', 'BRD', 'PCT'];
 let mitTimelineSkills = []; // [{ id, slotIndex, jobAbbrev, skillKey, startTime, duration }]
 let mitBossMechanics = [];
 let currentMitDutyFile = '';
+let mitLayoutMode = 'vertical'; // 'vertical' or 'horizontal'
 
 // Cloud State Variables
 let currentTeamPlanId = null;
@@ -36,6 +37,7 @@ const mitLengthDisplay = document.getElementById('mit-timeline-length-display');
 
 // Toolbar Buttons
 const mitDutySelect = document.getElementById('mit-duty-select');
+const mitLayoutSelect = document.getElementById('mit-layout-select');
 const mitBtnSave = document.getElementById('mit-btn-save');
 const mitBtnLoad = document.getElementById('mit-btn-load');
 const mitBtnShare = document.getElementById('mit-btn-share');
@@ -76,6 +78,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Check if there are sharing tokens in the URL
         await handleUrlSharingTokens();
+
+        // Render timeline initially
+        renderMitTimeline();
     } catch (err) {
         console.error('Initialization error in mit_timeline.js:', err);
     }
@@ -354,6 +359,15 @@ async function handleResetPassword() {
 }
 
 // ── 6. Helper Functions ──
+function parseDutyTime(timeStr) {
+    if (!timeStr) return 0;
+    const parts = timeStr.split(':');
+    if (parts.length === 2) {
+        return parseInt(parts[0], 10) * 60 + parseFloat(parts[1]);
+    }
+    return parseFloat(timeStr) || 0;
+}
+
 function getPixelsPerSecond() {
     return window.pixelsPerSecond || 15;
 }
@@ -589,12 +603,22 @@ function renderMitTimeline() {
         if (c.startTime + c.duration > maxTime) maxTime = c.startTime + c.duration;
     });
     
-    const totalWidth = (maxTime + 15) * pps;
-    mitTimelineEditor.style.width = `${totalWidth + 200}px`;
+    const totalLength = (maxTime + 15) * pps;
+    
+    if (mitLayoutMode === 'vertical') {
+        mitTimelineEditor.classList.add('vertical');
+        mitTimelineEditor.style.height = `${totalLength}px`;
+        mitTimelineEditor.style.width = ''; // handled by CSS
+    } else {
+        mitTimelineEditor.classList.remove('vertical');
+        mitTimelineEditor.style.width = `${totalLength + 200}px`;
+        mitTimelineEditor.style.height = '';
+    }
+    
     mitLengthDisplay.innerHTML = `<i class="fa-regular fa-clock"></i> 軸總長: ${Math.ceil(maxTime)}s`;
 
     // Render Ruler
-    renderMitRuler(totalWidth);
+    renderMitRuler(totalLength);
 
     // Render Boss Mechanics Track
     renderMitBossMechanics();
@@ -613,8 +637,18 @@ function renderMitTimeline() {
             const pill = document.createElement('div');
             pill.className = 'placed-mit-pill';
             pill.draggable = true;
-            pill.style.left = `${cast.startTime * pps}px`;
-            pill.style.width = `${cast.duration * pps}px`;
+            
+            if (mitLayoutMode === 'vertical') {
+                pill.style.top = `${cast.startTime * pps}px`;
+                pill.style.height = `${cast.duration * pps}px`;
+                pill.style.left = '';
+                pill.style.width = '';
+            } else {
+                pill.style.left = `${cast.startTime * pps}px`;
+                pill.style.width = `${cast.duration * pps}px`;
+                pill.style.top = '';
+                pill.style.height = '';
+            }
             
             pill.innerHTML = `
                 <img src="${skillData.icon}" />
@@ -646,15 +680,22 @@ function renderMitTimeline() {
     });
 }
 
-function renderMitRuler(width) {
+function renderMitRuler(widthOrHeight) {
     mitTimelineRuler.innerHTML = '';
     const pps = getPixelsPerSecond();
-    const totalSeconds = Math.ceil(width / pps);
+    const totalSeconds = Math.ceil(widthOrHeight / pps);
     
     for (let sec = 0; sec <= totalSeconds; sec += 5) {
         const tick = document.createElement('div');
         tick.className = sec % 10 === 0 ? 'ruler-tick major' : 'ruler-tick minor';
-        tick.style.left = `${sec * pps}px`;
+        
+        if (mitLayoutMode === 'vertical') {
+            tick.style.top = `${sec * pps}px`;
+            tick.style.left = '0';
+        } else {
+            tick.style.left = `${sec * pps}px`;
+            tick.style.top = '';
+        }
         
         if (sec % 10 === 0) {
             const label = document.createElement('span');
@@ -676,7 +717,14 @@ function renderMitBossMechanics() {
         const pill = document.createElement('div');
         pill.className = `mechanic-pill ${mech.dmgType || 'physical'}`;
         pill.draggable = true;
-        pill.style.left = `${mech.time * pps}px`;
+        
+        if (mitLayoutMode === 'vertical') {
+            pill.style.top = `${mech.time * pps}px`;
+            pill.style.left = '';
+        } else {
+            pill.style.left = `${mech.time * pps}px`;
+            pill.style.top = '';
+        }
         
         pill.innerHTML = `
             <span class="mechanic-name">${mech.name}</span>
@@ -745,6 +793,14 @@ function setupMitEventListeners() {
     mitBtnShare.addEventListener('click', generateTeamShareUrl);
     mitBtnAddMechanic.addEventListener('click', addNewBossMechanic);
 
+    // Layout select change event
+    if (mitLayoutSelect) {
+        mitLayoutSelect.addEventListener('change', (e) => {
+            mitLayoutMode = e.target.value;
+            renderMitTimeline();
+        });
+    }
+
     // Duty dropdown load events
     mitDutySelect.addEventListener('change', async (e) => {
         const dutyFile = e.target.value;
@@ -759,12 +815,36 @@ function setupMitEventListeners() {
             const data = await resp.json();
             
             // Map mechanics
-            mitBossMechanics = (data.timeline || []).map((m, idx) => ({
-                id: m.id || `mech-${idx}-${Date.now()}`,
-                time: m.time,
-                name: m.name,
-                dmgType: m.dmgType || 'physical'
-            }));
+            mitBossMechanics = (data.timeline || []).map((m, idx) => {
+                const time = parseDutyTime(m.castingTime || m.hitTime);
+                let name = m.skill;
+                if (name === 'AA') {
+                    name = '普通攻擊 (AA)';
+                }
+                if (!name) {
+                    if (m.variants && m.variants.length > 0) {
+                        name = m.variants.map(v => v.skill).join(' / ');
+                    } else {
+                        name = m.commonDesc || m.phase || '未命名機制';
+                    }
+                }
+                
+                // Determine damage type
+                let dmgType = 'physical';
+                const typeStr = m.type || (m.damage && m.damage[0] && m.damage[0].type) || '';
+                if (typeStr.includes('魔') || typeStr.toLowerCase().includes('magic')) {
+                    dmgType = 'magic';
+                } else if (typeStr.includes('暗') || typeStr.toLowerCase().includes('darkness') || typeStr.includes('無')) {
+                    dmgType = 'darkness';
+                }
+                
+                return {
+                    id: m.id || `mech-${idx}-${Date.now()}`,
+                    time: time,
+                    name: name,
+                    dmgType: dmgType
+                };
+            });
             
             renderMitTimeline();
         } catch (err) {
@@ -794,8 +874,15 @@ function handleMitDrop(e, trackContent) {
     try {
         const dragData = JSON.parse(e.dataTransfer.getData('text/plain'));
         const rect = trackContent.getBoundingClientRect();
-        const dropX = e.clientX - rect.left;
-        const dropTime = Math.max(0, dropX / getPixelsPerSecond());
+        
+        let dropTime;
+        if (mitLayoutMode === 'vertical') {
+            const dropY = e.clientY - rect.top;
+            dropTime = Math.max(0, dropY / getPixelsPerSecond());
+        } else {
+            const dropX = e.clientX - rect.left;
+            dropTime = Math.max(0, dropX / getPixelsPerSecond());
+        }
 
         if (dragData.sourceType === 'sidebar') {
             // Drag a new mitigation from the list
