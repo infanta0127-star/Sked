@@ -500,14 +500,15 @@ function getPlayerMitSkills(jobKey, slotIndex) {
         'sge_phys2', 'sge_pneuma', 'sge_philo'
     ]);
 
+    const isTankOrHealer = ['PLD', 'WAR', 'DRK', 'GNB', 'WHM', 'SCH', 'AST', 'SGE'].includes(jobKey);
+
     const allSkills = jobData.skills.filter(s => {
         if (s.passive || s.id.includes('passive')) return false;
         
-        // Include if it's a known group/party mitigation/buff (not marked personal)
         const isMitOrShield = s.tags && (s.tags.includes('減傷') || s.tags.includes('護盾') || s.tags.includes('無敵'));
-        const isNonPersonal = !s.personal;
+        const isAllowedPersonal = isTankOrHealer || !s.personal;
         
-        if (isMitOrShield && isNonPersonal) return true;
+        if (isMitOrShield && isAllowedPersonal) return true;
         
         // Or if it is in our healer AoE whitelist
         if (healerAoEIds.has(s.id)) return true;
@@ -665,9 +666,11 @@ function renderMitVerticalGrid(container) {
         th1.className = 'player-header-cell';
         th1.innerHTML = `
             <div class="player-header-content">
-                <span style="font-size: 9px; font-weight: bold; background: rgba(255, 255, 255, 0.1); padding: 1px 4px; border-radius: 3px;">${slotLabels[i]}</span>
-                <img src="${jobData.icon}" />
-                <span>${jobData.name}</span>
+                <div class="player-header-top">
+                    <span class="player-slot-badge">${slotLabels[i]}</span>
+                    <img src="${jobData.icon}" />
+                </div>
+                <div class="player-header-name">${jobData.name}</div>
                 ${hasExpandOption ? `
                     <span class="grid-expand-indicator" style="color:var(--color-text-muted); font-size:10px; padding:2px; display:inline-flex; align-items:center;">
                         <i class="fa-solid fa-${isExpanded ? 'chevron-left' : 'chevron-right'}"></i>
