@@ -33,8 +33,8 @@ declare
     v_plan public.team_plans%rowtype;
 begin
     select * into v_plan
-    from public.team_plans
-    where edit_token = p_token or read_token = p_token
+    from public.team_plans tp
+    where tp.edit_token = p_token or tp.read_token = p_token
     limit 1;
     
     if not found then
