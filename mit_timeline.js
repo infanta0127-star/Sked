@@ -23,6 +23,7 @@ let currentTeamPlanId = null;
 let currentTeamEditToken = null;
 let currentTeamReadToken = null;
 let currentTeamPlanName = '未命名團隊排軸';
+let currentTeamPlanOwnerId = null;
 let currentUser = null;
 
 // ── 3. DOM Elements ──
@@ -1507,6 +1508,7 @@ async function saveTeamPlanToSupabase() {
             currentTeamPlanId = data.id;
             currentTeamEditToken = data.edit_token;
             currentTeamReadToken = data.read_token;
+            currentTeamPlanOwnerId = data.owner_id;
             alert('新雲端排軸計畫儲存成功！');
         }
     } catch (err) {
@@ -1621,6 +1623,7 @@ async function loadTeamPlanById(planId) {
         currentTeamEditToken = plan.edit_token;
         currentTeamReadToken = plan.read_token;
         currentTeamPlanName = plan.name;
+        currentTeamPlanOwnerId = plan.owner_id;
 
         // Apply state
         mitDutySelect.value = plan.duty_key || '';
@@ -1768,6 +1771,12 @@ function openShareModal() {
         alert('請先點選「儲存至雲端」以儲存本計畫後，方可生成分享連結！');
         return;
     }
+    
+    // Check ownership
+    if (!currentUser || currentUser.id !== currentTeamPlanOwnerId) {
+        alert('只有計畫的擁有者才能修改分享與密碼設定！\n（若您是擁有者，請確認您已登入）');
+        return;
+    }
     createShareModal();
     
     const permissionSelect = document.getElementById('share-permission');
@@ -1816,11 +1825,15 @@ async function handleShareApply() {
     }
     
     try {
-        const { error } = await sb.from('team_plans')
+        const { data, error } = await sb.from('team_plans')
             .update({ share_password: password })
-            .eq('id', currentTeamPlanId);
+            .eq('id', currentTeamPlanId)
+            .select();
             
         if (error) throw error;
+        if (!data || data.length === 0) {
+            throw new Error('設定失敗！您沒有修改此計畫分享設定的權限（必須是計畫擁有者）。');
+        }
         
         const token = (permission === 'edit') ? currentTeamEditToken : currentTeamReadToken;
         const paramName = (permission === 'edit') ? 'mit_edit' : 'mit_view';
@@ -1903,6 +1916,7 @@ async function handleUrlSharingTokens() {
             currentTeamEditToken = data.edit_token;
             currentTeamReadToken = data.read_token;
             currentTeamPlanName = data.name;
+            currentTeamPlanOwnerId = data.owner_id;
 
             // Apply state
             mitDutySelect.value = data.duty_key || '';
