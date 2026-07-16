@@ -1754,7 +1754,12 @@ function importTeamPlanJSON(e) {
             
             // 2. Load the official duty mechanics first if a duty key is specified
             let dutyMechs = [];
-            const dutyFile = data.duty;
+            let dutyFile = data.duty;
+            const dutyObj = mitDutiesDatabase.duties ? mitDutiesDatabase.duties.find(d => d.key === dutyFile || d.file === dutyFile) : null;
+            if (dutyObj) {
+                dutyFile = dutyObj.file;
+            }
+            
             if (dutyFile && dutyFile !== 'custom') {
                 mitDutySelect.value = dutyFile;
                 // Fetch official duty mechanics
@@ -1812,7 +1817,7 @@ function importTeamPlanJSON(e) {
                     id: c.id || `cast-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
                 }));
             } else if (typeof data.mits === 'object' && data.mits !== null) {
-                // Format B (dictionary of casts)
+                // Format B (dictionary of casts where values are indices of the timeline array)
                 for (const [key, times] of Object.entries(data.mits)) {
                     const parts = key.split('-');
                     if (parts.length >= 3) {
@@ -1830,13 +1835,17 @@ function importTeamPlanJSON(e) {
                                 const skill = jobData?.skills.find(s => s.id === skillKey);
                                 const duration = skill ? skill.duration : 15;
                                 
+                                // Resolve mechanic index to actual seconds
+                                const mech = dutyMechs[time];
+                                const startTime = mech ? mech.time : time;
+                                
                                 parsedMits.push({
                                     id: `cast-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                                     slotIndex: slotIndex,
                                     jobKey: jobKey,
                                     jobAbbrev: jobKey,
                                     skillKey: skillKey,
-                                    startTime: time,
+                                    startTime: startTime,
                                     duration: duration
                                 });
                             });
