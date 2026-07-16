@@ -446,11 +446,30 @@ function getPlayerMitSkills(jobKey, slotIndex) {
     const jobData = mitSkillsDatabase[jobKey];
     if (!jobData) return [];
     
-    const allSkills = jobData.skills.filter(s => 
-        s.tags && 
-        (s.tags.includes('減傷') || s.tags.includes('護盾') || s.tags.includes('無敵')) && 
-        !s.personal
-    );
+    const healerAoEIds = new Set([
+        'whm_bell', 'whm_pli', 'whm_ass', 'whm_asy',
+        'sch_whi', 'sch_fey', 'sch_ser', 'sch_csl', 'sch_dt',
+        'ast_celop', 'ast_horos', 'ast_macromos',
+        'sge_phys2', 'sge_pneuma', 'sge_philo'
+    ]);
+
+    const allSkills = jobData.skills.filter(s => {
+        if (s.passive || s.id.includes('passive')) return false;
+        
+        // Include if it's a known group/party mitigation/buff (not marked personal)
+        const isMitOrShield = s.tags && (s.tags.includes('減傷') || s.tags.includes('護盾') || s.tags.includes('無敵'));
+        const isNonPersonal = !s.personal;
+        
+        if (isMitOrShield && isNonPersonal) return true;
+        
+        // Or if it is in our healer AoE whitelist
+        if (healerAoEIds.has(s.id)) return true;
+        
+        // Or if it's one of the group damage buffs we added
+        if (s.tags && s.tags.includes('團輔')) return true;
+        
+        return false;
+    });
     
     // Check if slot index is valid. If not, just return all utility skills
     if (slotIndex === undefined || slotIndex < 0 || slotIndex >= 8) {
@@ -603,23 +622,21 @@ function renderMitVerticalGrid(container) {
                 <img src="${jobData.icon}" />
                 <span>${jobData.name}</span>
                 ${hasExpandOption ? `
-                    <button class="grid-expand-btn" data-slot="${i}" style="background:none; border:none; color:var(--color-text-muted); cursor:pointer; font-size:10px; padding:2px; display:inline-flex; align-items:center;" title="${isExpanded ? '收合技能' : '展開更多'}">
+                    <span class="grid-expand-indicator" style="color:var(--color-text-muted); font-size:10px; padding:2px; display:inline-flex; align-items:center;">
                         <i class="fa-solid fa-${isExpanded ? 'chevron-left' : 'chevron-right'}"></i>
-                    </button>
+                    </span>
                 ` : ''}
             </div>
         `;
         
-        // Attach toggle expand listener
         if (hasExpandOption) {
-            const btn = th1.querySelector('.grid-expand-btn');
-            if (btn) {
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    mitGridExpanded[i] = !mitGridExpanded[i];
-                    renderMitTimeline();
-                });
-            }
+            th1.classList.add('clickable-header');
+            th1.style.cursor = 'pointer';
+            th1.title = isExpanded ? '點擊收合技能' : '點擊展開更多技能';
+            th1.addEventListener('click', () => {
+                mitGridExpanded[i] = !mitGridExpanded[i];
+                renderMitTimeline();
+            });
         }
         
         tr1.appendChild(th1);

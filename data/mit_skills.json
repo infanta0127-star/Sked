@@ -392,7 +392,8 @@
                 } 
             },
             { "id": "mnk_mantra", "name": "真言", "tags": [""], "title": "15秒內，自身與周圍隊員所受的HP恢復效果提高10%", "effects": [{ "type": "heal_out_magic", "val": 0.10 }], "duration": 15, "cooldown": 90, "icon": "./icons/Skill_icons/05_MNK/Mantra.png" },
-            { "id": "mnk_roe", "name": "金剛極意", "tags": ["減傷"], "title": "一定時間內，自身受到的傷害減輕20%，持續時間：10秒\n追加效果：持續時間內受到傷害，則為自身附加金剛決意狀態\n金剛決意效果：持續恢復自身的HP，恢復力：100，持續時間：15秒\n追加效果：金剛周天預備，持續時間：30秒", "effects": [{ "type": "mit_all", "val": 0.20 }], "duration": 10, "cooldown": 120, "icon": "./icons/Skill_icons/05_MNK/Riddle_of_Earth.png", "personal": true }
+            { "id": "mnk_roe", "name": "金剛極意", "tags": ["減傷"], "title": "一定時間內，自身受到的傷害減輕20%，持續時間：10秒\n追加效果：持續時間內受到傷害，則為自身附加金剛決意狀態\n金剛決意效果：持續恢復自身的HP，恢復力：100，持續時間：15秒\n追加效果：金剛周天預備，持續時間：30秒", "effects": [{ "type": "mit_all", "val": 0.20 }], "duration": 10, "cooldown": 120, "icon": "./icons/Skill_icons/05_MNK/Riddle_of_Earth.png", "personal": true },
+            { "id": "mnk_bh", "name": "義結金蘭", "tags": ["團輔"], "title": "為自身與周圍隊員附加義結金蘭：攻擊狀態\n發動攻擊造成的傷害提高5%，持續時間：20秒", "effects": [], "duration": 20, "cooldown": 120, "icon": "./icons/monk/pve_action__28.png" }
         ]
     },
     "SAM": {
@@ -450,7 +451,8 @@
                     "80": { "title": "10秒內，令目標物理攻擊造成的傷害降低10%，魔法攻擊造成的傷害降低5%", "duration": 10 },
                     "90": { "title": "10秒內，令目標物理攻擊造成的傷害降低10%，魔法攻擊造成的傷害降低5%", "duration": 10 }
                 } 
-            }
+            },
+            { "id": "drg_lit", "name": "戰鬥連禱", "tags": ["團輔"], "title": "一定時間內，自身與周圍隊員的暴擊發動率提高10%\n持續時間：20秒", "effects": [], "duration": 20, "cooldown": 120, "icon": "./icons/dragoon/pve_action__14.png" }
         ]
     },
     "RPR": {
@@ -480,7 +482,8 @@
                     "70": { "title": "為自身附加能夠抵消一定傷害量的防護罩守護紋\n該防護罩能夠抵消相當於自身最大HP10%的傷害量，持續時間：5秒" },
                     "80": { "title": "為自身附加能夠抵消一定傷害量的防護罩守護紋\n該防護罩能夠抵消相當於自身最大HP10%的傷害量，持續時間：5秒" }
                 }
-            }
+            },
+            { "id": "rpr_ac", "name": "神秘環", "tags": ["團輔"], "title": "自身及周圍隊員發動攻擊造成的傷害提高3%\n持續時間：20秒", "effects": [], "duration": 20, "cooldown": 120, "icon": "./icons/reaper/pve_action__21.png" }
         ]
     },
     "NIN": {
@@ -499,7 +502,8 @@
                     "90": { "title": "10秒內，令目標物理攻擊造成的傷害降低10%，魔法攻擊造成的傷害降低5%", "duration": 10 }
                 } 
             },
-            { "id": "nin_shad", "name": "殘影", "tags": ["護盾"], "title": "抵消相當於自身最大HP20%的傷害\n持續時間：20秒", "effects": [{ "type": "shield_maxhp", "val": 0.20 }], "duration": 20, "cooldown": 120, "icon": "./icons/Skill_icons/09_NIN/Shade_Shift.png", "personal": true }
+            { "id": "nin_shad", "name": "殘影", "tags": ["護盾"], "title": "抵消相當於自身最大HP20%的傷害\n持續時間：20秒", "effects": [{ "type": "shield_maxhp", "val": 0.20 }], "duration": 20, "cooldown": 120, "icon": "./icons/Skill_icons/09_NIN/Shade_Shift.png", "personal": true },
+            { "id": "nin_mug", "name": "奪取", "tags": ["團輔"], "title": "對目標發動物理攻擊，並附加受傷加重效果，目標所受傷害提高5%\n持續時間：20秒", "effects": [], "duration": 20, "cooldown": 120, "icon": "./icons/ninja/pve_action__06.png" }
         ]
     },
     "VPR": {
@@ -547,7 +551,9 @@
                     }
                 } 
             },
-            { "id": "brd_nature", "name": "大地神的抒情戀歌", "title": "15秒內，自身與周圍隊員所受的HP恢復效果提高15%", "effects": [{ "type": "heal_out_magic", "val": 0.15 }], "duration": 15, "cooldown": 120, "icon": "./icons/Skill_icons/11_BRD/Nature's_Minne.png" }
+            { "id": "brd_nature", "name": "大地神的抒情戀歌", "title": "15秒內，自身與周圍隊員所受的HP恢復效果提高15%", "effects": [{ "type": "heal_out_magic", "val": 0.15 }], "duration": 15, "cooldown": 120, "icon": "./icons/Skill_icons/11_BRD/Nature's_Minne.png" },
+            { "id": "brd_bv", "name": "戰鬥之聲", "tags": ["團輔"], "title": "一定時間內，自身及周圍隊員的直擊發動率提高20%\n持續時間：20秒", "effects": [], "duration": 20, "cooldown": 120, "icon": "./icons/bard/pve_action__15.png" },
+            { "id": "brd_rf", "name": "光明神的最終樂章", "tags": ["團輔"], "title": "一定時間內，自身與周圍隊員發動攻擊造成的傷害提高2%～6%\n持續時間：20秒", "effects": [], "duration": 20, "cooldown": 110, "icon": "./icons/bard/pve_action__31.png" }
         ]
     },
     "MCH": {
@@ -617,7 +623,8 @@
                     "70": { "unavailable": true },
                     "80": { "unavailable": true }
                 }  
-            }
+            },
+            { "id": "dnc_tf", "name": "技巧舞步結束", "tags": ["團輔"], "title": "成功跳舞後發動，自身及周圍30米隊員所受傷害提高5%，伶俐獲得率提高\n持續時間：20秒", "effects": [], "duration": 20, "cooldown": 120, "icon": "./icons/dancer/pve_action__21.png" }
         ]
     },
     "BLM": {
@@ -666,7 +673,8 @@
                     "70": { "charges": 1 },
                     "80": { "charges": 1 }
                 }
-            }
+            },
+            { "id": "smn_sl", "name": "灼熱之光", "tags": ["團輔"], "title": "一定時間內，自身與周圍隊員發動攻擊造成的傷害提高5%\n持續時間：20秒", "effects": [], "duration": 20, "cooldown": 120, "icon": "./icons/summoner/pve_action__40.png" }
         ]
     },
     "RDM": {
@@ -695,7 +703,8 @@
                     "70": { "unavailable": true },
                     "80": { "unavailable": true }
                 } 
-            }
+            },
+            { "id": "rdm_emb", "name": "鼓勵", "tags": ["團輔"], "title": "一定時間內，自身與周圍隊員發動魔法或攻擊造成的傷害提高5%\n持續時間：20秒", "effects": [], "duration": 20, "cooldown": 120, "icon": "./icons/redmage/pve_action__20.png" }
         ]
     },
     "PCT": {
@@ -726,7 +735,8 @@
                     "70": { "unavailable": true },
                     "80": { "unavailable": true }
                 }  
-            }
+            },
+            { "id": "pct_sm", "name": "星空構想", "tags": ["團輔"], "title": "展開藝術空間，自身與周圍隊員發動攻擊造成的傷害提高5%\n持續時間：20秒", "effects": [], "duration": 20, "cooldown": 120, "icon": "./icons/pictomancer/pve_action__31.png" }
         ]
     },
     "WHM": {
@@ -925,7 +935,8 @@
             },
             { "id": "sch_dis", "name": "轉化", "title": "回收小仙女，同時為自身附加最大等階的乙太超流狀態\n並且自身發動治療魔法的治療量提高20%", "effects": [{ "type": "heal_out_magic", "val": 0.20 }], "duration": 30, "cooldown": 180, "icon": "./icons/Skill_icons/19_SCH/Dissipation.png", "personal": true, "blockedBySkillId": ["sch_ser", "sch_sum"], "aetherProvide": 3, "combatOnly": true },
             { "id": "sch_ed",  "name": "吸取能量", "title": "對目標發動無屬性魔法攻擊\n追加效果：恢復傷害量一定比例的HP\n追加效果：獲得10點異想乙太", "effects": [{ "type": "heal_out_magic", "val": 0.20 }], "duration": 1, "cooldown": 1, "icon": "./icons/Skill_icons/19_SCH/Energy_Drain.png", "personal": true, "aetherCost": 1 },
-            { "id": "sch_af",  "name": "乙太超流", "title": "恢復自身最大MP的20%\n追加三階的乙太超流", "effects": [], "duration": 1, "cooldown": 60, "icon": "./icons/Skill_icons/19_SCH/Aetherflow.png", "personal": true, "aetherProvide": 3, "combatOnly": true }
+            { "id": "sch_af",  "name": "乙太超流", "title": "恢復自身最大MP的20%\n追加三階的乙太超流", "effects": [], "duration": 1, "cooldown": 60, "icon": "./icons/Skill_icons/19_SCH/Aetherflow.png", "personal": true, "aetherProvide": 3, "combatOnly": true },
+            { "id": "sch_chain", "name": "連環計", "tags": ["團輔"], "title": "一定時間內，目標被暴擊率提高10%\n持續時間：20秒", "effects": [], "duration": 20, "cooldown": 120, "icon": "./icons/scholar/pve_action__24.png" }
         ]
     },
     "AST": {
@@ -1023,7 +1034,8 @@
                     "70": { "unavailable": true },
                     "80": { "unavailable": true }
                 } 
-            }
+            },
+            { "id": "ast_div", "name": "占卜", "tags": ["團輔"], "title": "令自身與周圍隊員發動攻擊造成的傷害提高6%\n持續時間：20秒", "effects": [], "duration": 20, "cooldown": 120, "icon": "./icons/astrologian/pve_action__19.png" }
         ]
     },
     "SGE": {
