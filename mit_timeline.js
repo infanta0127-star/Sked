@@ -1211,6 +1211,21 @@ function renderMitBossMechanics() {
 // ── 8. Event and Drag Drop Handlers ──
 
 function setupMitEventListeners() {
+    // Sidebar Collapse Toggle
+    const sidebarToggleBtn = document.getElementById('mit-sidebar-toggle');
+    const sidebar = document.querySelector('#mit-planning-view .sidebar');
+    if (sidebarToggleBtn && sidebar) {
+        sidebarToggleBtn.addEventListener('click', () => {
+            const isCollapsed = sidebar.classList.toggle('collapsed');
+            sidebarToggleBtn.classList.toggle('collapsed', isCollapsed);
+            const icon = sidebarToggleBtn.querySelector('i');
+            if (icon) {
+                icon.className = isCollapsed ? 'fa-solid fa-angle-right' : 'fa-solid fa-angle-left';
+            }
+            sidebarToggleBtn.title = isCollapsed ? '展開側邊欄' : '收合側邊欄';
+        });
+    }
+
     // Search skills filter
     document.getElementById('mit-skill-search').addEventListener('input', renderMitSkillsList);
 
