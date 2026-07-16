@@ -700,13 +700,24 @@ function renderMitVerticalGrid(container) {
             skills.forEach(skill => {
                 const th2 = document.createElement('th');
                 th2.className = 'skill-header-cell';
-                th2.title = `${skill.name}: ${skill.title}`;
                 th2.innerHTML = `
                     <div class="skill-header-content">
                         <img src="${skill.icon}" />
                         <span>${skill.name}</span>
                     </div>
                 `;
+                
+                // Tooltip handlers
+                th2.addEventListener('mouseenter', (e) => showMitTooltip(e, skill, jobData.name));
+                th2.addEventListener('mouseleave', hideMitTooltip);
+                th2.addEventListener('mousemove', (e) => {
+                    const tooltip = document.getElementById('skill-tooltip');
+                    if (tooltip) {
+                        tooltip.style.left = `${e.clientX + 15}px`;
+                        tooltip.style.top = `${e.clientY + 15}px`;
+                    }
+                });
+                
                 tr2.appendChild(th2);
             });
         }
@@ -931,6 +942,13 @@ function renderMitSkillsList() {
             // Tooltip handlers
             item.addEventListener('mouseenter', (e) => showMitTooltip(e, skill, jobData.name));
             item.addEventListener('mouseleave', hideMitTooltip);
+            item.addEventListener('mousemove', (e) => {
+                const tooltip = document.getElementById('skill-tooltip');
+                if (tooltip) {
+                    tooltip.style.left = `${e.clientX + 15}px`;
+                    tooltip.style.top = `${e.clientY + 15}px`;
+                }
+            });
             
             // Drag start
             item.addEventListener('dragstart', (e) => {
@@ -955,23 +973,46 @@ function showMitTooltip(e, skill, jobName) {
     const tooltip = document.getElementById('skill-tooltip');
     if (!tooltip) return;
     
-    tooltip.querySelector('.tooltip-name').textContent = skill.name;
-    tooltip.querySelector('.tooltip-icon').src = skill.icon;
-    tooltip.querySelector('.tooltip-job').textContent = `${jobName} (持續時間: ${skill.duration}s)`;
-    tooltip.querySelector('.tooltip-mp').textContent = skill.cooldown ? `${skill.cooldown}秒` : '-';
-    tooltip.querySelector('.tooltip-times').textContent = `冷卻 / CD`;
-    tooltip.querySelector('.tooltip-range').textContent = skill.tags ? skill.tags.join(', ') : '減傷';
+    tooltip.style.display = 'block';
+    tooltip.style.left = `${e.clientX + 15}px`;
+    tooltip.style.top = `${e.clientY + 15}px`;
+    
+    const rect = tooltip.getBoundingClientRect();
+    if (rect.right > window.innerWidth) {
+        tooltip.style.left = `${e.clientX - rect.width - 15}px`;
+    }
+    if (rect.bottom > window.innerHeight) {
+        tooltip.style.top = `${e.clientY - rect.height - 15}px`;
+    }
+    
+    tooltip.querySelector('.tooltip-icon').src = skill.icon || '';
+    tooltip.querySelector('.tooltip-name').textContent = skill.name || '';
+    
+    const isGcd = skill.cooldown <= 2.5 && skill.cooldown > 0;
+    const classification = isGcd ? '魔法' : '能力';
+    tooltip.querySelector('.tooltip-badge').textContent = classification;
+    
+    tooltip.querySelector('.tooltip-lv').textContent = jobName || '防護職業';
+    tooltip.querySelector('.tooltip-mp').textContent = skill.duration ? `${skill.duration}秒` : '-';
+    
+    const castText = '即時';
+    const cooldownText = skill.cooldown ? `${skill.cooldown}秒` : '-';
+    tooltip.querySelector('.tooltip-times').textContent = `${castText} / ${cooldownText}`;
+    
+    const scopeText = skill.personal ? '自身/單體' : '小隊/範圍';
+    tooltip.querySelector('.tooltip-range').textContent = scopeText;
+    
     tooltip.querySelector('.tooltip-description').textContent = skill.title || '無詳細效果說明。';
     
-    const rect = e.target.getBoundingClientRect();
-    tooltip.style.left = `${rect.right + 10}px`;
-    tooltip.style.top = `${rect.top}px`;
-    tooltip.classList.add('active');
+    const badge = tooltip.querySelector('.tooltip-badge');
+    badge.style.backgroundColor = classification === '能力' ? 'var(--color-ogcd)' : 'var(--color-gcd)';
 }
 
 function hideMitTooltip() {
     const tooltip = document.getElementById('skill-tooltip');
-    if (tooltip) tooltip.classList.remove('active');
+    if (tooltip) {
+        tooltip.style.display = 'none';
+    }
 }
 
 function renderMitPlayerTracks() {
@@ -1119,9 +1160,21 @@ function renderMitTimeline() {
                     pill.style.opacity = '1';
                 });
                 
+                // Tooltip handlers
+                pill.addEventListener('mouseenter', (e) => showMitTooltip(e, skillData, mitSkillsDatabase[cast.jobKey]?.name));
+                pill.addEventListener('mouseleave', hideMitTooltip);
+                pill.addEventListener('mousemove', (e) => {
+                    const tooltip = document.getElementById('skill-tooltip');
+                    if (tooltip) {
+                        tooltip.style.left = `${e.clientX + 15}px`;
+                        tooltip.style.top = `${e.clientY + 15}px`;
+                    }
+                });
+                
                 // Double click to delete
                 pill.addEventListener('dblclick', () => {
                     mitTimelineSkills = mitTimelineSkills.filter(c => c.id !== cast.id);
+                    hideMitTooltip();
                     renderMitTimeline();
                 });
                 
