@@ -1384,12 +1384,12 @@ async function saveTeamPlanToSupabase() {
     }
 
     try {
-        const toExisting = confirm('是否保存到現有的紀錄檔？');
+        const toExisting = await window.showCustomConfirm('保存紀錄', '是否保存到現有的紀錄檔？');
         if (toExisting) {
             savesModalMode = 'save';
             await loadTeamPlansModal();
         } else {
-            const name = prompt('請輸入新的存檔名稱:', currentTeamPlanName);
+            const name = await window.showCustomPrompt('保存紀錄', '請輸入新的存檔名稱：', currentTeamPlanName);
             if (name === null) return;
             if (name.trim() === '') {
                 alert('計畫名稱不能為空！');
@@ -1465,7 +1465,8 @@ async function loadTeamPlansModal() {
                 // Click to load or overwrite
                 li.querySelector('div').addEventListener('click', async () => {
                     if (savesModalMode === 'save') {
-                        if (confirm(`確定要覆蓋「${plan.name}」嗎？`)) {
+                        const ok = await window.showCustomConfirm('覆蓋存檔', `確定要覆蓋「${plan.name}」嗎？`);
+                        if (ok) {
                             try {
                                 const { error: updErr } = await sb.from('team_plans')
                                     .update({
@@ -1493,7 +1494,8 @@ async function loadTeamPlansModal() {
                 // Click to delete
                 li.querySelector('button').addEventListener('click', async (e) => {
                     e.stopPropagation();
-                    if (confirm(`確定要刪除「${plan.name}」嗎？此動作無法復原。`)) {
+                    const ok = await window.showCustomConfirm('刪除存檔', `確定要刪除「${plan.name}」嗎？此動作無法復原。`);
+                    if (ok) {
                         const { error: delErr } = await sb.from('team_plans').delete().eq('id', plan.id);
                         if (delErr) {
                             alert('刪除失敗');
@@ -1769,7 +1771,8 @@ function importTeamPlanJSON(e) {
             }
             
             if (mitTimelineSkills.length > 0 || mitBossMechanics.length > 0) {
-                if (!confirm('匯入此計畫將覆蓋目前的編輯內容，確定要繼續嗎？')) {
+                const ok = await window.showCustomConfirm('覆蓋編輯內容', '匯入此計畫將覆蓋目前的編輯內容，確定要繼續嗎？');
+                if (!ok) {
                     return;
                 }
             }

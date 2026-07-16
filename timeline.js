@@ -1,3 +1,63 @@
+window.showCustomConfirm = function(title, message) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.75); backdrop-filter:blur(6px); display:flex; align-items:center; justify-content:center; z-index:10000;';
+    overlay.innerHTML = `
+      <div style="background:#12121f; border:1px solid #2a2a3f; border-radius:16px; padding:28px 24px; width:360px; max-width:90vw; color:#fff; box-shadow:0 24px 60px rgba(0,0,0,0.6);">
+        <h3 style="margin:0 0 12px; font-size:16px; font-weight:700; color:#fff;">${title}</h3>
+        <p style="margin:0 0 24px; font-size:14px; color:#aaa; line-height:1.5;">${message}</p>
+        <div style="display:flex; justify-content:flex-end; gap:12px;">
+          <button id="custom-confirm-cancel" style="padding:8px 16px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; cursor:pointer; font-size:14px; transition:background 0.2s;">否 / 取消</button>
+          <button id="custom-confirm-ok" style="padding:8px 20px; background:linear-gradient(135deg,#4f6ef7,#7c9ef8); border:none; border-radius:8px; color:#fff; cursor:pointer; font-weight:600; font-size:14px; transition:opacity 0.2s;">是 / 確定</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    
+    const cleanup = (val) => {
+      document.body.removeChild(overlay);
+      resolve(val);
+    };
+    
+    overlay.querySelector('#custom-confirm-cancel').addEventListener('click', () => cleanup(false));
+    overlay.querySelector('#custom-confirm-ok').addEventListener('click', () => cleanup(true));
+  });
+};
+
+window.showCustomPrompt = function(title, placeholder, defaultValue = '') {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.75); backdrop-filter:blur(6px); display:flex; align-items:center; justify-content:center; z-index:10000;';
+    overlay.innerHTML = `
+      <div style="background:#12121f; border:1px solid #2a2a3f; border-radius:16px; padding:28px 24px; width:360px; max-width:90vw; color:#fff; box-shadow:0 24px 60px rgba(0,0,0,0.6);">
+        <h3 style="margin:0 0 12px; font-size:16px; font-weight:700; color:#fff;">${title}</h3>
+        <input id="custom-prompt-input" type="text" placeholder="${placeholder}" value="${defaultValue}" style="width:100%; box-sizing:border-box; background:#0d0d1a; border:1px solid #333; border-radius:8px; padding:10px 12px; color:#fff; font-size:14px; outline:none; margin-bottom:24px;">
+        <div style="display:flex; justify-content:flex-end; gap:12px;">
+          <button id="custom-prompt-cancel" style="padding:8px 16px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; cursor:pointer; font-size:14px; transition:background 0.2s;">取消</button>
+          <button id="custom-prompt-ok" style="padding:8px 20px; background:linear-gradient(135deg,#4f6ef7,#7c9ef8); border:none; border-radius:8px; color:#fff; cursor:pointer; font-weight:600; font-size:14px; transition:opacity 0.2s;">確定</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    
+    const input = overlay.querySelector('#custom-prompt-input');
+    input.focus();
+    input.select();
+    
+    const cleanup = (val) => {
+      document.body.removeChild(overlay);
+      resolve(val);
+    };
+    
+    overlay.querySelector('#custom-prompt-cancel').addEventListener('click', () => cleanup(null));
+    overlay.querySelector('#custom-prompt-ok').addEventListener('click', () => cleanup(input.value));
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') cleanup(input.value);
+      if (e.key === 'Escape') cleanup(null);
+    });
+  });
+};
+
 // Globals and State
 const PREPULL_TIME = 10; // Pre-pull time in seconds (allows pre-casting skills before combat starts)
 const TRACK_INFO_WIDTH = 180; // Width of the sticky left track info panel in pixels
@@ -282,10 +342,13 @@ function setupEventListeners() {
   }
 
   // Job selection change
-  jobSelect.addEventListener('change', (e) => {
-    if (timelineSkills.length > 0 && !confirm('切換職業將清空目前的時間軸，確定要繼續嗎？')) {
-      jobSelect.value = currentJobId;
-      return;
+  jobSelect.addEventListener('change', async (e) => {
+    if (timelineSkills.length > 0) {
+      const ok = await window.showCustomConfirm('切換職業', '切換職業將清空目前的時間軸，確定要繼續嗎？');
+      if (!ok) {
+        jobSelect.value = currentJobId;
+        return;
+      }
     }
     currentJobId = e.target.value;
     timelineSkills = [];
@@ -1519,8 +1582,9 @@ function showJobSelectionModal(activePartyMembers, onSelect) {
 }
 
 async function importFfxivMitigationPlan(data) {
-  if (timelineSkills.length > 0 && !confirm('匯入新排軸將清空目前的時間軸與技能，確定要繼續嗎？')) {
-    return;
+  if (timelineSkills.length > 0) {
+    const ok = await window.showCustomConfirm('清空時間軸', '匯入新排軸將清空目前的時間軸與技能，確定要繼續嗎？');
+    if (!ok) return;
   }
 
   const dutyKey = data.duty;
@@ -2003,12 +2067,12 @@ async function saveIndivPlanToSupabase() {
   }
 
   try {
-    const toExisting = confirm('是否保存到現有的紀錄檔？');
+    const toExisting = await window.showCustomConfirm('保存紀錄', '是否保存到現有的紀錄檔？');
     if (toExisting) {
       savesModalMode = 'save';
       await loadIndivPlansModal();
     } else {
-      const name = prompt('請輸入新的存檔名稱:', currentIndivPlanName);
+      const name = await window.showCustomPrompt('保存紀錄', '請輸入新的存檔名稱：', currentIndivPlanName);
       if (name === null) return;
       if (name.trim() === '') {
         alert('計畫名稱不能為空！');
@@ -2089,7 +2153,8 @@ async function loadIndivPlansModal() {
         
         li.querySelector('div').addEventListener('click', async () => {
           if (savesModalMode === 'save') {
-            if (confirm(`確定要覆蓋「${plan.name}」嗎？`)) {
+            const ok = await window.showCustomConfirm('覆蓋存檔', `確定要覆蓋「${plan.name}」嗎？`);
+            if (ok) {
               try {
                 const { error: updErr } = await sb.from('individual_plans')
                   .update({
@@ -2115,7 +2180,8 @@ async function loadIndivPlansModal() {
         
         li.querySelector('button').addEventListener('click', async (e) => {
           e.stopPropagation();
-          if (confirm(`確定要刪除「${plan.name}」嗎？`)) {
+          const ok = await window.showCustomConfirm('刪除存檔', `確定要刪除「${plan.name}」嗎？`);
+          if (ok) {
             const { error: delErr } = await sb.from('individual_plans').delete().eq('id', plan.id);
             if (delErr) {
               alert('刪除失敗');
