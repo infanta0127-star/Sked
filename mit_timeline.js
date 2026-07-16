@@ -22,7 +22,7 @@ let mitGridExpanded = [false, false, false, false, false, false, false, false]; 
 let currentTeamPlanId = null;
 let currentTeamEditToken = null;
 let currentTeamReadToken = null;
-let currentTeamPlanName = '未命名團隊減排';
+let currentTeamPlanName = '未命名團隊排軸';
 let currentUser = null;
 
 // ── 3. DOM Elements ──
@@ -1708,9 +1708,9 @@ async function handleUrlSharingTokens() {
                 mitDragTrash.style.display = 'none';
                 document.getElementById('party-select-grid').style.pointerEvents = 'none';
                 document.getElementById('mit-skills-list').style.pointerEvents = 'none';
-                alert(`以「唯讀模式」載入團隊減排計畫：「${data.name}」`);
+                alert(`以「唯讀模式」載入團隊排軸計畫：「${data.name}」`);
             } else {
-                alert(`以「編輯模式」載入團隊減排計畫：「${data.name}」`);
+                alert(`以「編輯模式」載入團隊排軸計畫：「${data.name}」`);
             }
 
             renderPartySelector();
@@ -1755,7 +1755,7 @@ function importTeamPlanJSON(e) {
         try {
             const data = JSON.parse(event.target.result);
             if (!data.duty || !data.party || !data.mits) {
-                throw new Error('JSON 檔案格式不符合團隊減排計畫（必須包含 duty, party, mits）！');
+                throw new Error('JSON 檔案格式不符合團隊排軸計畫（必須包含 duty, party, mits）！');
             }
             
             if (mitTimelineSkills.length > 0 || mitBossMechanics.length > 0) {
@@ -1880,7 +1880,7 @@ function importTeamPlanJSON(e) {
             renderMitPlayerTracks();
             renderMitTimeline();
             
-            alert('成功匯入團隊減排計畫！');
+            alert('成功匯入團隊排軸計畫！');
         } catch (err) {
             alert(`匯入失敗: ${err.message}`);
         }

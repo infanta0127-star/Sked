@@ -256,8 +256,7 @@ function setupEventListeners() {
   // Import from team mitigation planner event listener
   if (btnImportMit) {
     btnImportMit.addEventListener('click', () => {
-      if (!window.mitParty || !window.mitTimelineSkills) {
-        alert('尚未在團隊減排頁籤中規劃減傷，請先在「團隊減傷排軸」中規劃。');
+        alert('尚未在團隊排軸頁籤中規劃技能，請先在「團隊技能排軸」中規劃。');
         return;
       }
       const mappedData = {
@@ -1550,7 +1549,7 @@ async function importFfxivMitigationPlan(data) {
   });
 
   if (activePartyMembers.length === 0) {
-    alert('團隊減排計畫中沒有任何特職的減傷施放紀錄！');
+    alert('團隊排軸計畫中沒有任何特職的技能施放紀錄！');
     return;
   }
 
@@ -1990,14 +1989,14 @@ let currentIndivPlanName = '未命名個人排軸';
 async function saveIndivPlanToSupabase() {
   const sb = window.supabaseClient;
   if (!sb) {
-    alert('資料庫尚未就緒！請先於團隊減排頁簽中登入 Discord。');
+    alert('資料庫尚未就緒！請先於團隊技能排軸頁籤中登入。');
     return;
   }
   
   // Retrieve user session
   const { data: { session } } = await sb.auth.getSession();
   if (!session) {
-    alert('請先在團隊減傷排軸頁面登入 Google 帳號，才能儲存個人排軸至雲端！');
+    alert('請先在團隊技能排軸頁面登入，才能儲存個人排軸至雲端！');
     return;
   }
 
@@ -2051,13 +2050,13 @@ async function saveIndivPlanToSupabase() {
 async function loadIndivPlansModal() {
   const sb = window.supabaseClient;
   if (!sb) {
-    alert('資料庫尚未就緒！請先於團隊減排頁簽中登入 Discord。');
+    alert('資料庫尚未就緒！請先於團隊技能排軸頁籤中登入。');
     return;
   }
 
   const { data: { session } } = await sb.auth.getSession();
   if (!session) {
-    alert('請先在團隊減傷排軸頁面登入 Google 以讀取您的雲端個人排軸！');
+    alert('請先在團隊技能排軸頁面登入以讀取您的雲端個人排軸！');
     return;
   }
 
