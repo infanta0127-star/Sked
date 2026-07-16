@@ -1543,3 +1543,247 @@ body {
   position: absolute;
 }
 
+/* Vertical Grid View Mode Layout Styles */
+#mit-grid-container {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background-color: #0b0c10;
+  border-radius: 8px;
+}
+
+.mit-grid-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  color: var(--color-text-main);
+  text-align: center;
+}
+
+/* Sticky Headers */
+.mit-grid-table thead tr:first-child th {
+  position: sticky;
+  top: 0;
+  background-color: #171b26;
+  z-index: 20;
+  border-bottom: 1px solid var(--border-color);
+  height: 40px;
+}
+
+.mit-grid-table thead tr:nth-child(2) th {
+  position: sticky;
+  top: 40px; /* offset by first header row height */
+  background-color: #1a1f2c;
+  z-index: 20;
+  border-bottom: 2px solid var(--border-color);
+  height: 45px;
+}
+
+.mit-grid-table th, .mit-grid-table td {
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Sticky Columns on Left (Time & Name) */
+.mit-grid-table .sticky-time {
+  position: sticky;
+  left: 0;
+  background-color: #12141c;
+  z-index: 10;
+  font-weight: 600;
+  color: var(--color-gcd);
+  min-width: 70px;
+}
+
+.mit-grid-table .sticky-name {
+  position: sticky;
+  left: 70px; /* width of sticky-time */
+  background-color: #12141c;
+  z-index: 10;
+  text-align: left;
+  min-width: 150px;
+  border-right: 2px solid rgba(255, 255, 255, 0.15) !important;
+}
+
+/* Sticky Column on Right (Estimated Damage) */
+.mit-grid-table .sticky-damage {
+  position: sticky;
+  right: 0;
+  background-color: #12141c;
+  z-index: 10;
+  font-weight: 700;
+  border-left: 2px solid rgba(255, 255, 255, 0.15) !important;
+  min-width: 100px;
+}
+
+/* Headers styling */
+.mit-grid-table .player-header-cell {
+  background-color: rgba(26, 30, 43, 0.95);
+  font-weight: 600;
+  font-size: 13px;
+  border-bottom: 2px solid var(--color-gcd);
+}
+
+.mit-grid-table .player-header-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.mit-grid-table .player-header-content img {
+  width: 16px;
+  height: 16px;
+}
+
+.mit-grid-table .skill-header-cell {
+  padding: 4px;
+}
+
+.mit-grid-table .skill-header-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 10px;
+  gap: 2px;
+}
+
+.mit-grid-table .skill-header-content img {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+}
+
+/* Row states */
+.mit-grid-table tr:hover td {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+.mit-grid-table tr:hover .sticky-time,
+.mit-grid-table tr:hover .sticky-name,
+.mit-grid-table tr:hover .sticky-damage {
+  background-color: #171b26;
+}
+
+.mit-grid-table td.empty-skill-cell {
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.02),
+    rgba(255, 255, 255, 0.02) 5px,
+    transparent 5px,
+    transparent 10px
+  );
+  color: rgba(255, 255, 255, 0.15);
+}
+
+/* Checkbox styling */
+.mit-grid-table .mit-checkbox-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.mit-grid-table .mit-checkbox {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  outline: none;
+  background-color: rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.mit-grid-table .mit-checkbox:checked {
+  background-color: var(--color-gcd);
+  border-color: var(--color-gcd);
+  box-shadow: 0 0 6px var(--color-gcd);
+}
+
+.mit-grid-table .mit-checkbox:checked::after {
+  content: '\f00c';
+  font-family: 'Font Awesome 6 Free';
+  font-weight: 900;
+  font-size: 10px;
+  color: #000;
+}
+
+/* Checkbox active duration from previous cast */
+.mit-grid-table .mit-checkbox.active-duration {
+  background-color: rgba(0, 230, 118, 0.25);
+  border-color: var(--color-accent);
+  cursor: not-allowed;
+}
+
+.mit-grid-table .mit-checkbox.active-duration::after {
+  content: '\f2f9'; /* circular sync arrow */
+  font-family: 'Font Awesome 6 Free';
+  font-weight: 900;
+  font-size: 10px;
+  color: var(--color-accent);
+}
+
+/* Checkbox on cooldown */
+.mit-grid-table .mit-checkbox.cooldown {
+  background-color: rgba(255, 71, 87, 0.1);
+  border-color: rgba(255, 71, 87, 0.3);
+  cursor: not-allowed;
+}
+
+.mit-grid-table .mit-checkbox.cooldown::after {
+  content: '\f023'; /* lock icon */
+  font-family: 'Font Awesome 6 Free';
+  font-weight: 900;
+  font-size: 10px;
+  color: var(--color-danger);
+}
+
+/* Damage Text Colors */
+.mit-grid-table .damage-reduced {
+  color: #4ade80;
+  text-shadow: 0 0 5px rgba(74, 222, 128, 0.3);
+}
+
+.mit-grid-table .damage-reduced-heavy {
+  color: #60a5fa;
+  text-shadow: 0 0 5px rgba(96, 165, 250, 0.3);
+}
+
+.mit-grid-table .damage-original {
+  color: var(--color-text-main);
+}
+
+.mit-grid-table .damage-type-badge {
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  margin-left: 6px;
+  font-weight: bold;
+}
+
+.mit-grid-table .damage-type-badge.physical {
+  background-color: rgba(255, 170, 0, 0.15);
+  color: var(--color-ogcd);
+  border: 1px solid rgba(255, 170, 0, 0.3);
+}
+
+.mit-grid-table .damage-type-badge.magic {
+  background-color: rgba(0, 240, 255, 0.15);
+  color: var(--color-gcd);
+  border: 1px solid rgba(0, 240, 255, 0.3);
+}
+
+.mit-grid-table .damage-type-badge.darkness {
+  background-color: rgba(216, 0, 255, 0.15);
+  color: var(--color-role);
+  border: 1px solid rgba(216, 0, 255, 0.3);
+}
+
+

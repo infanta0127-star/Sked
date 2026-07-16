@@ -368,6 +368,305 @@ function parseDutyTime(timeStr) {
     return parseFloat(timeStr) || 0;
 }
 
+function parseTimelineData(timelineList) {
+    return (timelineList || []).map((m, idx) => {
+        const time = parseDutyTime(m.castingTime || m.hitTime);
+        let name = m.skill;
+        if (name === 'AA') {
+            name = '普通攻擊 (AA)';
+        }
+        if (!name) {
+            if (m.variants && m.variants.length > 0) {
+                name = m.variants.map(v => v.skill).join(' / ');
+            } else {
+                name = m.commonDesc || m.phase || '未命名機制';
+            }
+        }
+        
+        // Determine damage type
+        let dmgType = 'physical';
+        const typeStr = m.type || (m.damage && m.damage[0] && m.damage[0].type) || '';
+        if (typeStr.includes('魔') || typeStr.toLowerCase().includes('magic')) {
+            dmgType = 'magic';
+        } else if (typeStr.includes('暗') || typeStr.toLowerCase().includes('darkness') || typeStr.includes('無')) {
+            dmgType = 'darkness';
+        }
+        
+        // Get raw damage
+        let rawDamage = 0;
+        if (m.damage && m.damage[0] && typeof m.damage[0].amount === 'number') {
+            rawDamage = m.damage[0].amount;
+        } else if (m.variants && m.variants[0] && m.variants[0].damage && m.variants[0].damage[0] && typeof m.variants[0].damage[0].amount === 'number') {
+            rawDamage = m.variants[0].damage[0].amount;
+        }
+        
+        return {
+            id: m.id || `mech-${idx}-${Date.now()}`,
+            time: time,
+            name: name,
+            dmgType: dmgType,
+            rawDamage: rawDamage
+        };
+    });
+}
+
+async function loadDutyMechanicsForPlan(dutyFile, savedMechanics) {
+    try {
+        const resp = await fetch(`./data/duties/${dutyFile}`);
+        const data = await resp.json();
+        const dutyMechs = parseTimelineData(data.timeline);
+        
+        // Merge saved custom mechanics that aren't in the official duty
+        const dutyIds = new Set(dutyMechs.map(dm => dm.id));
+        
+        // Match up rawDamage for saved mechanics that match by id or name/time
+        savedMechanics.forEach(sm => {
+            const match = dutyMechs.find(dm => dm.id === sm.id || (dm.name === sm.name && Math.abs(dm.time - sm.time) < 0.1));
+            if (match) {
+                sm.rawDamage = match.rawDamage;
+                sm.dmgType = match.dmgType;
+            }
+        });
+        
+        mitBossMechanics = savedMechanics;
+    } catch (err) {
+        console.error('Failed to reload duty mechanics for plan:', err);
+        mitBossMechanics = savedMechanics;
+    }
+}
+
+function formatTime(sec) {
+    const m = Math.floor(sec / 60).toString().padStart(2, '0');
+    const s = Math.floor(sec % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+}
+
+function getPlayerMitSkills(jobKey) {
+    const jobData = mitSkillsDatabase[jobKey];
+    if (!jobData) return [];
+    return jobData.skills.filter(s => 
+        s.tags && 
+        (s.tags.includes('減傷') || s.tags.includes('護盾') || s.tags.includes('無敵')) && 
+        !s.personal
+    );
+}
+
+function toggleMitGridSkill(slotIndex, jobKey, skillId, startTime, isChecked) {
+    if (isChecked) {
+        const jobData = mitSkillsDatabase[jobKey];
+        const skill = jobData?.skills.find(s => s.id === skillId);
+        const duration = skill ? skill.duration : 15;
+        
+        mitTimelineSkills.push({
+            id: `cast-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            slotIndex: slotIndex,
+            jobKey: jobKey,
+            jobAbbrev: jobKey,
+            skillKey: skillId,
+            startTime: startTime,
+            duration: duration
+        });
+    } else {
+        mitTimelineSkills = mitTimelineSkills.filter(c => 
+            !(c.slotIndex === slotIndex && c.skillKey === skillId && c.startTime === startTime)
+        );
+    }
+    renderMitTimeline();
+}
+
+function calculateRemainingDamage(mech) {
+    const rawDmg = mech.rawDamage || 0;
+    if (rawDmg === 0) return '-';
+    
+    let multiplier = 1.0;
+    
+    // Find all active mitigations covering this mechanic
+    mitTimelineSkills.forEach(c => {
+        const isActive = mech.time >= c.startTime && mech.time < c.startTime + c.duration;
+        if (isActive) {
+            const skill = mitSkillsDatabase[c.jobKey || c.jobAbbrev]?.skills.find(s => s.id === c.skillKey);
+            if (skill && skill.effects) {
+                skill.effects.forEach(eff => {
+                    let applies = false;
+                    if (eff.type === 'mit_all') {
+                        applies = true;
+                    } else if (mech.dmgType === 'physical' && eff.type === 'mit_physical') {
+                        applies = true;
+                    } else if (mech.dmgType === 'magic' && eff.type === 'mit_magic') {
+                        applies = true;
+                    } else if (mech.dmgType === 'darkness' && eff.type === 'mit_darkness') {
+                        applies = true;
+                    }
+                    
+                    if (applies && typeof eff.val === 'number') {
+                        multiplier *= (1 - eff.val);
+                    }
+                });
+            }
+        }
+    });
+    
+    const finalDmg = Math.round(rawDmg * multiplier);
+    return `<span class="${multiplier < 1.0 ? (multiplier <= 0.8 ? 'damage-reduced-heavy' : 'damage-reduced') : 'damage-original'}">${finalDmg.toLocaleString()}</span>`;
+}
+
+function renderMitVerticalGrid(container) {
+    container.innerHTML = '';
+    
+    if (mitBossMechanics.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state" style="padding: 100px 20px; text-align: center; color: var(--color-text-muted);">
+                <i class="fa-solid fa-table-list" style="font-size: 48px; margin-bottom: 16px; color: var(--color-gcd);"></i>
+                <h3>無副本數據</h3>
+                <p style="margin-top: 8px; font-size: 14px;">請在左上角選擇副本（例如：絕伊甸 P1）以載入機制，開啟豎版表格減傷規劃！</p>
+            </div>
+        `;
+        return;
+    }
+    
+    const sortedMechs = [...mitBossMechanics].sort((a, b) => a.time - b.time);
+    const slotLabels = ['T1', 'T2', 'H1', 'H2', 'D1', 'D2', 'D3', 'D4'];
+    
+    const table = document.createElement('table');
+    table.className = 'mit-grid-table';
+    
+    const thead = document.createElement('thead');
+    
+    const tr1 = document.createElement('tr');
+    tr1.innerHTML = `
+        <th rowspan="2" class="sticky-time">判定時間</th>
+        <th rowspan="2" class="sticky-name">機制名稱</th>
+    `;
+    
+    const tr2 = document.createElement('tr');
+    
+    for (let i = 0; i < 8; i++) {
+        const jobKey = mitParty[i];
+        const jobData = mitSkillsDatabase[jobKey];
+        if (!jobData) continue;
+        
+        const skills = getPlayerMitSkills(jobKey);
+        const colspan = Math.max(1, skills.length);
+        
+        const th1 = document.createElement('th');
+        th1.colSpan = colspan;
+        th1.className = 'player-header-cell';
+        th1.innerHTML = `
+            <div class="player-header-content">
+                <span style="font-size: 9px; font-weight: bold; background: rgba(255, 255, 255, 0.1); padding: 1px 4px; border-radius: 3px;">${slotLabels[i]}</span>
+                <img src="${jobData.icon}" />
+                <span>${jobData.name}</span>
+            </div>
+        `;
+        tr1.appendChild(th1);
+        
+        if (skills.length === 0) {
+            const th2 = document.createElement('th');
+            th2.className = 'skill-header-cell';
+            th2.innerHTML = '<span style="color: var(--color-text-muted); font-size: 11px;">無</span>';
+            tr2.appendChild(th2);
+        } else {
+            skills.forEach(skill => {
+                const th2 = document.createElement('th');
+                th2.className = 'skill-header-cell';
+                th2.title = `${skill.name}: ${skill.title}`;
+                th2.innerHTML = `
+                    <div class="skill-header-content">
+                        <img src="${skill.icon}" />
+                        <span>${skill.name}</span>
+                    </div>
+                `;
+                tr2.appendChild(th2);
+            });
+        }
+    }
+    
+    tr1.insertAdjacentHTML('beforeend', `<th rowspan="2" class="sticky-damage">預計傷害</th>`);
+    
+    thead.appendChild(tr1);
+    thead.appendChild(tr2);
+    table.appendChild(thead);
+    
+    const tbody = document.createElement('tbody');
+    
+    sortedMechs.forEach(mech => {
+        const tr = document.createElement('tr');
+        
+        const timeStr = formatTime(mech.time);
+        const dmgTypeLabel = mech.dmgType ? `<span class="damage-type-badge ${mech.dmgType}">${mech.dmgType === 'physical' ? '物理' : mech.dmgType === 'magic' ? '魔法' : '無屬'}</span>` : '';
+        
+        const tdTime = document.createElement('td');
+        tdTime.className = 'sticky-time';
+        tdTime.textContent = timeStr;
+        tr.appendChild(tdTime);
+        
+        const tdName = document.createElement('td');
+        tdName.className = 'sticky-name';
+        tdName.innerHTML = `${mech.name} ${dmgTypeLabel}`;
+        tr.appendChild(tdName);
+        
+        for (let i = 0; i < 8; i++) {
+            const jobKey = mitParty[i];
+            const skills = getPlayerMitSkills(jobKey);
+            
+            if (skills.length === 0) {
+                const td = document.createElement('td');
+                td.className = 'empty-skill-cell';
+                td.textContent = '—';
+                tr.appendChild(td);
+            } else {
+                skills.forEach(skill => {
+                    const td = document.createElement('td');
+                    
+                    const casts = mitTimelineSkills.filter(c => c.slotIndex === i && c.skillKey === skill.id);
+                    const isCast = casts.some(c => c.startTime === mech.time);
+                    const isActive = casts.some(c => mech.time > c.startTime && mech.time < c.startTime + c.duration);
+                    const isCooldown = casts.some(c => mech.time > c.startTime && mech.time < c.startTime + (skill.cooldown || 60));
+                    
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'mit-checkbox-wrapper';
+                    
+                    const input = document.createElement('input');
+                    input.type = 'checkbox';
+                    input.className = 'mit-checkbox';
+                    
+                    if (isCast) {
+                        input.checked = true;
+                        input.addEventListener('change', () => toggleMitGridSkill(i, jobKey, skill.id, mech.time, false));
+                    } else if (isActive) {
+                        input.checked = true;
+                        input.disabled = true;
+                        input.classList.add('active-duration');
+                        td.title = '持續時間覆蓋中';
+                    } else if (isCooldown) {
+                        input.checked = false;
+                        input.disabled = true;
+                        input.classList.add('cooldown');
+                        td.title = '技能冷卻中';
+                    } else {
+                        input.checked = false;
+                        input.addEventListener('change', () => toggleMitGridSkill(i, jobKey, skill.id, mech.time, true));
+                    }
+                    
+                    wrapper.appendChild(input);
+                    td.appendChild(wrapper);
+                    tr.appendChild(td);
+                });
+            }
+        }
+        
+        const tdDmg = document.createElement('td');
+        tdDmg.className = 'sticky-damage';
+        tdDmg.innerHTML = calculateRemainingDamage(mech);
+        tr.appendChild(tdDmg);
+        
+        tbody.appendChild(tr);
+    });
+    
+    table.appendChild(tbody);
+    container.appendChild(table);
+}
+
 function getPixelsPerSecond() {
     return window.pixelsPerSecond || 15;
 }
@@ -594,6 +893,14 @@ function renderMitPlayerTracks() {
 function renderMitTimeline() {
     const pps = getPixelsPerSecond();
     
+    // Ensure grid container exists
+    let gridContainer = document.getElementById('mit-grid-container');
+    if (!gridContainer) {
+        gridContainer = document.createElement('div');
+        gridContainer.id = 'mit-grid-container';
+        mitTimelineEditor.appendChild(gridContainer);
+    }
+    
     // Calculate total duration based on mechanics & casts
     let maxTime = 120; // Default minimum 120 seconds
     mitBossMechanics.forEach(m => {
@@ -605,79 +912,94 @@ function renderMitTimeline() {
     
     const totalLength = (maxTime + 15) * pps;
     
+    // Toggle layout views
+    const ruler = document.getElementById('mit-timeline-ruler');
+    const bossTrackWrapper = document.querySelector('.timeline-track-wrapper.boss-track-wrapper');
+    const playerTracksContainer = document.getElementById('mit-player-tracks-container');
+    const playhead = document.getElementById('mit-playhead');
+    
     if (mitLayoutMode === 'vertical') {
-        mitTimelineEditor.classList.add('vertical');
-        mitTimelineEditor.style.height = `${totalLength}px`;
-        mitTimelineEditor.style.width = ''; // handled by CSS
+        gridContainer.style.display = 'block';
+        if (ruler) ruler.style.display = 'none';
+        if (bossTrackWrapper) bossTrackWrapper.style.display = 'none';
+        if (playerTracksContainer) playerTracksContainer.style.display = 'none';
+        if (playhead) playhead.style.display = 'none';
+        
+        mitTimelineEditor.classList.add('vertical-grid-mode');
+        mitTimelineEditor.classList.remove('vertical');
+        mitTimelineEditor.style.width = '100%';
+        mitTimelineEditor.style.height = '100%';
+        
+        renderMitVerticalGrid(gridContainer);
     } else {
+        gridContainer.style.display = 'none';
+        if (ruler) ruler.style.display = '';
+        if (bossTrackWrapper) bossTrackWrapper.style.display = '';
+        if (playerTracksContainer) playerTracksContainer.style.display = '';
+        if (playhead) playhead.style.display = '';
+        
+        mitTimelineEditor.classList.remove('vertical-grid-mode');
         mitTimelineEditor.classList.remove('vertical');
         mitTimelineEditor.style.width = `${totalLength + 200}px`;
         mitTimelineEditor.style.height = '';
-    }
-    
-    mitLengthDisplay.innerHTML = `<i class="fa-regular fa-clock"></i> 軸總長: ${Math.ceil(maxTime)}s`;
-
-    // Render Ruler
-    renderMitRuler(totalLength);
-
-    // Render Boss Mechanics Track
-    renderMitBossMechanics();
-
-    // Render Player Track items
-    const trackContents = document.querySelectorAll('.player-track-content');
-    trackContents.forEach(track => {
-        const slotIdx = parseInt(track.dataset.slotIndex);
-        track.innerHTML = '';
         
-        const casts = mitTimelineSkills.filter(c => c.slotIndex === slotIdx);
-        casts.forEach(cast => {
-            const skillData = mitSkillsDatabase[cast.jobKey]?.skills.find(s => s.id === cast.skillKey);
-            if (!skillData) return;
+        // Render Ruler
+        renderMitRuler(totalLength);
+        
+        // Render Boss Mechanics Track
+        renderMitBossMechanics();
+        
+        // Render Player Track items
+        const trackContents = document.querySelectorAll('.player-track-content');
+        trackContents.forEach(track => {
+            const slotIdx = parseInt(track.dataset.slotIndex);
+            track.innerHTML = '';
             
-            const pill = document.createElement('div');
-            pill.className = 'placed-mit-pill';
-            pill.draggable = true;
-            
-            if (mitLayoutMode === 'vertical') {
-                pill.style.top = `${cast.startTime * pps}px`;
-                pill.style.height = `${cast.duration * pps}px`;
-                pill.style.left = '';
-                pill.style.width = '';
-            } else {
+            const casts = mitTimelineSkills.filter(c => c.slotIndex === slotIdx);
+            casts.forEach(cast => {
+                const skillData = mitSkillsDatabase[cast.jobKey]?.skills.find(s => s.id === cast.skillKey);
+                if (!skillData) return;
+                
+                const pill = document.createElement('div');
+                pill.className = 'placed-mit-pill';
+                pill.draggable = true;
+                
                 pill.style.left = `${cast.startTime * pps}px`;
                 pill.style.width = `${cast.duration * pps}px`;
                 pill.style.top = '';
                 pill.style.height = '';
-            }
-            
-            pill.innerHTML = `
-                <img src="${skillData.icon}" />
-                <span class="placed-mit-pill-name">${skillData.name}</span>
-            `;
-            
-            // Drag moves timeline items
-            pill.addEventListener('dragstart', (e) => {
-                e.dataTransfer.setData('text/plain', JSON.stringify({
-                    sourceType: 'timeline',
-                    castId: cast.id
-                }));
-                // Set active dragging item styling
-                setTimeout(() => pill.style.opacity = '0.5', 0);
+                
+                pill.innerHTML = `
+                    <img src="${skillData.icon}" />
+                    <span class="placed-mit-pill-name">${skillData.name}</span>
+                `;
+                
+                // Drag moves timeline items
+                pill.addEventListener('dragstart', (e) => {
+                    e.dataTransfer.setData('text/plain', JSON.stringify({
+                        sourceType: 'timeline',
+                        castId: cast.id
+                    }));
+                    // Set active dragging item styling
+                    setTimeout(() => pill.style.opacity = '0.5', 0);
+                });
+                
+                pill.addEventListener('dragend', () => {
+                    pill.style.opacity = '1';
+                });
+                
+                // Double click to delete
+                pill.addEventListener('dblclick', () => {
+                    mitTimelineSkills = mitTimelineSkills.filter(c => c.id !== cast.id);
+                    renderMitTimeline();
+                });
+                
+                track.appendChild(pill);
             });
-            
-            pill.addEventListener('dragend', () => {
-                pill.style.opacity = '1';
-            });
-            
-            // Double click to delete
-            pill.addEventListener('dblclick', () => {
-                mitTimelineSkills = mitTimelineSkills.filter(c => c.id !== cast.id);
-                renderMitTimeline();
-            });
-            
-            track.appendChild(pill);
         });
-    });
+    }
+    
+    mitLengthDisplay.innerHTML = `<i class="fa-regular fa-clock"></i> 軸總長: ${Math.ceil(maxTime)}s`;
 }
 
 function renderMitRuler(widthOrHeight) {
@@ -813,38 +1135,7 @@ function setupMitEventListeners() {
         try {
             const resp = await fetch(`./data/duties/${dutyFile}`);
             const data = await resp.json();
-            
-            // Map mechanics
-            mitBossMechanics = (data.timeline || []).map((m, idx) => {
-                const time = parseDutyTime(m.castingTime || m.hitTime);
-                let name = m.skill;
-                if (name === 'AA') {
-                    name = '普通攻擊 (AA)';
-                }
-                if (!name) {
-                    if (m.variants && m.variants.length > 0) {
-                        name = m.variants.map(v => v.skill).join(' / ');
-                    } else {
-                        name = m.commonDesc || m.phase || '未命名機制';
-                    }
-                }
-                
-                // Determine damage type
-                let dmgType = 'physical';
-                const typeStr = m.type || (m.damage && m.damage[0] && m.damage[0].type) || '';
-                if (typeStr.includes('魔') || typeStr.toLowerCase().includes('magic')) {
-                    dmgType = 'magic';
-                } else if (typeStr.includes('暗') || typeStr.toLowerCase().includes('darkness') || typeStr.includes('無')) {
-                    dmgType = 'darkness';
-                }
-                
-                return {
-                    id: m.id || `mech-${idx}-${Date.now()}`,
-                    time: time,
-                    name: name,
-                    dmgType: dmgType
-                };
-            });
+            mitBossMechanics = parseTimelineData(data.timeline);
             
             renderMitTimeline();
         } catch (err) {
@@ -1081,7 +1372,12 @@ async function loadTeamPlanById(planId) {
         mitDutySelect.value = plan.duty_key || '';
         mitParty = plan.party || [];
         mitTimelineSkills = plan.mits || [];
-        mitBossMechanics = plan.custom_mechanics || [];
+        
+        if (plan.duty_key && plan.duty_key !== 'custom') {
+            await loadDutyMechanicsForPlan(plan.duty_key, plan.custom_mechanics || []);
+        } else {
+            mitBossMechanics = plan.custom_mechanics || [];
+        }
 
         renderPartySelector();
         renderMitSkillsList();
@@ -1140,7 +1436,12 @@ async function handleUrlSharingTokens() {
             mitDutySelect.value = data.duty_key || '';
             mitParty = data.party || [];
             mitTimelineSkills = data.mits || [];
-            mitBossMechanics = data.custom_mechanics || [];
+            
+            if (data.duty_key && data.duty_key !== 'custom') {
+                await loadDutyMechanicsForPlan(data.duty_key, data.custom_mechanics || []);
+            } else {
+                mitBossMechanics = data.custom_mechanics || [];
+            }
 
             // If we only have view access, hide the edit buttons
             const isReadMode = (token === data.read_token);
