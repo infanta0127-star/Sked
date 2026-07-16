@@ -1444,7 +1444,45 @@ async function saveTeamPlanToSupabase() {
             savesModalMode = 'save';
             await loadTeamPlansModal();
         } else if (choice === 'new') {
-            const name = await window.showCustomPrompt('保存紀錄', '請輸入新的存檔名稱：', currentTeamPlanName);
+            let defaultName = currentTeamPlanName;
+            if (currentTeamPlanName === '未命名團隊排軸') {
+                let dutyName = '無副本';
+                if (mitDutySelect.value && mitDutySelect.value !== 'custom') {
+                    const selectedOption = mitDutySelect.options[mitDutySelect.selectedIndex];
+                    if (selectedOption) {
+                        dutyName = selectedOption.text.trim();
+                    }
+                }
+                
+                let baseName = dutyName.replace(/\s*\(([^)]+)\)/, '-$1').replace(/\s+/g, '-');
+                if (baseName === '無副本-(自訂時間軸)') {
+                    baseName = '無副本';
+                }
+                
+                const { data: existingPlans, error: fetchErr } = await sb.from('team_plans')
+                    .select('name')
+                    .eq('owner_id', currentUser.id)
+                    .eq('duty_key', mitDutySelect.value || 'custom');
+                
+                let nextNum = 1;
+                if (!fetchErr && existingPlans) {
+                    const names = existingPlans.map(p => p.name);
+                    let maxNum = 0;
+                    const escapedBase = baseName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+                    const regex = new RegExp(`^${escapedBase}-(\\d+)$`);
+                    names.forEach(n => {
+                        const match = n.match(regex);
+                        if (match) {
+                            const num = parseInt(match[1], 10);
+                            if (num > maxNum) maxNum = num;
+                        }
+                    });
+                    nextNum = maxNum + 1;
+                }
+                defaultName = `${baseName}-${nextNum}`;
+            }
+
+            const name = await window.showCustomPrompt('保存紀錄', '請輸入新的存檔名稱：', defaultName);
             if (name === null) return;
             if (name.trim() === '') {
                 alert('計畫名稱不能為空！');

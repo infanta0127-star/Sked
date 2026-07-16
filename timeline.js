@@ -2110,7 +2110,44 @@ async function saveIndivPlanToSupabase() {
       savesModalMode = 'save';
       await loadIndivPlansModal();
     } else if (choice === 'new') {
-      const name = await window.showCustomPrompt('保存紀錄', '請輸入新的存檔名稱：', currentIndivPlanName);
+      let defaultName = currentIndivPlanName;
+      if (currentIndivPlanName === '未命名個人排軸') {
+        let dutyName = '無副本';
+        if (dutySelect && dutySelect.value && dutySelect.value !== 'custom') {
+          const selectedOption = dutySelect.options[dutySelect.selectedIndex];
+          if (selectedOption) {
+            dutyName = selectedOption.text.trim();
+          }
+        }
+        
+        let baseName = dutyName.replace(/\s*\(([^)]+)\)/, '-$1').replace(/\s+/g, '-');
+        if (baseName === '無副本-(自訂時間軸)') {
+          baseName = '無副本';
+        }
+        
+        const { data: existingPlans, error: fetchErr } = await sb.from('individual_plans')
+          .select('name')
+          .eq('owner_id', session.user.id);
+        
+        let nextNum = 1;
+        if (!fetchErr && existingPlans) {
+          const names = existingPlans.map(p => p.name);
+          let maxNum = 0;
+          const escapedBase = baseName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+          const regex = new RegExp(`^${escapedBase}-(\\d+)$`);
+          names.forEach(n => {
+            const match = n.match(regex);
+            if (match) {
+              const num = parseInt(match[1], 10);
+              if (num > maxNum) maxNum = num;
+            }
+          });
+          nextNum = maxNum + 1;
+        }
+        defaultName = `${baseName}-${nextNum}`;
+      }
+
+      const name = await window.showCustomPrompt('保存紀錄', '請輸入新的存檔名稱：', defaultName);
       if (name === null) return;
       if (name.trim() === '') {
         alert('計畫名稱不能為空！');
