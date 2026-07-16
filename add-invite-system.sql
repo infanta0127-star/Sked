@@ -59,12 +59,12 @@ begin
 
     return query
     select
-        p.id,
-        u.email,
-        p.is_active,
-        p.role,
-        p.invite_code,
-        p.created_at
+        p.id::uuid,
+        u.email::text,
+        p.is_active::boolean,
+        p.role::text,
+        p.invite_code::text,
+        p.created_at::timestamptz
     from public.profiles p
     join auth.users u on u.id = p.id
     order by p.created_at desc;
