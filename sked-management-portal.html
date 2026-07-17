@@ -608,6 +608,14 @@
 
     <!-- TAB 2: Analytics -->
     <div id="tab-analytics" class="portal-tab-content hidden">
+        <!-- Filter Row -->
+        <div class="section" style="padding: 16px 24px; margin-bottom: 20px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+            <span style="font-size: 14px; font-weight: 600; color: var(--muted);"><i class="fa-solid fa-filter"></i> 篩選使用者範圍:</span>
+            <select id="analytics-user-filter" style="background: var(--bg3); border: 1px solid var(--border); color: var(--text); padding: 6px 12px; border-radius: 8px; font-size: 13px; outline: none; cursor: pointer; min-width: 280px; transition: border-color 0.2s ease;">
+                <option value="all">🌐 全局統計 (所有使用者)</option>
+            </select>
+        </div>
+
         <!-- Analytics Stats Row -->
         <div class="stats-row">
             <div class="stat-card">
@@ -640,7 +648,7 @@
             <div class="section-header">
                 <div class="section-title">
                     <i class="fa-solid fa-clock-rotate-left"></i>
-                    近期使用者行為日誌 (最新 50 筆)
+                    近期使用者行為日誌 (最新 100 筆)
                 </div>
                 <button class="btn btn-primary" id="btn-refresh-analytics" style="background: rgba(91,124,246,.15); color: var(--accent2); border: 1px solid rgba(91,124,246,.3);">
                     <i class="fa-solid fa-arrows-rotate"></i> 重新整理
@@ -651,6 +659,7 @@
                     <thead>
                         <tr>
                             <th>時間</th>
+                            <th>操作者</th>
                             <th>類別</th>
                             <th>事件名稱</th>
                             <th>動作詳細內容</th>
@@ -658,7 +667,7 @@
                     </thead>
                     <tbody id="analytics-log-tbody">
                         <tr>
-                            <td colspan="4" class="empty-state" style="text-align: center;">載入數據中...</td>
+                            <td colspan="5" class="empty-state" style="text-align: center;">載入數據中...</td>
                         </tr>
                     </tbody>
                 </table>
@@ -896,157 +905,81 @@ document.querySelectorAll('.portal-tab-btn').forEach(btn => {
 });
 
 // ── Analytics ──
+let allAnalyticsEvents = [];
+let recentAnalyticsLogs = [];
+let cachedUserMap = {};
+
 async function loadAnalytics() {
     try {
-        // 1. Fetch recent events (last 50)
+        const area = document.getElementById('analytics-chart-container');
+        area.innerHTML = '<div class="empty-state">載入數據中...</div>';
+
+        // 1. Fetch users map
+        const { data: users } = await sb.rpc('admin_get_all_users');
+        cachedUserMap = {};
+        if (users) {
+            users.forEach(u => {
+                cachedUserMap[u.id] = u.email;
+            });
+        }
+
+        // 2. Fetch logs (fetch up to 100 recent events)
         const { data: logs, error: logsError } = await sb
             .from('analytics_events')
             .select('*')
             .order('created_at', { ascending: false })
-            .limit(50);
+            .limit(100);
             
         if (logsError) throw logsError;
+        recentAnalyticsLogs = logs;
 
-        // 2. Fetch stats for aggregating metrics & charts
-        const { count: totalEvents, error: countError } = await sb
-            .from('analytics_events')
-            .select('id', { count: 'exact', head: true });
-            
-        if (countError) throw countError;
-
-        // Let's query events to calculate uniques
+        // 3. Fetch all events for statistics
         const { data: allEvents, error: allErr } = await sb
             .from('analytics_events')
-            .select('session_id, event_name, event_category');
+            .select('session_id, event_name, event_category, user_id, created_at, event_data');
 
         if (allErr) throw allErr;
+        allAnalyticsEvents = allEvents;
 
-        // Calculate unique sessions & share link count
-        const sessions = new Set();
-        let shareCount = 0;
-        const featureCounts = {};
+        // 4. Populate User Filter Dropdown
+        const filterSelect = document.getElementById('analytics-user-filter');
+        const currentValue = filterSelect.value;
+        filterSelect.innerHTML = '<option value="all">🌐 全局統計 (所有使用者)</option>';
 
-        allEvents.forEach(e => {
-            sessions.add(e.session_id);
-            if (e.event_name === 'share_link') {
-                shareCount++;
+        const uniqueUsers = new Set();
+        const uniqueSessions = new Set();
+
+        allAnalyticsEvents.forEach(e => {
+            if (e.user_id && cachedUserMap[e.user_id]) {
+                uniqueUsers.add(e.user_id);
+            } else if (e.session_id) {
+                uniqueSessions.add(e.session_id);
             }
-            // count feature usage
-            featureCounts[e.event_name] = (featureCounts[e.event_name] || 0) + 1;
         });
 
-        // Update metrics DOM
-        document.getElementById('stat-events-total').textContent = totalEvents || 0;
-        document.getElementById('stat-sessions-total').textContent = sessions.size || 0;
-        document.getElementById('stat-shares-total').textContent = shareCount || 0;
+        // Add user options
+        uniqueUsers.forEach(uid => {
+            const opt = document.createElement('option');
+            opt.value = `user:${uid}`;
+            opt.textContent = `👤 使用者: ${cachedUserMap[uid]}`;
+            filterSelect.appendChild(opt);
+        });
 
-        // Render horizontal bar chart
-        const chartContainer = document.getElementById('analytics-chart-container');
-        chartContainer.innerHTML = '';
+        // Add anonymous session options
+        uniqueSessions.forEach(sid => {
+            const opt = document.createElement('option');
+            opt.value = `session:${sid}`;
+            opt.textContent = `💻 訪客會話: ${sid.substring(0, 12)}...`;
+            filterSelect.appendChild(opt);
+        });
 
-        const sortedFeatures = Object.entries(featureCounts)
-            .sort((a, b) => b[1] - a[1]);
-
-        if (sortedFeatures.length === 0) {
-            chartContainer.innerHTML = '<div class="empty-state">目前尚無埋點數據紀錄</div>';
-        } else {
-            const maxCount = sortedFeatures[0][1];
-            
-            // Pretty names map
-            const nameMap = {
-                'tab_switch': '切換排軸頁籤 (Navigation)',
-                'save_cloud': '保存個人/團隊紀錄到雲端',
-                'load_cloud': '讀取個人/團隊雲端紀錄',
-                'share_link': '建立/複製分享連結',
-                'import_json': '自 JSON 檔案/剪貼簿匯入',
-                'export_json': '匯出為 JSON 檔案',
-                'export_image': '個人排軸導出成圖片',
-                'import_from_team': '個人排軸載入團隊計畫',
-                'click_import_from_team_btn': '點擊載入團隊排軸按鈕',
-                'login': '管理員/使用者登入',
-                'register': '註冊新帳號',
-                'logout': '登出帳號'
-            };
-
-            const chartRow = document.createElement('div');
-            chartRow.className = 'chart-row';
-
-            sortedFeatures.forEach(([eventName, count]) => {
-                const pct = maxCount > 0 ? Math.round((count / maxCount) * 100) : 0;
-                const displayName = nameMap[eventName] || eventName;
-                
-                const barHtml = `
-                    <div class="chart-bar-container">
-                        <div class="chart-bar-label-row">
-                            <span style="font-weight: 500;">${displayName}</span>
-                            <span style="color: var(--muted);">${count} 次 (${pct}%)</span>
-                        </div>
-                        <div class="chart-bar-bg">
-                            <div class="chart-bar-fill" style="width: ${pct}%"></div>
-                        </div>
-                    </div>
-                `;
-                chartRow.insertAdjacentHTML('beforeend', barHtml);
-            });
-            chartContainer.appendChild(chartRow);
+        // Restore selection
+        if ([...filterSelect.options].some(opt => opt.value === currentValue)) {
+            filterSelect.value = currentValue;
         }
 
-        // Render activity logs table
-        const logTbody = document.getElementById('analytics-log-tbody');
-        logTbody.innerHTML = '';
-
-        if (logs.length === 0) {
-            logTbody.innerHTML = '<tr><td colspan="4" class="empty-state" style="text-align:center;">尚無近期日誌紀錄</td></tr>';
-        } else {
-            // Pretty events translation helper
-            function formatEventAction(ev) {
-                const data = ev.event_data || {};
-                switch (ev.event_name) {
-                    case 'tab_switch':
-                        return `切換至 ${data.target === 'team' ? '團隊排軸' : '個人排軸'} 頁籤`;
-                    case 'save_cloud':
-                        return `保存個人/團隊雲端存檔: <strong>${data.name || '未命名'}</strong> (${data.type === 'new' ? '新存檔' : '覆蓋'})`;
-                    case 'load_cloud':
-                        return `讀取雲端存檔: <strong>${data.name || '未命名'}</strong>`;
-                    case 'share_link':
-                        return `生成分享連結權限: <strong>${data.type === 'edit' ? '可編輯' : '唯讀'}</strong>`;
-                    case 'import_json':
-                        return `匯入排軸 JSON (副本/職業: ${data.duty || data.job || '未知'})`;
-                    case 'export_json':
-                        return `導出 JSON 檔案 (副本/職業: ${data.duty || data.job || '未知'})`;
-                    case 'export_image':
-                        return `匯出個人排軸為圖片`;
-                    case 'import_from_team':
-                        return `匯入團隊計畫至個人排軸`;
-                    case 'click_import_from_team_btn':
-                        return `點擊匯入團隊計畫按鈕`;
-                    case 'login':
-                        return `登入帳號`;
-                    case 'register':
-                        return `註冊新帳號`;
-                    case 'logout':
-                        return `登出帳號`;
-                    default:
-                        return JSON.stringify(data);
-                }
-            }
-
-            logs.forEach(log => {
-                const tr = document.createElement('tr');
-                const localTime = new Date(log.created_at).toLocaleString();
-                const categoryText = log.event_category === 'team_planner' ? '團隊排軸' :
-                                     log.event_category === 'personal_planner' ? '個人排軸' :
-                                     log.event_category === 'auth' ? '身份驗證' : '系統導覽';
-                
-                tr.innerHTML = `
-                    <td style="white-space:nowrap; color: var(--muted);">${localTime}</td>
-                    <td><span class="badge" style="background: rgba(255,255,255,0.05); color: var(--text); border: 1px solid var(--border); font-size:11px; padding: 2px 6px;">${categoryText}</span></td>
-                    <td style="font-family: monospace; font-weight: bold; color: var(--accent2);">${log.event_name}</td>
-                    <td>${formatEventAction(log)}</td>
-                `;
-                logTbody.appendChild(tr);
-            });
-        }
+        // 5. Render
+        renderFilteredAnalytics();
 
     } catch (err) {
         console.error('Failed to load analytics:', err);
@@ -1054,6 +987,156 @@ async function loadAnalytics() {
     }
 }
 
+function renderFilteredAnalytics() {
+    const filterVal = document.getElementById('analytics-user-filter').value;
+    
+    // Filter
+    let filteredEvents = allAnalyticsEvents;
+    let filteredLogs = recentAnalyticsLogs;
+
+    if (filterVal !== 'all') {
+        const [type, id] = filterVal.split(':');
+        if (type === 'user') {
+            filteredEvents = allAnalyticsEvents.filter(e => e.user_id === id);
+            filteredLogs = recentAnalyticsLogs.filter(e => e.user_id === id);
+        } else if (type === 'session') {
+            filteredEvents = allAnalyticsEvents.filter(e => e.session_id === id);
+            filteredLogs = recentAnalyticsLogs.filter(e => e.session_id === id);
+        }
+    }
+
+    // 1. Calculate metrics
+    const totalEvents = filteredEvents.length;
+    const sessions = new Set(filteredEvents.map(e => e.session_id));
+    const shareCount = filteredEvents.filter(e => e.event_name === 'share_link').length;
+
+    document.getElementById('stat-events-total').textContent = totalEvents;
+    document.getElementById('stat-sessions-total').textContent = sessions.size;
+    document.getElementById('stat-shares-total').textContent = shareCount;
+
+    // 2. Render horizontal bar chart
+    const chartContainer = document.getElementById('analytics-chart-container');
+    chartContainer.innerHTML = '';
+
+    const featureCounts = {};
+    filteredEvents.forEach(e => {
+        featureCounts[e.event_name] = (featureCounts[e.event_name] || 0) + 1;
+    });
+
+    const sortedFeatures = Object.entries(featureCounts)
+        .sort((a, b) => b[1] - a[1]);
+
+    if (sortedFeatures.length === 0) {
+        chartContainer.innerHTML = '<div class="empty-state">此使用者範圍內尚無數據紀錄</div>';
+    } else {
+        const maxCount = sortedFeatures[0][1];
+        
+        const nameMap = {
+            'tab_switch': '切換排軸頁籤 (Navigation)',
+            'save_cloud': '保存個人/團隊紀錄到雲端',
+            'load_cloud': '讀取個人/團隊雲端紀錄',
+            'share_link': '建立/複製分享連結',
+            'import_json': '自 JSON 檔案/剪貼簿匯入',
+            'export_json': '匯出為 JSON 檔案',
+            'export_image': '個人排軸導出成圖片',
+            'import_from_team': '個人排軸載入團隊計畫',
+            'click_import_from_team_btn': '點擊載入團隊排軸按鈕',
+            'login': '管理員/使用者登入',
+            'register': '註冊新帳號',
+            'logout': '登出帳號'
+        };
+
+        const chartRow = document.createElement('div');
+        chartRow.className = 'chart-row';
+
+        sortedFeatures.forEach(([eventName, count]) => {
+            const pct = maxCount > 0 ? Math.round((count / maxCount) * 100) : 0;
+            const displayName = nameMap[eventName] || eventName;
+            
+            const barHtml = `
+                <div class="chart-bar-container">
+                    <div class="chart-bar-label-row">
+                        <span style="font-weight: 500;">${displayName}</span>
+                        <span style="color: var(--muted);">${count} 次 (${pct}%)</span>
+                    </div>
+                    <div class="chart-bar-bg">
+                        <div class="chart-bar-fill" style="width: ${pct}%"></div>
+                    </div>
+                </div>
+            `;
+            chartRow.insertAdjacentHTML('beforeend', barHtml);
+        });
+        chartContainer.appendChild(chartRow);
+    }
+
+    // 3. Render log table
+    const logTbody = document.getElementById('analytics-log-tbody');
+    logTbody.innerHTML = '';
+
+    if (filteredLogs.length === 0) {
+        logTbody.innerHTML = '<tr><td colspan="5" class="empty-state" style="text-align:center;">此篩選範圍內無近期日誌紀錄</td></tr>';
+    } else {
+        function formatEventAction(ev) {
+            const data = ev.event_data || {};
+            switch (ev.event_name) {
+                case 'tab_switch':
+                    return `切換至 ${data.target === 'team' ? '團隊排軸' : '個人排軸'} 頁籤`;
+                case 'save_cloud':
+                    return `保存個人/團隊雲端存檔: <strong>${data.name || '未命名'}</strong> (${data.type === 'new' ? '新存檔' : '覆蓋'})`;
+                case 'load_cloud':
+                    return `讀取雲端存檔: <strong>${data.name || '未命名'}</strong>`;
+                case 'share_link':
+                    return `生成分享連結權限: <strong>${data.type === 'edit' ? '可編輯' : '唯讀'}</strong>`;
+                case 'import_json':
+                    return `匯入排軸 JSON (副本/職業: ${data.duty || data.job || '未知'})`;
+                case 'export_json':
+                    return `導出 JSON 檔案 (副本/職業: ${data.duty || data.job || '未知'})`;
+                case 'export_image':
+                    return `匯出個人排軸為圖片`;
+                case 'import_from_team':
+                    return `匯入團隊計畫至個人排軸`;
+                case 'click_import_from_team_btn':
+                    return `點擊匯入團隊計畫按鈕`;
+                case 'login':
+                    return `登入帳號`;
+                case 'register':
+                    return `註冊新帳號`;
+                case 'logout':
+                    return `登出帳號`;
+                default:
+                    return JSON.stringify(data);
+            }
+        }
+
+        filteredLogs.forEach(log => {
+            const tr = document.createElement('tr');
+            const localTime = new Date(log.created_at).toLocaleString();
+            const categoryText = log.event_category === 'team_planner' ? '團隊排軸' :
+                                 log.event_category === 'personal_planner' ? '個人排軸' :
+                                 log.event_category === 'auth' ? '身份驗證' : '系統導覽';
+            
+            // Resolve identity
+            let identityText = '<span style="color:var(--muted); font-size:12px;">訪客 (Anonymous)</span>';
+            if (log.user_id && cachedUserMap[log.user_id]) {
+                identityText = `<strong style="color:var(--accent2); font-size:12px;"><i class="fa-solid fa-circle-user"></i> ${cachedUserMap[log.user_id]}</strong>`;
+            } else if (log.session_id) {
+                identityText = `<span style="color:var(--muted); font-size:11px; font-family:monospace;"><i class="fa-solid fa-laptop"></i> ${log.session_id.substring(0, 8)}...</span>`;
+            }
+
+            tr.innerHTML = `
+                <td style="white-space:nowrap; color: var(--muted);">${localTime}</td>
+                <td>${identityText}</td>
+                <td><span class="badge" style="background: rgba(255,255,255,0.05); color: var(--text); border: 1px solid var(--border); font-size:11px; padding: 2px 6px;">${categoryText}</span></td>
+                <td style="font-family: monospace; font-weight: bold; color: var(--accent2);">${log.event_name}</td>
+                <td>${formatEventAction(log)}</td>
+            `;
+            logTbody.appendChild(tr);
+        });
+    }
+}
+
+// Bind dropdown change event
+document.getElementById('analytics-user-filter').addEventListener('change', renderFilteredAnalytics);
 document.getElementById('btn-refresh-analytics').addEventListener('click', loadAnalytics);
 </script>
 </body>
