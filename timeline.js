@@ -2470,3 +2470,68 @@ function updateCustomDropdownSelection(selectEl, container) {
 
 window.syncCustomDropdown = syncCustomDropdown;
 
+// ── 18. Auto-Update Version Check ──
+let currentVersionTag = null;
+let updatePopupShown = false;
+
+async function initVersionCheck() {
+  try {
+    const response = await fetch('./index.html?t=' + Date.now(), { method: 'HEAD', cache: 'no-cache' });
+    if (response.ok) {
+      currentVersionTag = response.headers.get('etag') || response.headers.get('last-modified');
+      console.log('[Version Check] Initialized with version tag:', currentVersionTag);
+    }
+  } catch (e) {
+    console.error('[Version Check] Failed to initialize:', e);
+  }
+  
+  // Check for updates every 60 seconds
+  setInterval(checkForUpdates, 60000);
+}
+
+async function checkForUpdates() {
+  if (updatePopupShown) return;
+  try {
+    const response = await fetch('./index.html?t=' + Date.now(), { method: 'HEAD', cache: 'no-cache' });
+    if (response.ok) {
+      const newVersionTag = response.headers.get('etag') || response.headers.get('last-modified');
+      if (newVersionTag && currentVersionTag && newVersionTag !== currentVersionTag) {
+        showUpdateNotification();
+      }
+    }
+  } catch (e) {
+    console.warn('[Version Check] Check failed:', e);
+  }
+}
+
+function showUpdateNotification() {
+  if (updatePopupShown) return;
+  updatePopupShown = true;
+  
+  const toast = document.createElement('div');
+  toast.className = 'update-toast';
+  toast.innerHTML = `
+    <div class="update-toast-header">
+      <i class="fa-solid fa-cloud-arrow-down"></i>
+      <span>系統有新版本發布！</span>
+    </div>
+    <div class="update-toast-body">
+      排軸小助手已在 GitHub Pages 部署了最新的優化版本，請重新整理頁面以啟用最新功能與樣式。
+    </div>
+    <div class="update-toast-actions">
+      <button class="btn-update-refresh" id="btn-toast-reload">
+        <i class="fa-solid fa-arrows-rotate"></i> 重新整理
+      </button>
+    </div>
+  `;
+  
+  toast.querySelector('#btn-toast-reload').addEventListener('click', () => {
+    window.location.reload();
+  });
+  
+  document.body.appendChild(toast);
+}
+
+// Start checking
+initVersionCheck();
+

@@ -2103,6 +2103,87 @@ body {
   font-weight: 500;
 }
 
+/* ── Version Update Notification ── */
+.update-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: rgba(18, 22, 32, 0.96);
+  border: 1px solid rgba(0, 240, 255, 0.4);
+  border-radius: 12px;
+  padding: 16px 20px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 15px rgba(0, 240, 255, 0.15);
+  z-index: 99999;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 320px;
+  backdrop-filter: blur(12px);
+  animation: slideInToast 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes slideInToast {
+  from {
+    transform: translateY(100px) scale(0.9);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.update-toast-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 14px;
+  color: #fff;
+}
+
+.update-toast-header i {
+  color: #ffa500;
+  animation: pulseWarm 1.5s infinite alternate;
+}
+
+@keyframes pulseWarm {
+  from { transform: scale(1); filter: drop-shadow(0 0 2px rgba(255,165,0,0.4)); }
+  to { transform: scale(1.15); filter: drop-shadow(0 0 6px rgba(255,165,0,0.8)); }
+}
+
+.update-toast-body {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  line-height: 1.6;
+}
+
+.update-toast-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.btn-update-refresh {
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  color: #fff;
+  border: none;
+  padding: 6px 16px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 10px rgba(91, 124, 246, 0.3);
+}
+
+.btn-update-refresh:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(91, 124, 246, 0.4);
+}
+
 
 
 
