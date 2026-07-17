@@ -404,6 +404,97 @@
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: var(--bg); }
         ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+        /* ── Tabs Navigation ── */
+        .portal-tabs {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 12px;
+        }
+
+        .portal-tab-btn {
+            background: none;
+            border: none;
+            color: var(--muted);
+            font-size: 14px;
+            font-weight: 600;
+            padding: 8px 16px;
+            cursor: pointer;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .portal-tab-btn:hover {
+            color: var(--text);
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .portal-tab-btn.active {
+            color: #fff;
+            background: var(--accent);
+        }
+
+        .portal-tab-content.hidden {
+            display: none !important;
+        }
+
+        /* ── Bar Chart Styling ── */
+        .chart-row {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .chart-bar-container {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .chart-bar-label-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+        }
+
+        .chart-bar-bg {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 6px;
+            height: 12px;
+            width: 100%;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.02);
+        }
+
+        .chart-bar-fill {
+            background: linear-gradient(90deg, var(--accent), var(--accent2));
+            height: 100%;
+            border-radius: 6px;
+            width: 0%; /* Animate via JS */
+            transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .activity-log-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            text-align: left;
+        }
+
+        .activity-log-table th, .activity-log-table td {
+            padding: 12px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .activity-log-table th {
+            color: var(--muted);
+            font-weight: 600;
+        }
     </style>
 </head>
 <body>
@@ -439,66 +530,139 @@
 <!-- Admin Content -->
 <div id="admin-content">
 
-    <!-- Stats -->
-    <div class="stats-row">
-        <div class="stat-card">
-            <div class="stat-value" id="stat-total">—</div>
-            <div class="stat-label">總用戶數</div>
+    <!-- Tabs Navigation -->
+    <div class="portal-tabs">
+        <button class="portal-tab-btn active" data-target="tab-settings">
+            <i class="fa-solid fa-user-gear"></i> 帳號與邀請碼設定
+        </button>
+        <button class="portal-tab-btn" data-target="tab-analytics">
+            <i class="fa-solid fa-chart-line"></i> 數據流量與分析
+        </button>
+    </div>
+
+    <!-- TAB 1: Settings -->
+    <div id="tab-settings" class="portal-tab-content">
+        <!-- Stats -->
+        <div class="stats-row">
+            <div class="stat-card">
+                <div class="stat-value" id="stat-total">—</div>
+                <div class="stat-label">總用戶數</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-active" style="color: var(--success);">—</div>
+                <div class="stat-label">啟用中</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-inactive" style="color: var(--danger);">—</div>
+                <div class="stat-label">已停用</div>
+            </div>
         </div>
-        <div class="stat-card">
-            <div class="stat-value" id="stat-active" style="color: var(--success);">—</div>
-            <div class="stat-label">啟用中</div>
+
+        <!-- Invite Code Section -->
+        <div class="section">
+            <div class="section-header">
+                <div class="section-title">
+                    <i class="fa-solid fa-key"></i>
+                    邀請碼管理
+                </div>
+                <button class="btn btn-primary" id="btn-regenerate">
+                    <i class="fa-solid fa-rotate"></i> 重新生成邀請碼
+                </button>
+            </div>
+
+            <div id="invite-code-area">
+                <div class="code-display">
+                    <div class="code-label">目前有效邀請碼</div>
+                    <div class="code-value" id="current-code">——</div>
+                    <div class="code-status active" id="code-status-badge">
+                        <i class="fa-solid fa-circle-check"></i> 有效
+                    </div>
+                </div>
+
+                <div class="code-history">
+                    <div class="code-history-title">歷史邀請碼</div>
+                    <div class="code-history-list" id="code-history-list">
+                        <div class="empty-state" style="padding: 20px;">載入中...</div>
+                    </div>
+                </div>
+            </div>
         </div>
-        <div class="stat-card">
-            <div class="stat-value" id="stat-inactive" style="color: var(--danger);">—</div>
-            <div class="stat-label">已停用</div>
+
+        <!-- User Management Section -->
+        <div class="section">
+            <div class="section-header">
+                <div class="section-title">
+                    <i class="fa-solid fa-users"></i>
+                    用戶管理
+                </div>
+                <button class="btn btn-primary" id="btn-refresh-users" style="background: rgba(91,124,246,.15); color: var(--accent2); border: 1px solid rgba(91,124,246,.3);">
+                    <i class="fa-solid fa-arrows-rotate"></i> 重新整理
+                </button>
+            </div>
+
+            <div id="user-table-area">
+                <div class="empty-state">載入中...</div>
+            </div>
         </div>
     </div>
 
-    <!-- Invite Code Section -->
-    <div class="section">
-        <div class="section-header">
-            <div class="section-title">
-                <i class="fa-solid fa-key"></i>
-                邀請碼管理
+    <!-- TAB 2: Analytics -->
+    <div id="tab-analytics" class="portal-tab-content hidden">
+        <!-- Analytics Stats Row -->
+        <div class="stats-row">
+            <div class="stat-card">
+                <div class="stat-value" id="stat-events-total">—</div>
+                <div class="stat-label">累計上報事件數</div>
             </div>
-            <button class="btn btn-primary" id="btn-regenerate">
-                <i class="fa-solid fa-rotate"></i> 重新生成邀請碼
-            </button>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-sessions-total" style="color: var(--warning);">—</div>
+                <div class="stat-label">不重複會話數 (Sessions)</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-shares-total" style="color: var(--accent2);">—</div>
+                <div class="stat-label">連結分享次數</div>
+            </div>
         </div>
 
-        <div id="invite-code-area">
-            <div class="code-display">
-                <div class="code-label">目前有效邀請碼</div>
-                <div class="code-value" id="current-code">——</div>
-                <div class="code-status active" id="code-status-badge">
-                    <i class="fa-solid fa-circle-check"></i> 有效
+        <div class="section">
+            <div class="section-header">
+                <div class="section-title">
+                    <i class="fa-solid fa-chart-bar"></i>
+                    熱門功能使用排行 (全部歷史)
                 </div>
             </div>
+            <div class="chart-row" id="analytics-chart-container">
+                <div class="empty-state">載入數據中...</div>
+            </div>
+        </div>
 
-            <div class="code-history">
-                <div class="code-history-title">歷史邀請碼</div>
-                <div class="code-history-list" id="code-history-list">
-                    <div class="empty-state" style="padding: 20px;">載入中...</div>
+        <div class="section">
+            <div class="section-header">
+                <div class="section-title">
+                    <i class="fa-solid fa-clock-rotate-left"></i>
+                    近期使用者行為日誌 (最新 50 筆)
                 </div>
+                <button class="btn btn-primary" id="btn-refresh-analytics" style="background: rgba(91,124,246,.15); color: var(--accent2); border: 1px solid rgba(91,124,246,.3);">
+                    <i class="fa-solid fa-arrows-rotate"></i> 重新整理
+                </button>
             </div>
-        </div>
-    </div>
-
-    <!-- User Management Section -->
-    <div class="section">
-        <div class="section-header">
-            <div class="section-title">
-                <i class="fa-solid fa-users"></i>
-                用戶管理
+            <div style="overflow-x: auto;">
+                <table class="activity-log-table">
+                    <thead>
+                        <tr>
+                            <th>時間</th>
+                            <th>類別</th>
+                            <th>事件名稱</th>
+                            <th>動作詳細內容</th>
+                        </tr>
+                    </thead>
+                    <tbody id="analytics-log-tbody">
+                        <tr>
+                            <td colspan="4" class="empty-state" style="text-align: center;">載入數據中...</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
-            <button class="btn btn-primary" id="btn-refresh-users" style="background: rgba(91,124,246,.15); color: var(--accent2); border: 1px solid rgba(91,124,246,.3);">
-                <i class="fa-solid fa-arrows-rotate"></i> 重新整理
-            </button>
-        </div>
-
-        <div id="user-table-area">
-            <div class="empty-state">載入中...</div>
         </div>
     </div>
 
@@ -714,6 +878,183 @@ function showNewCodeModal(code) {
 
 // ── Refresh ──
 document.getElementById('btn-refresh-users').addEventListener('click', loadUsers);
+
+// ── Tabs Navigation Click Handler ──
+document.querySelectorAll('.portal-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.portal-tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.portal-tab-content').forEach(c => c.classList.add('hidden'));
+        
+        btn.classList.add('active');
+        const target = btn.dataset.target;
+        document.getElementById(target).classList.remove('hidden');
+        
+        if (target === 'tab-analytics') {
+            loadAnalytics();
+        }
+    });
+});
+
+// ── Analytics ──
+async function loadAnalytics() {
+    try {
+        // 1. Fetch recent events (last 50)
+        const { data: logs, error: logsError } = await sb
+            .from('analytics_events')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(50);
+            
+        if (logsError) throw logsError;
+
+        // 2. Fetch stats for aggregating metrics & charts
+        const { count: totalEvents, error: countError } = await sb
+            .from('analytics_events')
+            .select('id', { count: 'exact', head: true });
+            
+        if (countError) throw countError;
+
+        // Let's query events to calculate uniques
+        const { data: allEvents, error: allErr } = await sb
+            .from('analytics_events')
+            .select('session_id, event_name, event_category');
+
+        if (allErr) throw allErr;
+
+        // Calculate unique sessions & share link count
+        const sessions = new Set();
+        let shareCount = 0;
+        const featureCounts = {};
+
+        allEvents.forEach(e => {
+            sessions.add(e.session_id);
+            if (e.event_name === 'share_link') {
+                shareCount++;
+            }
+            // count feature usage
+            featureCounts[e.event_name] = (featureCounts[e.event_name] || 0) + 1;
+        });
+
+        // Update metrics DOM
+        document.getElementById('stat-events-total').textContent = totalEvents || 0;
+        document.getElementById('stat-sessions-total').textContent = sessions.size || 0;
+        document.getElementById('stat-shares-total').textContent = shareCount || 0;
+
+        // Render horizontal bar chart
+        const chartContainer = document.getElementById('analytics-chart-container');
+        chartContainer.innerHTML = '';
+
+        const sortedFeatures = Object.entries(featureCounts)
+            .sort((a, b) => b[1] - a[1]);
+
+        if (sortedFeatures.length === 0) {
+            chartContainer.innerHTML = '<div class="empty-state">目前尚無埋點數據紀錄</div>';
+        } else {
+            const maxCount = sortedFeatures[0][1];
+            
+            // Pretty names map
+            const nameMap = {
+                'tab_switch': '切換排軸頁籤 (Navigation)',
+                'save_cloud': '保存個人/團隊紀錄到雲端',
+                'load_cloud': '讀取個人/團隊雲端紀錄',
+                'share_link': '建立/複製分享連結',
+                'import_json': '自 JSON 檔案/剪貼簿匯入',
+                'export_json': '匯出為 JSON 檔案',
+                'export_image': '個人排軸導出成圖片',
+                'import_from_team': '個人排軸載入團隊計畫',
+                'click_import_from_team_btn': '點擊載入團隊排軸按鈕',
+                'login': '管理員/使用者登入',
+                'register': '註冊新帳號',
+                'logout': '登出帳號'
+            };
+
+            const chartRow = document.createElement('div');
+            chartRow.className = 'chart-row';
+
+            sortedFeatures.forEach(([eventName, count]) => {
+                const pct = maxCount > 0 ? Math.round((count / maxCount) * 100) : 0;
+                const displayName = nameMap[eventName] || eventName;
+                
+                const barHtml = `
+                    <div class="chart-bar-container">
+                        <div class="chart-bar-label-row">
+                            <span style="font-weight: 500;">${displayName}</span>
+                            <span style="color: var(--muted);">${count} 次 (${pct}%)</span>
+                        </div>
+                        <div class="chart-bar-bg">
+                            <div class="chart-bar-fill" style="width: ${pct}%"></div>
+                        </div>
+                    </div>
+                `;
+                chartRow.insertAdjacentHTML('beforeend', barHtml);
+            });
+            chartContainer.appendChild(chartRow);
+        }
+
+        // Render activity logs table
+        const logTbody = document.getElementById('analytics-log-tbody');
+        logTbody.innerHTML = '';
+
+        if (logs.length === 0) {
+            logTbody.innerHTML = '<tr><td colspan="4" class="empty-state" style="text-align:center;">尚無近期日誌紀錄</td></tr>';
+        } else {
+            // Pretty events translation helper
+            function formatEventAction(ev) {
+                const data = ev.event_data || {};
+                switch (ev.event_name) {
+                    case 'tab_switch':
+                        return `切換至 ${data.target === 'team' ? '團隊排軸' : '個人排軸'} 頁籤`;
+                    case 'save_cloud':
+                        return `保存個人/團隊雲端存檔: <strong>${data.name || '未命名'}</strong> (${data.type === 'new' ? '新存檔' : '覆蓋'})`;
+                    case 'load_cloud':
+                        return `讀取雲端存檔: <strong>${data.name || '未命名'}</strong>`;
+                    case 'share_link':
+                        return `生成分享連結權限: <strong>${data.type === 'edit' ? '可編輯' : '唯讀'}</strong>`;
+                    case 'import_json':
+                        return `匯入排軸 JSON (副本/職業: ${data.duty || data.job || '未知'})`;
+                    case 'export_json':
+                        return `導出 JSON 檔案 (副本/職業: ${data.duty || data.job || '未知'})`;
+                    case 'export_image':
+                        return `匯出個人排軸為圖片`;
+                    case 'import_from_team':
+                        return `匯入團隊計畫至個人排軸`;
+                    case 'click_import_from_team_btn':
+                        return `點擊匯入團隊計畫按鈕`;
+                    case 'login':
+                        return `登入帳號`;
+                    case 'register':
+                        return `註冊新帳號`;
+                    case 'logout':
+                        return `登出帳號`;
+                    default:
+                        return JSON.stringify(data);
+                }
+            }
+
+            logs.forEach(log => {
+                const tr = document.createElement('tr');
+                const localTime = new Date(log.created_at).toLocaleString();
+                const categoryText = log.event_category === 'team_planner' ? '團隊排軸' :
+                                     log.event_category === 'personal_planner' ? '個人排軸' :
+                                     log.event_category === 'auth' ? '身份驗證' : '系統導覽';
+                
+                tr.innerHTML = `
+                    <td style="white-space:nowrap; color: var(--muted);">${localTime}</td>
+                    <td><span class="badge" style="background: rgba(255,255,255,0.05); color: var(--text); border: 1px solid var(--border); font-size:11px; padding: 2px 6px;">${categoryText}</span></td>
+                    <td style="font-family: monospace; font-weight: bold; color: var(--accent2);">${log.event_name}</td>
+                    <td>${formatEventAction(log)}</td>
+                `;
+                logTbody.appendChild(tr);
+            });
+        }
+
+    } catch (err) {
+        console.error('Failed to load analytics:', err);
+        document.getElementById('analytics-chart-container').innerHTML = `<div class="empty-state" style="color:var(--danger);">載入失敗: ${err.message}</div>`;
+    }
+}
+
+document.getElementById('btn-refresh-analytics').addEventListener('click', loadAnalytics);
 </script>
 </body>
 </html>

@@ -346,6 +346,7 @@ function setupEventListeners() {
       mitPlanningView.classList.remove('hidden');
       timelineWorkspaceView.classList.add('hidden');
       timelineToolbar.classList.add('hidden');
+      window.trackEvent('navigation', 'tab_switch', { target: 'team' });
     });
 
     tabBtnTimeline.addEventListener('click', () => {
@@ -354,12 +355,14 @@ function setupEventListeners() {
       timelineWorkspaceView.classList.remove('hidden');
       timelineToolbar.classList.remove('hidden');
       mitPlanningView.classList.add('hidden');
+      window.trackEvent('navigation', 'tab_switch', { target: 'personal' });
     });
   }
 
   // Import from team mitigation planner event listener
   if (btnImportMit) {
     btnImportMit.addEventListener('click', () => {
+      window.trackEvent('personal_planner', 'click_import_from_team_btn');
       if (!window.mitParty || !window.mitTimelineSkills) {
         alert('尚未在團隊排軸頁籤中規劃技能，請先在「團隊技能排軸」中規劃。');
         return;
@@ -1404,6 +1407,7 @@ function exportTimelineJSON() {
     return;
   }
   const data = getExportableData();
+  window.trackEvent('personal_planner', 'export_json', { job: currentJobId });
   const json = JSON.stringify(data, null, 2);
   const blob = new Blob([json], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -1636,6 +1640,7 @@ async function importFfxivMitigationPlan(data) {
   }
 
   const dutyKey = data.duty;
+  window.trackEvent('personal_planner', 'import_from_team', { duty: dutyKey });
   const dutyObj = dutiesDatabase.duties ? dutiesDatabase.duties.find(d => d.key === dutyKey) : null;
   let dutyData = null;
   if (dutyObj) {
@@ -1747,6 +1752,7 @@ function importTimelineJSON(e) {
         await importFfxivMitigationPlan(data);
       } else if (data.jobId && data.skills) {
         loadPlanData(data);
+        window.trackEvent('personal_planner', 'import_json', { job: data.jobId });
         alert('匯入成功！');
       } else {
         throw new Error('匯入的 JSON 檔案格式不正確！');
@@ -1805,6 +1811,7 @@ async function downloadTimelineImage() {
     alert('時間軸中無任何內容可匯出圖片！');
     return;
   }
+  window.trackEvent('personal_planner', 'export_image', { job: currentJobId });
   
   let maxTime = 60;
   timelineSkills.forEach(s => { maxTime = Math.max(maxTime, s.startTime + s.duration); });
@@ -2185,6 +2192,7 @@ async function saveIndivPlanToSupabase() {
       currentIndivPlanId = data.id;
       currentIndivEditToken = data.edit_token;
       currentIndivReadToken = data.read_token;
+      window.trackEvent('personal_planner', 'save_cloud', { type: 'new', name: currentIndivPlanName, job: currentJobId });
       alert('雲端個人排軸建立成功！');
     }
   } catch (err) {
@@ -2253,6 +2261,7 @@ async function loadIndivPlansModal() {
                   })
                   .eq('id', plan.id);
                 if (updErr) throw updErr;
+                window.trackEvent('personal_planner', 'save_cloud', { type: 'existing', name: plan.name, job: currentJobId });
                 alert(`「${plan.name}」覆蓋保存成功！`);
                 currentIndivPlanId = plan.id;
                 currentIndivPlanName = plan.name;
@@ -2306,6 +2315,7 @@ async function loadIndivPlanById(planId) {
     currentIndivEditToken = plan.edit_token;
     currentIndivReadToken = plan.read_token;
     currentIndivPlanName = plan.name;
+    window.trackEvent('personal_planner', 'load_cloud', { name: plan.name, job: plan.job_id });
 
     currentJobId = plan.job_id;
     jobSelect.value = plan.job_id;

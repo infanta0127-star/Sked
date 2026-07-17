@@ -133,7 +133,10 @@ function updateAuthUI() {
                 <button id="btn-logout" class="btn-mini" style="background:none; border:none; color:var(--color-danger); cursor:pointer;" title="登出"><i class="fa-solid fa-right-from-bracket"></i></button>
             </div>
         `;
-        document.getElementById('btn-logout').addEventListener('click', () => sb.auth.signOut());
+        document.getElementById('btn-logout').addEventListener('click', () => {
+            window.trackEvent('auth', 'logout');
+            sb.auth.signOut();
+        });
     } else {
         profileArea.innerHTML = `
             <button id="btn-login" class="btn btn-secondary" style="padding:5px 14px; font-size:12px; display:flex; align-items:center; gap:6px;">
@@ -319,6 +322,7 @@ async function handleLogin() {
         btn.textContent = '登入';
         showAuthError(error.message.includes('Invalid') ? '帳號或密碼錯誤' : error.message);
     } else {
+        window.trackEvent('auth', 'login', { email });
         closeAuthModal();
     }
 }
@@ -362,6 +366,7 @@ async function handleSignup() {
         btn.textContent = '發送驗證信並註冊';
         showAuthError(error.message);
     } else {
+        window.trackEvent('auth', 'register', { email });
         const content = document.getElementById('auth-modal-content');
         content.dataset.message = `驗證信已寄送至 ${email}，
 請點擊信中的連結完成帳號啟用。`;
@@ -1523,6 +1528,7 @@ async function saveTeamPlanToSupabase() {
             currentTeamEditToken = data.edit_token;
             currentTeamReadToken = data.read_token;
             currentTeamPlanOwnerId = data.owner_id;
+            window.trackEvent('team_planner', 'save_cloud', { type: 'new', name: currentTeamPlanName, duty: mitDutySelect.value || 'custom' });
             alert('新雲端排軸計畫儲存成功！');
         }
     } catch (err) {
@@ -1586,6 +1592,7 @@ async function loadTeamPlansModal() {
                                     })
                                     .eq('id', plan.id);
                                 if (updErr) throw updErr;
+                                window.trackEvent('team_planner', 'save_cloud', { type: 'existing', name: plan.name, duty: mitDutySelect.value || 'custom' });
                                 alert(`「${plan.name}」覆蓋保存成功！`);
                                 currentTeamPlanId = plan.id;
                                 currentTeamPlanName = plan.name;
@@ -1660,6 +1667,7 @@ async function loadTeamPlanById(planId) {
         window.mitTimelineSkills = mitTimelineSkills;
         window.mitParty = mitParty;
         
+        window.trackEvent('team_planner', 'load_cloud', { name: plan.name, duty: plan.duty_key });
         alert(`已載入「${plan.name}」！`);
     } catch (err) {
         alert(`載入計畫失敗: ${err.message}`);
@@ -1859,6 +1867,7 @@ async function handleShareApply() {
         }
         
         const shareUrl = `${window.location.origin}${window.location.pathname}?${paramName}=${token}`;
+        window.trackEvent('team_planner', 'share_link', { type: permission });
         
         // Auto-copy the share URL
         await navigator.clipboard.writeText(shareUrl);
@@ -1974,6 +1983,7 @@ async function handleUrlSharingTokens() {
 }
 
 function exportTeamPlanJSON() {
+    window.trackEvent('team_planner', 'export_json', { duty: mitDutySelect.value || 'custom' });
     const data = {
         duty: mitDutySelect.value || 'custom',
         party: mitParty,
@@ -2129,6 +2139,7 @@ function importTeamPlanJSON(e) {
             renderMitPlayerTracks();
             renderMitTimeline();
             
+            window.trackEvent('team_planner', 'import_json', { duty: data.duty });
             alert('成功匯入團隊排軸計畫！');
         } catch (err) {
             alert(`匯入失敗: ${err.message}`);
