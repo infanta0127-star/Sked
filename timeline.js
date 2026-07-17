@@ -2516,7 +2516,7 @@ function showUpdateNotification() {
       <span>系統有新版本發布！</span>
     </div>
     <div class="update-toast-body">
-      排軸小助手已在 GitHub Pages 部署了最新的優化版本，請重新整理頁面以啟用最新功能與樣式。
+      請重新整理頁面以啟用最新功能與樣式。
     </div>
     <div class="update-toast-actions">
       <button class="btn-update-refresh" id="btn-toast-reload">
