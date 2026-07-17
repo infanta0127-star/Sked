@@ -50,12 +50,12 @@
         <div class="control-group">
           <label for="job-select"><i class="fa-solid fa-shield-halved"></i> 選擇職業:</label>
           <select id="job-select" class="custom-select">
-            <option value="" disabled selected>請選擇特職...</option>
-            <optgroup label="防護職業 (Tank)" id="tank-group"></optgroup>
-            <optgroup label="治療職業 (Healer)" id="healer-group"></optgroup>
-            <optgroup label="近戰職業 (Melee DPS)" id="melee-group"></optgroup>
-            <optgroup label="遠程物理 (Physical Ranged)" id="ranged-group"></optgroup>
-            <optgroup label="遠程魔法 (Magical Ranged)" id="caster-group"></optgroup>
+            <option value="" disabled selected>請選擇職業</option>
+            <optgroup label="防護職業" id="tank-group"></optgroup>
+            <optgroup label="治療職業" id="healer-group"></optgroup>
+            <optgroup label="近戰職業" id="melee-group"></optgroup>
+            <optgroup label="遠程物理" id="ranged-group"></optgroup>
+            <optgroup label="遠程魔法" id="caster-group"></optgroup>
           </select>
         </div>
         
@@ -65,33 +65,14 @@
             <option value="" selected>無副本 (自訂時間軸)</option>
           </select>
         </div>
-        
-        <div class="control-group">
-          <label for="gcd-input"><i class="fa-solid fa-clock"></i> 玩家 GCD (秒):</label>
-          <input type="number" id="gcd-input" class="custom-input" value="2.50" step="0.01" min="1.50" max="3.00">
-        </div>
 
         <div class="divider"></div>
 
         <div class="btn-group">
-          <button id="btn-play" class="btn btn-secondary" title="播放預覽"><i class="fa-solid fa-play"></i> 播放</button>
-          <button id="btn-stop" class="btn btn-secondary" title="停止"><i class="fa-solid fa-stop"></i></button>
-          <button id="btn-zoom-in" class="btn btn-icon" title="放大"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
-          <button id="btn-zoom-out" class="btn btn-icon" title="縮小"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
-        </div>
-
-        <div class="divider"></div>
-
-        <div class="btn-group">
-          <button id="btn-save" class="btn btn-primary" title="存檔至瀏覽器"><i class="fa-solid fa-floppy-disk"></i> 儲存</button>
-          <button id="btn-load-list" class="btn btn-secondary" title="開啟已存檔案"><i class="fa-solid fa-folder-open"></i> 開啟</button>
           <button id="btn-cloud-save" class="btn btn-primary" title="保存計畫紀錄"><i class="fa-solid fa-cloud-arrow-up"></i> 保存紀錄</button>
           <button id="btn-cloud-load" class="btn btn-secondary" title="選擇雲端存檔"><i class="fa-solid fa-cloud-arrow-down"></i> 選擇紀錄</button>
-          <button id="btn-import-mit" class="btn btn-accent" title="從團隊技能排軸頁籤載入規劃"><i class="fa-solid fa-rotate"></i> 從團隊排軸匯入</button>
-          <button id="btn-export-json" class="btn btn-secondary" title="匯出 JSON 檔"><i class="fa-solid fa-file-export"></i> 匯出</button>
-          <button id="btn-import-json" class="btn btn-secondary" title="匯入 JSON 檔"><i class="fa-solid fa-file-import"></i> 匯入</button>
-          <button id="btn-export-text" class="btn btn-secondary" title="複製文字排軸"><i class="fa-solid fa-copy"></i> 複製文字軸</button>
-          <button id="btn-export-img" class="btn btn-accent" title="下載排軸圖片"><i class="fa-solid fa-image"></i> 匯出長圖</button>
+          <button id="btn-import-menu" class="btn btn-accent" title="開啟匯入選項"><i class="fa-solid fa-file-import"></i> 匯入</button>
+          <button id="btn-export-menu" class="btn btn-secondary" title="開啟匯出選項"><i class="fa-solid fa-file-export"></i> 匯出</button>
           <button id="btn-clear" class="btn btn-danger" title="清空時間軸"><i class="fa-solid fa-trash-can"></i></button>
         </div>
       </div>
@@ -103,7 +84,12 @@
       <!-- Left Sidebar: Party Comp & Mitigation Skills -->
       <aside class="sidebar">
         <div class="sidebar-header">
-          <h2>隊伍組成 (Party)</h2>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+            <h2 style="margin: 0;">隊伍組成 (Party)</h2>
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; color: var(--color-text-normal); user-select: none; margin-right: 15px;">
+              <input type="checkbox" id="mit-filter-roles-checkbox" checked style="cursor: pointer; margin: 0; width: 14px; height: 14px;"> 依職能過濾
+            </label>
+          </div>
           <div class="party-grid" id="party-select-grid">
             <!-- 8 Dropdowns will be dynamically populated in mit_timeline.js -->
           </div>
@@ -215,6 +201,10 @@
             <button class="tab-btn" data-filter="gcd">GCD</button>
             <button class="tab-btn" data-filter="ogcd">oGCD</button>
             <button class="tab-btn" data-filter="role">職能</button>
+          </div>
+          <div class="gcd-setting-box" style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border-color); display: flex; align-items: center; gap: 8px;">
+            <label for="gcd-input" style="font-size: 13px; font-weight: 500; color: var(--color-text-normal); white-space: nowrap;"><i class="fa-solid fa-clock" style="color: var(--color-gcd);"></i> GCD 時間 (秒):</label>
+            <input type="number" id="gcd-input" class="custom-input" value="2.50" step="0.01" min="1.50" max="3.00" style="flex: 1; height: 32px; padding: 4px 8px; font-size: 13px;">
           </div>
         </div>
         <div class="skills-list-container" id="skills-list">
@@ -332,6 +322,69 @@
           <ul class="saves-list" id="saves-list">
             <!-- List of stored timeline plans -->
           </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal for FF Logs Import -->
+    <div class="modal" id="fflogs-modal">
+      <div class="modal-content" style="width: 600px; max-width: 95%;">
+        <div class="modal-header">
+          <h3><i class="fa-solid fa-paste"></i> 從 FF Logs 匯入事件</h3>
+          <span class="modal-close" id="fflogs-modal-close">&times;</span>
+        </div>
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 12px; max-height: none; overflow: visible;">
+          <p style="font-size: 13px; color: var(--color-text-muted); line-height: 1.5; margin: 0;">
+            請在 FF Logs 點開您的戰鬥與特職事件頁面 (Events 頁籤)，全選 (Ctrl+A) 並複製 (Ctrl+C) 整個表格內容，或者只選取事件列，然後貼在下方文字方塊中。<br>
+            系統會自動解析時間與技能名稱，並排入當前特職的時間軸中。
+          </p>
+          <div style="display: flex; flex-direction: column; gap: 5px;">
+            <label for="fflogs-player-name" style="font-weight: bold; font-size: 13px;">角色名稱 (選填，用於過濾他人技能，例如 "老鴿"):</label>
+            <input type="text" id="fflogs-player-name" class="custom-input" placeholder="留空將自動偵測最多次施放的玩家" style="width: 100%; box-sizing: border-box; padding: 6px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-main); color: #fff;">
+          </div>
+          <div style="display: flex; gap: 15px; font-size: 13px; align-items: center;">
+            <label style="display: flex; align-items: center; gap: 5px; cursor: pointer; color: #fff;">
+              <input type="checkbox" id="fflogs-clear-timeline" checked style="cursor: pointer;"> 匯入前清空時間軸
+            </label>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 5px;">
+            <label for="fflogs-paste-area" style="font-weight: bold; font-size: 13px;">貼上事件文字:</label>
+            <textarea id="fflogs-paste-area" class="custom-input" style="height: 150px; font-family: monospace; font-size: 11px; resize: none; width: 100%; box-sizing: border-box; padding: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-main); color: #fff;" placeholder="範例：&#10;00:04.120	Player Name	casts	Fall Malefic on Boss&#10;00:06.540	Player Name	casts	Combust III&#10;00:08.200	Player Name	starts casting	Lightspeed"></textarea>
+          </div>
+          <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;">
+            <button id="btn-fflogs-cancel" class="btn btn-secondary">取消</button>
+            <button id="btn-fflogs-submit" class="btn btn-primary">開始解析與匯入</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal for Import Options -->
+    <div class="modal" id="import-options-modal">
+      <div class="modal-content" style="width: 400px; max-width: 95%;">
+        <div class="modal-header">
+          <h3><i class="fa-solid fa-file-import"></i> 匯入排軸</h3>
+          <span class="modal-close" id="import-options-close">&times;</span>
+        </div>
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 12px; padding: 20px;">
+          <button id="import-opt-mit" class="btn btn-accent" style="width: 100%; justify-content: flex-start; padding: 12px 16px; font-size: 14px; text-align: left; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-rotate"></i> 從團隊排軸匯入</button>
+          <button id="import-opt-json" class="btn btn-secondary" style="width: 100%; justify-content: flex-start; padding: 12px 16px; font-size: 14px; text-align: left; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-file-import"></i> 匯入 JSON 檔案</button>
+          <button id="import-opt-fflogs" class="btn btn-accent" style="width: 100%; justify-content: flex-start; padding: 12px 16px; font-size: 14px; text-align: left; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-paste"></i> 匯入 FF Logs 戰鬥事件</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal for Export Options -->
+    <div class="modal" id="export-options-modal">
+      <div class="modal-content" style="width: 400px; max-width: 95%;">
+        <div class="modal-header">
+          <h3><i class="fa-solid fa-file-export"></i> 匯出排軸</h3>
+          <span class="modal-close" id="export-options-close">&times;</span>
+        </div>
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 12px; padding: 20px;">
+          <button id="export-opt-json" class="btn btn-secondary" style="width: 100%; justify-content: flex-start; padding: 12px 16px; font-size: 14px; text-align: left; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-file-export"></i> 匯出 JSON 檔案</button>
+          <button id="export-opt-text" class="btn btn-secondary" style="width: 100%; justify-content: flex-start; padding: 12px 16px; font-size: 14px; text-align: left; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-copy"></i> 複製文字軸</button>
+          <button id="export-opt-img" class="btn btn-accent" style="width: 100%; justify-content: flex-start; padding: 12px 16px; font-size: 14px; text-align: left; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-image"></i> 匯出長圖</button>
         </div>
       </div>
     </div>

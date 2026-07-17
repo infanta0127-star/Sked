@@ -7,8 +7,8 @@ window.showCustomConfirm = function(title, message) {
         <h3 style="margin:0 0 12px; font-size:16px; font-weight:700; color:#fff;">${title}</h3>
         <p style="margin:0 0 24px; font-size:14px; color:#aaa; line-height:1.5;">${message}</p>
         <div style="display:flex; justify-content:flex-end; gap:12px;">
-          <button id="custom-confirm-cancel" style="padding:8px 16px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; cursor:pointer; font-size:14px; transition:background 0.2s;">否 / 取消</button>
-          <button id="custom-confirm-ok" style="padding:8px 20px; background:linear-gradient(135deg,#4f6ef7,#7c9ef8); border:none; border-radius:8px; color:#fff; cursor:pointer; font-weight:600; font-size:14px; transition:opacity 0.2s;">是 / 確定</button>
+          <button id="custom-confirm-cancel" style="padding:8px 16px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; cursor:pointer; font-size:14px; transition:background 0.2s;">取消</button>
+          <button id="custom-confirm-ok" style="padding:8px 20px; background:linear-gradient(135deg,#4f6ef7,#7c9ef8); border:none; border-radius:8px; color:#fff; cursor:pointer; font-weight:600; font-size:14px; transition:opacity 0.2s;">確定</button>
         </div>
       </div>
     `;
@@ -152,16 +152,8 @@ const ogcdTrack = document.getElementById('ogcd-track');
 const dragTrash = document.getElementById('drag-trash');
 
 // Buttons
-const btnPlay = document.getElementById('btn-play');
-const btnStop = document.getElementById('btn-stop');
-const btnZoomIn = document.getElementById('btn-zoom-in');
-const btnZoomOut = document.getElementById('btn-zoom-out');
-const btnSave = document.getElementById('btn-save');
-const btnLoadList = document.getElementById('btn-load-list');
-const btnExportJson = document.getElementById('btn-export-json');
-const btnImportJson = document.getElementById('btn-import-json');
-const btnExportText = document.getElementById('btn-export-text');
-const btnExportImg = document.getElementById('btn-export-img');
+const btnImportMenu = document.getElementById('btn-import-menu');
+const btnExportMenu = document.getElementById('btn-export-menu');
 const btnClear = document.getElementById('btn-clear');
 const btnAddMechanic = document.getElementById('btn-add-mechanic');
 
@@ -171,7 +163,6 @@ const tabBtnTimeline = document.getElementById('tab-btn-timeline');
 const mitPlanningView = document.getElementById('mit-planning-view');
 const timelineWorkspaceView = document.getElementById('timeline-workspace-view');
 const timelineToolbar = document.getElementById('timeline-toolbar');
-const btnImportMit = document.getElementById('btn-import-mit');
 
 // Tooltip & Modals
 const tooltip = document.getElementById('skill-tooltip');
@@ -179,6 +170,29 @@ const fileImportInput = document.getElementById('file-import-input');
 const savesModal = document.getElementById('saves-modal');
 const savesList = document.getElementById('saves-list');
 const savesModalClose = document.getElementById('saves-modal-close');
+
+// Option Modals
+const importOptionsModal = document.getElementById('import-options-modal');
+const importOptionsClose = document.getElementById('import-options-close');
+const exportOptionsModal = document.getElementById('export-options-modal');
+const exportOptionsClose = document.getElementById('export-options-close');
+
+// Option Buttons
+const importOptMit = document.getElementById('import-opt-mit');
+const importOptJson = document.getElementById('import-opt-json');
+const importOptFflogs = document.getElementById('import-opt-fflogs');
+
+const exportOptJson = document.getElementById('export-opt-json');
+const exportOptText = document.getElementById('export-opt-text');
+const exportOptImg = document.getElementById('export-opt-img');
+const fflogsModal = document.getElementById('fflogs-modal');
+const fflogsModalClose = document.getElementById('fflogs-modal-close');
+const btnFflogsCancel = document.getElementById('btn-fflogs-cancel');
+const btnFflogsSubmit = document.getElementById('btn-fflogs-submit');
+const fflogsPasteArea = document.getElementById('fflogs-paste-area');
+const fflogsPlayerName = document.getElementById('fflogs-player-name');
+const fflogsClearTimeline = document.getElementById('fflogs-clear-timeline');
+
 
 // Load Data and Initialize
 document.addEventListener('DOMContentLoaded', async () => {
@@ -200,12 +214,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     populateJobDropdown();
     setupEventListeners();
-    
-    // Check if there is local auto-save data
-    const lastPlan = localStorage.getItem('ffxiv_timeline_autosave');
-    if (lastPlan) {
-      loadPlanData(JSON.parse(lastPlan));
-    }
   } catch (error) {
     console.error(error);
     skillsList.innerHTML = `<div class="empty-state"><i class="fa-solid fa-triangle-exclamation"></i><p>${error.message}</p></div>`;
@@ -360,8 +368,9 @@ function setupEventListeners() {
   }
 
   // Import from team mitigation planner event listener
-  if (btnImportMit) {
-    btnImportMit.addEventListener('click', () => {
+  if (importOptMit) {
+    importOptMit.addEventListener('click', () => {
+      importOptionsModal.classList.remove('active');
       window.trackEvent('personal_planner', 'click_import_from_team_btn');
       if (!window.mitParty || !window.mitTimelineSkills) {
         alert('尚未在團隊排軸頁籤中規劃技能，請先在「團隊技能排軸」中規劃。');
@@ -394,6 +403,7 @@ function setupEventListeners() {
       const ok = await window.showCustomConfirm('切換職業', '切換職業將清空目前的時間軸，確定要繼續嗎？');
       if (!ok) {
         jobSelect.value = currentJobId;
+        syncCustomDropdown(jobSelect);
         return;
       }
     }
@@ -467,29 +477,103 @@ function setupEventListeners() {
   // Search filter
   searchInput.addEventListener('input', filterSidebarSkills);
 
-  // Zoom Buttons
-  btnZoomIn.addEventListener('click', () => {
-    pixelsPerSecond = Math.min(200, pixelsPerSecond + 15);
-    renderTimeline();
-  });
+  // Action Menus
+  if (btnImportMenu) {
+    btnImportMenu.addEventListener('click', () => {
+      importOptionsModal.classList.add('active');
+    });
+  }
+  if (importOptionsClose) {
+    importOptionsClose.addEventListener('click', () => {
+      importOptionsModal.classList.remove('active');
+    });
+  }
   
-  btnZoomOut.addEventListener('click', () => {
-    pixelsPerSecond = Math.max(30, pixelsPerSecond - 15);
-    renderTimeline();
-  });
+  if (btnExportMenu) {
+    btnExportMenu.addEventListener('click', () => {
+      exportOptionsModal.classList.add('active');
+    });
+  }
+  if (exportOptionsClose) {
+    exportOptionsClose.addEventListener('click', () => {
+      exportOptionsModal.classList.remove('active');
+    });
+  }
 
-  // Playback Control
-  btnPlay.addEventListener('click', togglePlayback);
-  btnStop.addEventListener('click', stopPlayback);
-
-  // Action Buttons
-  btnSave.addEventListener('click', saveTimelineProfile);
-  btnLoadList.addEventListener('click', openLoadModal);
-  btnExportJson.addEventListener('click', exportTimelineJSON);
-  btnImportJson.addEventListener('click', () => fileImportInput.click());
+  // Import Options
+  if (importOptJson) {
+    importOptJson.addEventListener('click', () => {
+      importOptionsModal.classList.remove('active');
+      fileImportInput.click();
+    });
+  }
   fileImportInput.addEventListener('change', importTimelineJSON);
-  btnExportText.addEventListener('click', copyTextTimeline);
-  btnExportImg.addEventListener('click', downloadTimelineImage);
+
+  if (importOptFflogs) {
+    importOptFflogs.addEventListener('click', () => {
+      importOptionsModal.classList.remove('active');
+      if (!currentJobId) {
+        alert('請先選擇職業再匯入 FF Logs！');
+        return;
+      }
+      fflogsPasteArea.value = '';
+      fflogsModal.classList.add('active');
+    });
+  }
+
+  if (fflogsModalClose) {
+    fflogsModalClose.addEventListener('click', () => fflogsModal.classList.remove('active'));
+  }
+
+  if (btnFflogsCancel) {
+    btnFflogsCancel.addEventListener('click', () => fflogsModal.classList.remove('active'));
+  }
+
+  if (btnFflogsSubmit) {
+    btnFflogsSubmit.addEventListener('click', () => {
+      const text = fflogsPasteArea.value;
+      if (!text.trim()) {
+        alert('請貼上 FF Logs 事件文字！');
+        return;
+      }
+      const playerName = fflogsPlayerName.value.trim();
+      const clearBefore = fflogsClearTimeline.checked;
+      
+      try {
+        const count = importFflogsEvents(text, playerName, clearBefore);
+        if (count > 0) {
+          alert(`已成功解析並匯入 ${count} 個技能事件！`);
+          fflogsModal.classList.remove('active');
+        } else {
+          alert('解析失敗：找不到符合當前特職的技能事件。請確認您貼上的文字格式正確且包含您的特職技能。');
+        }
+      } catch (err) {
+        alert(`匯入出錯: ${err.message}`);
+      }
+    });
+  }
+
+  // Export Options
+  if (exportOptJson) {
+    exportOptJson.addEventListener('click', () => {
+      exportOptionsModal.classList.remove('active');
+      exportTimelineJSON();
+    });
+  }
+
+  if (exportOptText) {
+    exportOptText.addEventListener('click', () => {
+      exportOptionsModal.classList.remove('active');
+      copyTextTimeline();
+    });
+  }
+
+  if (exportOptImg) {
+    exportOptImg.addEventListener('click', () => {
+      exportOptionsModal.classList.remove('active');
+      downloadTimelineImage();
+    });
+  }
   btnClear.addEventListener('click', () => {
     if (confirm('確定要清空時間軸嗎？')) {
       timelineSkills = [];
@@ -525,6 +609,9 @@ function setupEventListeners() {
   savesModalClose.addEventListener('click', () => savesModal.classList.remove('active'));
   window.addEventListener('click', (e) => {
     if (e.target === savesModal) savesModal.classList.remove('active');
+    if (e.target === fflogsModal) fflogsModal.classList.remove('active');
+    if (e.target === importOptionsModal) importOptionsModal.classList.remove('active');
+    if (e.target === exportOptionsModal) exportOptionsModal.classList.remove('active');
   });
 
   // Drag and drop events for tracks
@@ -560,6 +647,17 @@ function setupEventListeners() {
     e.preventDefault();
     dragTrash.classList.remove('drag-hover');
     handleTrashDrop(e);
+  });
+
+  // Enable horizontal scrolling with mouse wheel on timeline containers
+  const outerContainers = document.querySelectorAll('.timeline-container-outer');
+  outerContainers.forEach(container => {
+    container.addEventListener('wheel', (e) => {
+      if (e.deltaY !== 0) {
+        e.preventDefault();
+        container.scrollLeft += e.deltaY;
+      }
+    }, { passive: false });
   });
 }
 
@@ -728,7 +826,8 @@ function appendSkillToTimeline(skill) {
     track,
     parentGcdId,
     relativeOffset,
-    clip: 0
+    clip: 0,
+    idle: 0
   });
   
   recalculateTimeline();
@@ -759,8 +858,9 @@ function recalculateTimeline() {
     
     const parsedRecast = parseTimeToSeconds(gcd.recast);
     const parsedCast = parseTimeToSeconds(gcd.cast);
-    const isStandardGcd = (parsedRecast >= 1.8 && parsedRecast <= 3.2);
-    const recastVal = isStandardGcd ? timelineGCDDuration : parsedRecast;
+    // If recast is >= 1.8s (standard GCDs or long cooldown GCD spells), we treat its timeline duration as standard GCD
+    // to prevent its long cooldown from blocking/delaying subsequent GCDs.
+    const recastVal = (parsedRecast >= 1.8) ? timelineGCDDuration : parsedRecast;
     gcd.duration = Math.max(parsedCast, recastVal);
     
     // 2. Position all oGCDs parented to this GCD block
@@ -795,8 +895,15 @@ function recalculateTimeline() {
     // 3. Check for GCD clipping
     const normalGcdEnd = gcd.startTime + gcd.duration;
     if (currentLockEnd > normalGcdEnd) {
-      gcd.clip = currentLockEnd - normalGcdEnd;
-      nextAvailableGcdTime = currentLockEnd; // Forces next GCD to be delayed
+      const calculatedClip = currentLockEnd - normalGcdEnd;
+      if (calculatedClip >= 2.0) {
+        // If the gap is >= 2.0s, it's idling, not clipping!
+        gcd.clip = 0;
+        nextAvailableGcdTime = normalGcdEnd;
+      } else {
+        gcd.clip = calculatedClip;
+        nextAvailableGcdTime = currentLockEnd; // Forces next GCD to be delayed
+      }
     } else {
       gcd.clip = 0;
       nextAvailableGcdTime = normalGcdEnd; // Next GCD starts on schedule
@@ -805,7 +912,26 @@ function recalculateTimeline() {
     // Round next available time
     nextAvailableGcdTime = Math.round(nextAvailableGcdTime * 10) / 10;
   }
-  
+
+  // 3b. Calculate idle times between GCDs
+  for (let i = 0; i < gcds.length; i++) {
+    const gcd = gcds[i];
+    const normalGcdEnd = gcd.startTime + gcd.duration;
+    const currentLockEnd = normalGcdEnd + gcd.clip;
+    const availableTime = Math.round(Math.max(normalGcdEnd, currentLockEnd) * 10) / 10;
+    
+    if (i < gcds.length - 1) {
+      const nextGcd = gcds[i + 1];
+      if (nextGcd.startTime > availableTime) {
+        gcd.idle = Math.round((nextGcd.startTime - availableTime) * 10) / 10;
+      } else {
+        gcd.idle = 0;
+      }
+    } else {
+      gcd.idle = 0;
+    }
+  }
+
   // 4. Place orphaned oGCDs absolutely
   const orphanOgcds = ogcds.filter(o => !o.parentGcdId);
   for (const ogcd of orphanOgcds) {
@@ -956,14 +1082,24 @@ function renderTimeline() {
       el.appendChild(recastMesh);
     }
     
-    // Red clip overlay
+    // Red clip overlay placed in the gap after the current GCD block
     if (skill.clip > 0) {
       const clipWarning = document.createElement('div');
       clipWarning.className = 'gcd-clip-warning';
-      clipWarning.style.left = `${(skill.duration - skill.clip) * pixelsPerSecond}px`;
+      clipWarning.style.left = `${(skill.startTime + skill.duration + PREPULL_TIME) * pixelsPerSecond}px`;
       clipWarning.style.width = `${skill.clip * pixelsPerSecond}px`;
       clipWarning.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> 卡 ${skill.clip.toFixed(1)}s`;
-      el.appendChild(clipWarning);
+      gcdTrack.appendChild(clipWarning);
+    }
+
+    // Amber idle warning placed in the empty gap before the next GCD block
+    if (skill.idle >= 2.0) {
+      const idleWarning = document.createElement('div');
+      idleWarning.className = 'gcd-clip-warning gcd-idle-warning';
+      idleWarning.style.left = `${(skill.startTime + skill.duration + skill.clip + PREPULL_TIME) * pixelsPerSecond}px`;
+      idleWarning.style.width = `${skill.idle * pixelsPerSecond}px`;
+      idleWarning.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> 空轉 ${skill.idle.toFixed(1)}s`;
+      gcdTrack.appendChild(idleWarning);
     }
     
     // Drag handlers
@@ -1082,7 +1218,8 @@ function handleDrop(e, targetTrackType) {
       track: isGcd ? 'gcd' : 'ogcd',
       parentGcdId,
       relativeOffset,
-      clip: 0
+      clip: 0,
+      idle: 0
     });
     
   } else if (draggedItem.source === 'timeline') {
@@ -1150,7 +1287,6 @@ function togglePlayback() {
 
 function startPlayback() {
   playbackState.isPlaying = true;
-  btnPlay.innerHTML = '<i class="fa-solid fa-pause"></i> 暫停';
   playhead.style.display = 'block';
   
   playbackState.startTimeStamp = performance.now() - (playbackState.currentTime * 1000);
@@ -1185,7 +1321,6 @@ function startPlayback() {
 
 function pausePlayback() {
   playbackState.isPlaying = false;
-  btnPlay.innerHTML = '<i class="fa-solid fa-play"></i> 播放';
   if (playbackState.animationFrameId) {
     cancelAnimationFrame(playbackState.animationFrameId);
   }
@@ -1212,13 +1347,26 @@ function updateStatusPanel() {
   displayLength.innerHTML = `<i class="fa-regular fa-clock"></i> 軸總長: ${maxTime.toFixed(1)} 秒`;
   
   const clippedGcds = timelineSkills.filter(s => s.track === 'gcd' && s.clip > 0);
+  const idleGcds = timelineSkills.filter(s => s.track === 'gcd' && s.idle >= 2.0);
+  
+  let clipText = '';
   if (clippedGcds.length > 0) {
     const totalClip = clippedGcds.reduce((acc, curr) => acc + curr.clip, 0);
+    clipText += `卡 GCD (共 ${clippedGcds.length} 處 / ${totalClip.toFixed(1)}秒)`;
+  }
+  
+  if (idleGcds.length > 0) {
+    const totalIdle = idleGcds.reduce((acc, curr) => acc + curr.idle, 0);
+    if (clipText) clipText += ' | ';
+    clipText += `GCD 空轉 (共 ${idleGcds.length} 處 / ${totalIdle.toFixed(1)}秒)`;
+  }
+  
+  if (clipText) {
     displayClip.className = 'danger';
-    displayClip.innerHTML = `<i class="fa-solid fa-circle-exclamation"></i> 卡 GCD (共 ${clippedGcds.length} 處 / ${totalClip.toFixed(1)}秒)`;
+    displayClip.innerHTML = `<i class="fa-solid fa-circle-exclamation"></i> ${clipText}`;
   } else {
     displayClip.className = 'safe';
-    displayClip.innerHTML = `<i class="fa-solid fa-circle-check"></i> GCD 無卡頓`;
+    displayClip.innerHTML = `<i class="fa-solid fa-circle-check"></i> GCD 無卡頓 / 空轉`;
   }
 }
 
@@ -1249,6 +1397,7 @@ function loadPlanData(data) {
   
   currentJobId = data.jobId;
   jobSelect.value = currentJobId;
+  syncCustomDropdown(jobSelect);
   timelineGCDDuration = data.gcd || 2.50;
   gcdInput.value = timelineGCDDuration.toFixed(2);
   
@@ -1286,7 +1435,8 @@ function loadPlanData(data) {
       track: isGcd ? 'gcd' : 'ogcd',
       parentGcdId: s.parentGcdId,
       relativeOffset: s.relativeOffset,
-      clip: 0
+      clip: 0,
+      idle: 0
     });
   });
   
@@ -1355,6 +1505,15 @@ function saveTimelineProfile() {
   alert('排軸存檔成功！');
 }
 
+function getDutyName(dutyFile) {
+  if (!dutyFile) return '自訂時間軸';
+  if (dutiesDatabase && dutiesDatabase.duties) {
+    const duty = dutiesDatabase.duties.find(d => d.file === dutyFile);
+    if (duty) return duty.name;
+  }
+  return dutyFile;
+}
+
 // Open load save modal
 function openLoadModal() {
   const profiles = JSON.parse(localStorage.getItem('ffxiv_timeline_profiles') || '[]');
@@ -1370,13 +1529,28 @@ function openLoadModal() {
       li.innerHTML = `
         <div class="save-info">
           <span class="save-name">${p.name}</span>
-          <span class="save-details">職業: ${skillsDatabase[p.jobId]?.name || p.jobId} | GCD: ${p.gcd.toFixed(2)}s | 儲存時間: ${new Date(p.updatedAt).toLocaleString()}</span>
+          <span class="save-details">職業: ${skillsDatabase[p.jobId]?.name || p.jobId} | 副本: ${getDutyName(p.dutyFile)} | GCD: ${p.gcd.toFixed(2)}s | 儲存時間: ${new Date(p.updatedAt).toLocaleString()}</span>
         </div>
         <div class="save-actions">
+          <button class="btn btn-secondary btn-mini-edit" data-id="${p.id}"><i class="fa-solid fa-pen"></i> 重新命名</button>
           <button class="btn btn-secondary btn-mini-load" data-id="${p.id}"><i class="fa-solid fa-folder-open"></i> 開啟</button>
           <button class="btn btn-danger btn-mini-del" data-id="${p.id}"><i class="fa-solid fa-trash"></i> 刪除</button>
         </div>
       `;
+      
+      // Edit event
+      li.querySelector('.btn-mini-edit').addEventListener('click', () => {
+        const newName = prompt('請輸入新的名稱：', p.name);
+        if (newName === null) return;
+        if (newName.trim() === '') {
+          alert('名稱不能為空！');
+          return;
+        }
+        p.name = newName.trim();
+        p.updatedAt = new Date().toISOString();
+        localStorage.setItem('ffxiv_timeline_profiles', JSON.stringify(profiles));
+        openLoadModal(); // Reload list
+      });
       
       // Load event
       li.querySelector('.btn-mini-load').addEventListener('click', () => {
@@ -1677,6 +1851,7 @@ async function importFfxivMitigationPlan(data) {
     
     currentJobId = jobId;
     jobSelect.value = jobId;
+    syncCustomDropdown(jobSelect);
     loadJobSkills(jobId);
     
     // Setup Boss Mechanics
@@ -1728,7 +1903,8 @@ async function importFfxivMitigationPlan(data) {
           track: isGcd ? 'gcd' : 'ogcd',
           parentGcdId: null,
           relativeOffset: 0,
-          clip: 0
+          clip: 0,
+          idle: 0
         });
       });
     }
@@ -1762,6 +1938,404 @@ function importTimelineJSON(e) {
     }
   };
   reader.readAsText(file);
+}
+
+function importFflogsEvents(text, filterPlayer, clearTimeline) {
+  if (!currentJobId) throw new Error('請先選擇特職');
+  const jobDb = skillsDatabase[currentJobId];
+  if (!jobDb) throw new Error('技能資料庫中找不到該特職資料');
+
+  const lines = text.split(/\r?\n/);
+  const events = [];
+
+  // Parse lines
+  for (let line of lines) {
+    line = line.trim();
+    if (!line) continue;
+
+    // Regex to match timestamp at the beginning of the line
+    // e.g. -00:00.491 or 00:00.222 or 02:42.198 or [00:00.222]
+    // The timestamp can have a minus sign for pre-pull (e.g. -00:00.491)
+    const timeMatch = line.match(/^\s*\[?(-?\d+):(\d+)(?:\.(\d+))?\]?/);
+    let timeInSeconds = null;
+    let restOfLine = '';
+
+    if (timeMatch) {
+      const isMinus = timeMatch[0].includes('-');
+      const minutes = parseInt(timeMatch[1].replace('-', ''), 10);
+      const seconds = parseInt(timeMatch[2], 10);
+      const ms = timeMatch[3] ? parseFloat('0.' + timeMatch[3]) : 0;
+      timeInSeconds = minutes * 60 + seconds + ms;
+      if (isMinus) timeInSeconds = -timeInSeconds;
+      restOfLine = line.substring(timeMatch[0].length).trim();
+    } else {
+      // ss.SSS
+      const timeMatchSec = line.match(/^\s*\[?(-?\d+)(?:\.(\d+))?\]?/);
+      if (timeMatchSec) {
+        const isMinus = timeMatchSec[0].includes('-');
+        const seconds = parseInt(timeMatchSec[1].replace('-', ''), 10);
+        const ms = timeMatchSec[2] ? parseFloat('0.' + timeMatchSec[2]) : 0;
+        timeInSeconds = seconds + ms;
+        if (isMinus) timeInSeconds = -timeInSeconds;
+        restOfLine = line.substring(timeMatchSec[0].length).trim();
+      }
+    }
+
+    if (timeInSeconds === null) continue; // Not a valid line with timestamp
+
+    // Split by verb to find actor and skill
+    // Verbs: begins casting, starts casting, casts, 開始施放, 施放, 唱え始めた, 唱えた, 実行した, begins, starts
+    const verbMatch = restOfLine.match(/(?:begins casting|starts casting|casts|開始施放|施放|唱え始めた|唱えた|実行した|begins|starts)\s+(.+)$/i);
+    let actorName = '';
+    let eventDetail = restOfLine;
+    let isStartCast = /begins casting|starts casting|開始施放|唱え始めた|starts|begins/i.test(restOfLine);
+
+    if (verbMatch) {
+      // The actor name is everything before the verb
+      const verbIndex = restOfLine.indexOf(verbMatch[0]);
+      actorName = restOfLine.substring(0, verbIndex).trim();
+      eventDetail = verbMatch[1].trim();
+    }
+
+    // Clean event detail (e.g. "Fall Malefic on Boss" -> "Fall Malefic")
+    // Split by " on " or " 對 " or " 於 " (or just take target out)
+    const targetMatch = eventDetail.match(/^(.+?)\s+(?:on|對|於)\s+/i);
+    let skillRawName = eventDetail;
+    if (targetMatch) {
+      skillRawName = targetMatch[1].trim();
+    }
+    
+    // Clean any parenthetical suffix (e.g., "(1.44 sec)" or similar)
+    skillRawName = skillRawName.replace(/\(.*?\)/g, '').trim();
+
+    events.push({
+      time: timeInSeconds,
+      actor: actorName,
+      skillRawName: skillRawName,
+      isStartCast: isStartCast,
+      originalLine: line
+    });
+  }
+
+  if (events.length === 0) return 0;
+
+  // Translation table mapping English and Simplified Chinese to Chinese in database (Traditional Chinese)
+  const skillTranslation = {
+    // Astrologian English -> Traditional Chinese
+    "malefic": "凶星",
+    "malefic ii": "災星",
+    "malefic iii": "禍星",
+    "malefic iv": "煞星",
+    "fall malefic": "落陷凶星",
+    "benefic": "吉星",
+    "benefic ii": "福星",
+    "combust": "燒灼",
+    "combust ii": "熾灼",
+    "combust iii": "焚灼",
+    "lightspeed": "光速",
+    "helios": "陽星",
+    "ascend": "生辰",
+    "essential dignity": "先天稟賦",
+    "astral draw": "星極抽卡",
+    "umbral draw": "靈極抽卡",
+    "play i": "出卡I",
+    "play ii": "出卡II",
+    "play iii": "出卡III",
+    "aspected benefic": "吉星相位",
+    "aspected helios": "陽星相位",
+    "gravity": "重力",
+    "gravity ii": "中重力",
+    "synastry": "星位合圖",
+    "divination": "占卜",
+    "collective unconscious": "命運之輪",
+    "celestial opposition": "天星衝日",
+    "earthly star": "地星",
+    "stellar detonation": "星體爆轟",
+    "stellar burst": "星體爆轟",
+    "stellar explosion": "星體爆轟",
+    "starry burst": "星體爆轟",
+    "minor arcana": "小奧秘卡",
+    "celestial intersection": "天星交錯",
+    "horoscope": "天宮圖",
+    "neutral sect": "中間學派",
+    "exaltation": "擢升",
+    "macrocosmos": "大宇宙",
+    "microcosmos": "小宇宙",
+    "oracle": "神諭",
+    "helios conjunction": "陽星合相",
+    "aspected helios ii": "陽星合相",
+    "sun sign": "太陽星座",
+    "sunsign": "太陽星座",
+    "the balance": "太陽神之衡",
+    "balance": "太陽神之衡",
+    "the arrow": "放浪神之箭",
+    "arrow": "放浪神之箭",
+    "the spire": "建築神之塔",
+    "spire": "建築神之塔",
+    "the spear": "戰爭神之槍",
+    "spear": "戰爭神之槍",
+    "the bole": "世界樹之幹",
+    "bole": "世界樹之幹",
+    "the ewer": "河流神之瓶",
+    "ewer": "河流神之瓶",
+    "lord of crowns": "王冠之領主",
+    "lady of crowns": "王冠之貴婦",
+    "crown play": "小奧秘卡",
+    
+    // Healer role actions
+    "repose": "沉靜",
+    "esuna": "復原",
+    "lucid dreaming": "醒夢",
+    "swiftcast": "即刻詠唱",
+    "surecast": "沉穩詠唱",
+    "rescue": "營救",
+
+    // Simplified Chinese -> Traditional Chinese (in case some players use SC client logs)
+    "灾星": "災星",
+    "祸星": "禍星",
+    "煞星": "煞星",
+    "坠星": "落陷凶星",
+    "发牌i": "出卡I",
+    "发牌1": "出卡I",
+    "發牌i": "出卡I",
+    "發牌1": "出卡I",
+    "出卡i": "出卡I",
+    "出卡1": "出卡I",
+    "发牌ii": "出卡II",
+    "发牌2": "出卡II",
+    "發牌ii": "出卡II",
+    "發牌2": "出卡II",
+    "出卡ii": "出卡II",
+    "出卡2": "出卡II",
+    "发牌iii": "出卡III",
+    "发牌3": "出卡III",
+    "發牌iii": "出卡III",
+    "發牌3": "出卡III",
+    "出卡iii": "出卡III",
+    "出卡3": "出卡III",
+    "阳星": "陽星",
+    "先天禀赋": "先天稟賦",
+    "星极抽卡": "星極抽卡",
+    "灵极抽卡": "靈極抽卡",
+    "阳星相位": "陽星相位",
+    "命运之轮": "命運之輪",
+    "天星冲日": "天星衝日",
+    "星体爆轰": "星體爆轟",
+    "小奥秘卡": "小奧秘卡",
+    "天星交错": "天星交錯",
+    "天宫图": "天宮圖",
+    "中间学派": "中間學派",
+    "阳星合相": "陽星合相",
+    "即刻咏唱": "即刻詠唱",
+    "沉稳咏唱": "沉穩詠唱",
+    "营救": "營救",
+    "沉静": "沉靜",
+    "天星沖日": "天星衝日"
+  };
+
+  // Helper function to resolve skill name to Traditional Chinese database name
+  function resolveSkillName(rawName) {
+    const lower = rawName.toLowerCase();
+    
+    // Direct match in translation table
+    if (skillTranslation[lower]) {
+      return skillTranslation[lower];
+    }
+    
+    // Direct check if it matches database skill name (Traditional Chinese)
+    const exactMatch = jobDb.skills.find(s => s.name === rawName);
+    if (exactMatch) return exactMatch.name;
+
+    // Check with normalized name
+    const normalizedMatch = jobDb.skills.find(s => s.name.toLowerCase() === lower);
+    if (normalizedMatch) return normalizedMatch.name;
+
+    // Try a partial matches or case-insensitive matches
+    for (let key in skillTranslation) {
+      if (lower.includes(key)) {
+        return skillTranslation[key];
+      }
+    }
+
+    return null;
+  }
+
+  // Identify matching skill objects for each event
+  const matchedEvents = [];
+  events.forEach(ev => {
+    const dbName = resolveSkillName(ev.skillRawName);
+    if (dbName) {
+      const skill = jobDb.skills.find(s => s.name === dbName);
+      if (skill) {
+        matchedEvents.push({
+          ...ev,
+          skill: skill,
+          skillId: skill.id
+        });
+      }
+    }
+  });
+
+  if (matchedEvents.length === 0) return 0;
+
+  // Auto-detect player name if filterPlayer is not provided
+  let targetPlayer = filterPlayer;
+  if (!targetPlayer) {
+    const actorCounts = {};
+    matchedEvents.forEach(ev => {
+      if (ev.actor) {
+        actorCounts[ev.actor] = (actorCounts[ev.actor] || 0) + 1;
+      }
+    });
+
+    // Find actor with max counts
+    let maxActor = '';
+    let maxCount = 0;
+    for (const actor in actorCounts) {
+      if (actorCounts[actor] > maxCount) {
+        maxCount = actorCounts[actor];
+        maxActor = actor;
+      }
+    }
+    targetPlayer = maxActor;
+    console.log('Auto-detected target player from log:', targetPlayer);
+  }
+
+  // Filter events by player (if targetPlayer is determined)
+  let filteredEvents = matchedEvents;
+  if (targetPlayer) {
+    const targetLower = targetPlayer.toLowerCase();
+    filteredEvents = matchedEvents.filter(ev => ev.actor && ev.actor.toLowerCase() === targetLower);
+    if (filteredEvents.length === 0) {
+      // fallback: if filter failed entirely, keep original matches
+      filteredEvents = matchedEvents;
+    }
+  }
+
+  // Deduplicate and resolve startTime for each cast
+  const finalSkills = [];
+
+  // Sort events by time
+  filteredEvents.sort((a, b) => a.time - b.time);
+
+  filteredEvents.forEach((ev) => {
+    const skill = ev.skill;
+    const isGcd = (skill.classification === '戰技' || skill.classification === '魔法');
+    const castTime = parseTimeToSeconds(skill.cast);
+
+    if (ev.isStartCast) {
+      // Starts casting event
+      finalSkills.push({
+        skillId: skill.id,
+        name: skill.name,
+        icon: skill.icon,
+        classification: skill.classification,
+        cast: skill.cast,
+        recast: skill.recast,
+        startTime: ev.time,
+        duration: Math.max(castTime, isGcd ? timelineGCDDuration : 0.6),
+        track: isGcd ? 'gcd' : 'ogcd',
+        isGcd: isGcd,
+        parentGcdId: null,
+        relativeOffset: 0
+      });
+    } else {
+      // Casts event
+      if (castTime > 0) {
+        // Look back for a starts-casting event of same skill within 3.5s
+        const alreadyParsed = finalSkills.find(s => s.skillId === skill.id && Math.abs(s.startTime - (ev.time - castTime)) < 2.0);
+        if (alreadyParsed) {
+          // Yes, already recorded when it started casting, skip
+          return;
+        }
+        // No starts-casting event found, we insert it starting at (ev.time - castTime)
+        finalSkills.push({
+          skillId: skill.id,
+          name: skill.name,
+          icon: skill.icon,
+          classification: skill.classification,
+          cast: skill.cast,
+          recast: skill.recast,
+          startTime: ev.time - castTime,
+          duration: Math.max(castTime, isGcd ? timelineGCDDuration : 0.6),
+          track: isGcd ? 'gcd' : 'ogcd',
+          isGcd: isGcd,
+          parentGcdId: null,
+          relativeOffset: 0
+        });
+      } else {
+        // Instant cast
+        finalSkills.push({
+          skillId: skill.id,
+          name: skill.name,
+          icon: skill.icon,
+          classification: skill.classification,
+          cast: skill.cast,
+          recast: skill.recast,
+          startTime: ev.time,
+          duration: 0.6, // default instant duration
+          track: isGcd ? 'gcd' : 'ogcd',
+          isGcd: isGcd,
+          parentGcdId: null,
+          relativeOffset: 0
+        });
+      }
+    }
+  });
+
+  if (finalSkills.length === 0) return 0;
+
+  // Clear timeline if requested
+  if (clearTimeline) {
+    timelineSkills = [];
+  }
+
+  // Parent oGCDs to preceding GCDs
+  // First, generate random instanceId for each final skill
+  finalSkills.forEach(s => {
+    s.instanceId = 'skill_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+  });
+
+  const gcds = finalSkills.filter(s => s.isGcd).sort((a, b) => a.startTime - b.startTime);
+  const ogcds = finalSkills.filter(s => !s.isGcd);
+
+  ogcds.forEach(ogcd => {
+    // Find closest preceding GCD
+    const parent = gcds.slice().reverse().find(g => g.startTime <= ogcd.startTime);
+    if (parent) {
+      ogcd.parentGcdId = parent.instanceId;
+      ogcd.relativeOffset = ogcd.startTime - parent.startTime;
+    } else {
+      ogcd.parentGcdId = null;
+      ogcd.relativeOffset = 0;
+    }
+  });
+
+  // Push to timelineSkills
+  finalSkills.forEach(s => {
+    timelineSkills.push({
+      instanceId: s.instanceId,
+      skillId: s.skillId,
+      name: s.name,
+      icon: s.icon,
+      classification: s.classification,
+      cast: s.cast,
+      recast: s.recast,
+      startTime: Math.round(s.startTime * 10) / 10,
+      duration: s.duration,
+      track: s.track,
+      parentGcdId: s.parentGcdId,
+      relativeOffset: Math.round(s.relativeOffset * 10) / 10,
+      clip: 0,
+      idle: 0
+    });
+  });
+
+  recalculateTimeline();
+  renderTimeline();
+  autoSave();
+
+  return finalSkills.length;
 }
 
 // 14. Copy Text Rotation (Clipboard)
@@ -2015,12 +2589,23 @@ async function downloadTimelineImage() {
     // Red clip overlay
     if (skill.clip > 0) {
       ctx.fillStyle = 'rgba(255, 71, 87, 0.35)';
-      const clipX = x + (skill.duration - skill.clip) * pixelsPerSecond;
+      const clipX = x + skill.duration * pixelsPerSecond;
       ctx.fillRect(clipX, 163, skill.clip * pixelsPerSecond, 54);
       
       ctx.fillStyle = '#ff8b94';
       ctx.font = 'bold 9px sans-serif';
       ctx.fillText(`卡 ${skill.clip.toFixed(1)}s`, clipX + 5, 185);
+    }
+
+    // Amber idle overlay
+    if (skill.idle >= 2.0) {
+      ctx.fillStyle = 'rgba(255, 165, 0, 0.15)';
+      const idleX = x + (skill.duration + skill.clip) * pixelsPerSecond;
+      ctx.fillRect(idleX, 163, skill.idle * pixelsPerSecond, 54);
+      
+      ctx.fillStyle = '#ffa500';
+      ctx.font = 'bold 9px sans-serif';
+      ctx.fillText(`空轉 ${skill.idle.toFixed(1)}s`, idleX + 5, 185);
     }
   }
   
@@ -2176,12 +2761,17 @@ async function saveIndivPlanToSupabase() {
       }
       currentIndivPlanName = name.trim();
 
+      const skillsToSave = [...timelineSkills];
+      if (currentDutyFile) {
+        skillsToSave.push({ isMetadata: true, dutyFile: currentDutyFile });
+      }
+
       const { data, error } = await sb.from('individual_plans')
         .insert({
           owner_id: session.user.id,
           job_id: currentJobId,
           name: currentIndivPlanName,
-          skills: timelineSkills,
+          skills: skillsToSave,
           gcd: timelineGCDDuration
         })
         .select()
@@ -2215,7 +2805,7 @@ async function loadIndivPlansModal() {
 
   try {
     const { data: plans, error } = await sb.from('individual_plans')
-      .select('id, name, job_id, updated_at')
+      .select('id, name, job_id, skills, updated_at')
       .eq('owner_id', session.user.id)
       .order('updated_at', { ascending: false });
 
@@ -2240,12 +2830,20 @@ async function loadIndivPlansModal() {
         li.style.padding = '8px 12px';
         li.style.borderBottom = '1px solid var(--border-color)';
         
+        const meta = (plan.skills || []).find(s => s.isMetadata);
+        const dutyFile = meta ? meta.dutyFile : '';
+        const dutyName = getDutyName(dutyFile);
+        const jobName = skillsDatabase[plan.job_id]?.name || plan.job_id;
+
         li.innerHTML = `
           <div style="cursor:pointer; flex:1;">
             <strong>${plan.name}</strong><br/>
-            <span style="font-size:10px; color:var(--color-text-muted);">職業: ${plan.job_id} | 更新於 ${new Date(plan.updated_at).toLocaleString()}</span>
+            <span style="font-size:10px; color:var(--color-text-muted);">職業: ${jobName} | 副本: ${dutyName} | 更新於 ${new Date(plan.updated_at).toLocaleString()}</span>
           </div>
-          <button class="btn btn-danger btn-mini" style="padding: 2px 6px;" title="刪除"><i class="fa-solid fa-trash"></i></button>
+          <div class="save-actions" style="display:flex; align-items:center;">
+            <button class="btn btn-secondary btn-mini btn-mini-rename" style="padding: 2px 6px; margin-right: 5px;" title="重新命名"><i class="fa-solid fa-pen"></i></button>
+            <button class="btn btn-danger btn-mini btn-mini-del" style="padding: 2px 6px;" title="刪除"><i class="fa-solid fa-trash"></i></button>
+          </div>
         `;
         
         li.querySelector('div').addEventListener('click', async () => {
@@ -2253,9 +2851,13 @@ async function loadIndivPlansModal() {
             const ok = await window.showCustomConfirm('覆蓋存檔', `確定要覆蓋「${plan.name}」嗎？`);
             if (ok) {
               try {
+                const skillsToSave = [...timelineSkills];
+                if (currentDutyFile) {
+                  skillsToSave.push({ isMetadata: true, dutyFile: currentDutyFile });
+                }
                 const { error: updErr } = await sb.from('individual_plans')
                   .update({
-                    skills: timelineSkills,
+                    skills: skillsToSave,
                     gcd: timelineGCDDuration,
                     updated_at: new Date()
                   })
@@ -2276,7 +2878,28 @@ async function loadIndivPlansModal() {
           }
         });
         
-        li.querySelector('button').addEventListener('click', async (e) => {
+        li.querySelector('.btn-mini-rename').addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const newName = await window.showCustomPrompt('重新命名雲端存檔', '請輸入新的存檔名稱：', plan.name);
+          if (newName === null) return;
+          if (newName.trim() === '') {
+            alert('名稱不能為空！');
+            return;
+          }
+          
+          try {
+            const { error: renameErr } = await sb.from('individual_plans')
+              .update({ name: newName.trim(), updated_at: new Date() })
+              .eq('id', plan.id);
+            if (renameErr) throw renameErr;
+            alert('重命名成功！');
+            await loadIndivPlansModal();
+          } catch (err) {
+            alert(`重命名失敗: ${err.message}`);
+          }
+        });
+        
+        li.querySelector('.btn-mini-del').addEventListener('click', async (e) => {
           e.stopPropagation();
           const ok = await window.showCustomConfirm('刪除存檔', `確定要刪除「${plan.name}」嗎？`);
           if (ok) {
@@ -2319,10 +2942,34 @@ async function loadIndivPlanById(planId) {
 
     currentJobId = plan.job_id;
     jobSelect.value = plan.job_id;
+    syncCustomDropdown(jobSelect);
     loadJobSkills(plan.job_id);
 
-    timelineSkills = plan.skills || [];
+    const meta = (plan.skills || []).find(s => s.isMetadata);
+    currentDutyFile = meta ? meta.dutyFile : '';
+    
+    if (dutySelect) {
+      dutySelect.value = currentDutyFile;
+      populateDutyDropdown(dutiesDatabase, currentDutyFile);
+    }
+
+    timelineSkills = (plan.skills || []).filter(s => !s.isMetadata);
     timelineGCDDuration = parseFloat(plan.gcd) || 2.50;
+
+    // Load boss mechanics from duty file if it exists
+    if (currentDutyFile) {
+      try {
+        const response = await fetch(`./data/duties/${currentDutyFile}`);
+        if (response.ok) {
+          const dutyData = await response.json();
+          loadDutyTimeline(dutyData);
+        }
+      } catch (err) {
+        console.error('Failed to load duty mechanics for cloud save:', err);
+      }
+    } else {
+      bossMechanics = [];
+    }
 
     recalculateTimeline();
     renderTimeline();

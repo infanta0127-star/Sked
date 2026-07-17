@@ -856,8 +856,19 @@ function populateMitDutyDropdown(dutiesData, selectedValue = '') {
 function renderPartySelector() {
     partyGrid.innerHTML = '';
     const availableJobs = Object.keys(mitSkillsDatabase);
+    const filterCheckbox = document.getElementById('mit-filter-roles-checkbox');
+    const isFiltered = filterCheckbox ? filterCheckbox.checked : false;
     
     const slotLabels = ['T1', 'T2', 'H1', 'H2', 'D1', 'D2', 'D3', 'D4'];
+    
+    // Role mapping for FFXIV jobs
+    const JOB_ROLES = {
+        'PLD': 'tank', 'WAR': 'tank', 'DRK': 'tank', 'GNB': 'tank',
+        'WHM': 'healer', 'SCH': 'healer', 'AST': 'healer', 'SGE': 'healer',
+        'SAM': 'dps', 'MNK': 'dps', 'DRG': 'dps', 'RPR': 'dps', 'VPR': 'dps',
+        'BRD': 'dps', 'MCH': 'dps', 'DNC': 'dps',
+        'BLM': 'dps', 'SMN': 'dps', 'RDM': 'dps', 'PCT': 'dps'
+    };
     
     for (let i = 0; i < 8; i++) {
         const wrapper = document.createElement('div');
@@ -874,7 +885,27 @@ function renderPartySelector() {
         const select = document.createElement('select');
         select.dataset.slot = i;
         
+        // Determine expected role for this slot
+        let expectedRole = 'dps';
+        if (i < 2) expectedRole = 'tank';
+        else if (i < 4) expectedRole = 'healer';
+        
+        // If filtering is active and currently selected job is mismatched, assign fallback and clear timeline skills on slot
+        let currentSelectedJob = mitParty[i];
+        if (isFiltered && JOB_ROLES[currentSelectedJob.toUpperCase()] !== expectedRole) {
+            const fallbackJob = availableJobs.find(jobKey => (JOB_ROLES[jobKey.toUpperCase()] || 'dps') === expectedRole);
+            if (fallbackJob) {
+                mitParty[i] = fallbackJob;
+                mitTimelineSkills = mitTimelineSkills.filter(cast => cast.slotIndex !== i);
+            }
+        }
+        
         availableJobs.forEach(jobKey => {
+            const jobRole = JOB_ROLES[jobKey.toUpperCase()] || 'dps';
+            if (isFiltered && jobRole !== expectedRole) {
+                return;
+            }
+            
             const option = document.createElement('option');
             option.value = jobKey;
             option.text = mitSkillsDatabase[jobKey].name;
@@ -924,9 +955,9 @@ function renderMitSkillsList() {
         const section = document.createElement('div');
         section.className = 'job-skills-section';
         section.innerHTML = `
-            <div style="display:flex; align-items:center; gap:6px; margin: 12px 0 6px 0; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:4px;">
-                <img src="${jobData.icon}" style="width:16px; height:16px; border-radius:3px;" />
-                <span style="font-size:11px; font-weight:bold; color:#00f0ff;">${jobData.name}</span>
+            <div style="display:flex; align-items:center; gap:8px; margin: 12px 0 6px 0; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:4px;">
+                <img src="${jobData.icon}" style="width:24px; height:24px; border-radius:4px;" />
+                <span style="font-size:13px; font-weight:bold; color:#00f0ff;">${jobData.name}</span>
             </div>
         `;
         
@@ -1301,6 +1332,17 @@ function setupMitEventListeners() {
     // Search skills filter
     document.getElementById('mit-skill-search').addEventListener('input', renderMitSkillsList);
 
+    // Role filtering checkbox listener
+    const filterRolesCheckbox = document.getElementById('mit-filter-roles-checkbox');
+    if (filterRolesCheckbox) {
+        filterRolesCheckbox.addEventListener('change', () => {
+            renderPartySelector();
+            renderMitSkillsList();
+            renderMitPlayerTracks();
+            renderMitTimeline();
+        });
+    }
+
     // Zooming updates
     document.querySelector('.timeline-container-outer').addEventListener('scroll', (e) => {
         // Sync scroll header if needed
@@ -1536,6 +1578,19 @@ async function saveTeamPlanToSupabase() {
     }
 }
 
+function getMitDutyName(dutyFile) {
+    if (!dutyFile || dutyFile === 'custom') return '自訂時間軸';
+    if (mitDutiesDatabase && mitDutiesDatabase.duties) {
+        const duty = mitDutiesDatabase.duties.find(d => d.file === dutyFile);
+        if (duty) return duty.name;
+    }
+    if (window.dutiesDatabase && window.dutiesDatabase.duties) {
+        const duty = window.dutiesDatabase.duties.find(d => d.file === dutyFile);
+        if (duty) return duty.name;
+    }
+    return dutyFile;
+}
+
 async function loadTeamPlansModal() {
     if (!currentUser) {
         alert('請先登入以讀取您的雲端計畫！');
@@ -1572,9 +1627,12 @@ async function loadTeamPlansModal() {
                 li.innerHTML = `
                     <div style="cursor:pointer; flex:1;">
                         <strong>${plan.name}</strong><br/>
-                        <span style="font-size:10px; color:var(--color-text-muted);">副本: ${plan.duty_key} | 更新於 ${new Date(plan.updated_at).toLocaleString()}</span>
+                        <span style="font-size:10px; color:var(--color-text-muted);">副本: ${getMitDutyName(plan.duty_key)} | 更新於 ${new Date(plan.updated_at).toLocaleString()}</span>
                     </div>
-                    <button class="btn btn-danger btn-mini" style="padding: 2px 6px;" title="刪除"><i class="fa-solid fa-trash"></i></button>
+                    <div class="save-actions" style="display:flex; align-items:center;">
+                        <button class="btn btn-secondary btn-mini btn-mini-rename" style="padding: 2px 6px; margin-right: 5px;" title="重新命名"><i class="fa-solid fa-pen"></i></button>
+                        <button class="btn btn-danger btn-mini btn-mini-del" style="padding: 2px 6px;" title="刪除"><i class="fa-solid fa-trash"></i></button>
+                    </div>
                 `;
                 
                 // Click to load or overwrite
@@ -1607,8 +1665,30 @@ async function loadTeamPlansModal() {
                     }
                 });
                 
+                // Click to rename
+                li.querySelector('.btn-mini-rename').addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const newName = await window.showCustomPrompt('重新命名雲端存檔', '請輸入新的存檔名稱：', plan.name);
+                    if (newName === null) return;
+                    if (newName.trim() === '') {
+                        alert('名稱不能為空！');
+                        return;
+                    }
+                    
+                    try {
+                        const { error: renameErr } = await sb.from('team_plans')
+                            .update({ name: newName.trim(), updated_at: new Date() })
+                            .eq('id', plan.id);
+                        if (renameErr) throw renameErr;
+                        alert('重命名成功！');
+                        await loadTeamPlansModal(); // Refresh modal list
+                    } catch (err) {
+                        alert(`重命名失敗: ${err.message}`);
+                    }
+                });
+
                 // Click to delete
-                li.querySelector('button').addEventListener('click', async (e) => {
+                li.querySelector('.btn-mini-del').addEventListener('click', async (e) => {
                     e.stopPropagation();
                     const ok = await window.showCustomConfirm('刪除存檔', `確定要刪除「${plan.name}」嗎？此動作無法復原。`);
                     if (ok) {
