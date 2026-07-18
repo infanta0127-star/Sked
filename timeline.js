@@ -2438,6 +2438,11 @@ function importFflogsEvents(text, filterPlayer, clearTimeline, targetTimelineId 
     const cleaned = rawName.replace(/\[HQ\]/gi, '').trim();
     const lower = cleaned.toLowerCase();
     
+    // Special check for potions/tinctures/gemdraughts/幻药
+    if (lower.includes("爆发药") || lower.includes("爆發藥") || lower.includes("幻药") || lower.includes("幻藥") || lower.includes("potion") || lower.includes("tincture") || lower.includes("gemdraught")) {
+      return "爆發藥";
+    }
+    
     // Direct match in translation table
     if (skillTranslation[lower]) {
       return skillTranslation[lower];
@@ -3835,10 +3840,19 @@ async function fflogsApiImport() {
       if (!abilityName) continue;
 
       const evNameLower = abilityName.toLowerCase();
-      const matched = activeJobData.skills.find(s =>
-        s.name.toLowerCase() === evNameLower ||
-        (s.aliases && s.aliases.some(alias => alias.toLowerCase() === evNameLower))
-      );
+      const matched = activeJobData.skills.find(s => {
+        if (s.id === 'potion') {
+          return evNameLower.includes("爆发药") || 
+                 evNameLower.includes("爆發藥") || 
+                 evNameLower.includes("幻药") || 
+                 evNameLower.includes("幻藥") || 
+                 evNameLower.includes("potion") || 
+                 evNameLower.includes("tincture") || 
+                 evNameLower.includes("gemdraught");
+        }
+        return s.name.toLowerCase() === evNameLower ||
+               (s.aliases && s.aliases.some(alias => alias.toLowerCase() === evNameLower));
+      });
       if (!matched) continue;
 
       const relSec = (ev.timestamp - alignmentStart) / 1000;
