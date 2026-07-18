@@ -1430,6 +1430,16 @@ function setupMitEventListeners() {
             if (typeof window.renderTimeline === 'function') window.renderTimeline();
         }
     });
+
+    const tabBtnCompare = document.getElementById('tab-btn-compare');
+    if (tabBtnCompare) {
+        tabBtnCompare.addEventListener('click', () => {
+            if (window.bossMechanics) {
+                window.bossMechanics = JSON.parse(JSON.stringify(mitBossMechanics));
+                if (typeof window.renderCompareTimeline === 'function') window.renderCompareTimeline();
+            }
+        });
+    }
 }
 
 function handleMitDrop(e, trackContent) {

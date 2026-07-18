@@ -113,6 +113,8 @@ let draggedItem = null;  // { source: 'sidebar'|'timeline', skillId/instanceId, 
 window.isDraggingInProgress = false;
 let currentDutyCategory = '';
 let currentUltimatePhaseStarts = {};
+let activeTab = 'mit';
+let comparePlayers = [];
 
 // Buff Mapping for FFXIV alignment
 const BUFF_MAP = {
@@ -166,8 +168,10 @@ const btnAddMechanic = document.getElementById('btn-add-mechanic');
 // Tab Switching & Import Elements
 const tabBtnMit = document.getElementById('tab-btn-mit');
 const tabBtnTimeline = document.getElementById('tab-btn-timeline');
+const tabBtnCompare = document.getElementById('tab-btn-compare');
 const mitPlanningView = document.getElementById('mit-planning-view');
 const timelineWorkspaceView = document.getElementById('timeline-workspace-view');
+const compareWorkspaceView = document.getElementById('compare-workspace-view');
 const timelineToolbar = document.getElementById('timeline-toolbar');
 
 // Tooltip & Modals
@@ -395,7 +399,11 @@ function loadDutyTimeline(dutyData) {
   });
   
   recalculateTimeline();
-  renderTimeline();
+  if (activeTab === 'compare') {
+    renderCompareTimeline();
+  } else {
+    renderTimeline();
+  }
   autoSave();
   
   // Auto-scroll to the first boss mechanic to prevent blank screen confusion
@@ -505,23 +513,60 @@ function setupEventListeners() {
     draggedItem = null;
   });
   // Tab Switcher event listeners
-  if (tabBtnMit && tabBtnTimeline) {
+  if (tabBtnMit && tabBtnTimeline && tabBtnCompare) {
     tabBtnMit.addEventListener('click', () => {
+      activeTab = 'mit';
       tabBtnMit.classList.add('active');
       tabBtnTimeline.classList.remove('active');
+      tabBtnCompare.classList.remove('active');
       mitPlanningView.classList.remove('hidden');
       timelineWorkspaceView.classList.add('hidden');
+      compareWorkspaceView.classList.add('hidden');
       timelineToolbar.classList.add('hidden');
       window.trackEvent('navigation', 'tab_switch', { target: 'team' });
     });
 
     tabBtnTimeline.addEventListener('click', () => {
+      activeTab = 'personal';
       tabBtnTimeline.classList.add('active');
       tabBtnMit.classList.remove('active');
+      tabBtnCompare.classList.remove('active');
       timelineWorkspaceView.classList.remove('hidden');
       timelineToolbar.classList.remove('hidden');
       mitPlanningView.classList.add('hidden');
+      compareWorkspaceView.classList.add('hidden');
+      
+      // Show all personal toolbar items
+      document.getElementById('job-select-group').style.display = '';
+      document.getElementById('btn-cloud-save').style.display = '';
+      document.getElementById('btn-cloud-load').style.display = '';
+      document.getElementById('btn-export-menu').style.display = '';
+      document.getElementById('btn-add-timeline-track').style.display = '';
+      document.getElementById('toolbar-divider').style.display = '';
+      
       window.trackEvent('navigation', 'tab_switch', { target: 'personal' });
+    });
+
+    tabBtnCompare.addEventListener('click', () => {
+      activeTab = 'compare';
+      tabBtnCompare.classList.add('active');
+      tabBtnMit.classList.remove('active');
+      tabBtnTimeline.classList.remove('active');
+      compareWorkspaceView.classList.remove('hidden');
+      timelineToolbar.classList.remove('hidden');
+      mitPlanningView.classList.add('hidden');
+      timelineWorkspaceView.classList.add('hidden');
+      
+      // Hide irrelevant personal toolbar items
+      document.getElementById('job-select-group').style.display = 'none';
+      document.getElementById('btn-cloud-save').style.display = 'none';
+      document.getElementById('btn-cloud-load').style.display = 'none';
+      document.getElementById('btn-export-menu').style.display = 'none';
+      document.getElementById('btn-add-timeline-track').style.display = 'none';
+      document.getElementById('toolbar-divider').style.display = 'none';
+      
+      renderCompareTimeline();
+      window.trackEvent('navigation', 'tab_switch', { target: 'compare' });
     });
   }
 
@@ -1457,8 +1502,12 @@ function formatTime(seconds) {
 }
 
 function scrollToTime(timeSeconds) {
-  const scrollContainer = timelineEditor.parentElement;
-  scrollContainer.scrollLeft = TRACK_INFO_WIDTH + (timeSeconds + PREPULL_TIME) * pixelsPerSecond - 100;
+  const scrollContainer = activeTab === 'compare' ? 
+    document.querySelector('#compare-workspace-view .timeline-container-outer') : 
+    timelineEditor.parentElement;
+  if (scrollContainer) {
+    scrollContainer.scrollLeft = TRACK_INFO_WIDTH + (timeSeconds + PREPULL_TIME) * pixelsPerSecond - 100;
+  }
 }
 
 // 8. Handle Drag-and-Drop Drop logic
@@ -3074,19 +3123,26 @@ function showTooltip(e, skill) {
 
   // Hover guide and current time display
   const hoverGuide = document.getElementById('hover-guide');
+  if (hoverGuide) hoverGuide.style.display = 'none';
+  const compareHoverGuide = document.getElementById('compare-hover-guide');
+  if (compareHoverGuide) compareHoverGuide.style.display = 'none';
+
+  const activeHoverGuide = document.getElementById(activeTab === 'compare' ? 'compare-hover-guide' : 'hover-guide');
   const tooltipTime = document.getElementById('tooltip-time');
   const tooltipTimeVal = document.getElementById('tooltip-time-val');
+  
   if (typeof skill.startTime === 'number') {
-    if (hoverGuide) {
-      hoverGuide.style.display = 'block';
-      hoverGuide.style.left = `${TRACK_INFO_WIDTH + (skill.startTime + PREPULL_TIME) * pixelsPerSecond}px`;
+    if (activeHoverGuide) {
+      activeHoverGuide.style.display = 'block';
+      activeHoverGuide.style.left = `${TRACK_INFO_WIDTH + (skill.startTime + PREPULL_TIME) * pixelsPerSecond}px`;
     }
     if (tooltipTime && tooltipTimeVal) {
       tooltipTime.style.display = 'block';
-      tooltipTimeVal.textContent = `開始時間：${formatTime(skill.startTime)}`;
+      const playerSuffix = skill.playerName ? ` [${skill.playerName}]` : '';
+      tooltipTimeVal.textContent = `開始時間：${formatTime(skill.startTime)}${playerSuffix}`;
     }
   } else {
-    if (hoverGuide) hoverGuide.style.display = 'none';
+    if (activeHoverGuide) activeHoverGuide.style.display = 'none';
     if (tooltipTime) tooltipTime.style.display = 'none';
   }
 }
@@ -3095,6 +3151,8 @@ function hideTooltip() {
   tooltip.style.display = 'none';
   const hoverGuide = document.getElementById('hover-guide');
   if (hoverGuide) hoverGuide.style.display = 'none';
+  const compareHoverGuide = document.getElementById('compare-hover-guide');
+  if (compareHoverGuide) compareHoverGuide.style.display = 'none';
   const tooltipTime = document.getElementById('tooltip-time');
   if (tooltipTime) tooltipTime.style.display = 'none';
 }
@@ -3807,7 +3865,7 @@ async function fflogsApiImport() {
 
   // Check if player's job matches current active job and prompt auto-switch if mismatch
   const selectedPlayer = fflogsApiPlayers.find(p => p.id === sourceId);
-  if (selectedPlayer) {
+  if (activeTab !== 'compare' && selectedPlayer) {
     const playerJob = selectedPlayer.type.toLowerCase();
     if (playerJob !== currentJobId && skillsDatabase[playerJob]) {
       const playerJobName = skillsDatabase[playerJob]?.name || playerJob;
@@ -3834,7 +3892,7 @@ async function fflogsApiImport() {
   let targetTimelineId = 1;
   let autoClear = clearFirst;
   
-  if (timelineSkills.length > 0) {
+  if (activeTab !== 'compare' && timelineSkills.length > 0) {
     const choice = await promptImportTargetChoice();
     if (!choice) {
       document.getElementById('fflogs-api-import').disabled = false;
@@ -3918,8 +3976,8 @@ async function fflogsApiImport() {
     }
 
     // Match skills to database
-    const activeJobData = skillsDatabase[currentJobId];
-    if (!activeJobData) throw new Error('找不到當前職業技能資料');
+    const targetJobData = activeTab === 'compare' ? skillsDatabase[selectedPlayer.type.toLowerCase()] : skillsDatabase[currentJobId];
+    if (!targetJobData) throw new Error('找不到該玩家職業的技能資料');
 
     const parsedEvents = [];
     for (const ev of events) {
@@ -3929,7 +3987,7 @@ async function fflogsApiImport() {
       if (!abilityName) continue;
 
       const evNameLower = abilityName.toLowerCase();
-      const matched = activeJobData.skills.find(s => {
+      const matched = targetJobData.skills.find(s => {
         if (s.id === 'potion') {
           return evNameLower.includes("爆发药") || 
                  evNameLower.includes("爆發藥") || 
@@ -3998,7 +4056,8 @@ async function fflogsApiImport() {
       const isGcd = (pe.skill.classification === '戰技' || pe.skill.classification === '魔法');
       const track = isGcd ? 'gcd' : 'ogcd';
       const castDur = parseTimeToSeconds(pe.skill.cast);
-      const duration = Math.max(castDur, isGcd ? timelineGCDDuration : 0.6);
+      const gcdDur = activeTab === 'compare' ? 2.50 : timelineGCDDuration;
+      const duration = Math.max(castDur, isGcd ? gcdDur : 0.6);
 
       rawSkills.push({
         skillId: pe.skill.id,
@@ -4026,13 +4085,7 @@ async function fflogsApiImport() {
     const playerSel = document.getElementById('fflogs-api-player-select');
     const selectedPlayerOption = playerSel && playerSel.selectedIndex !== -1 ? playerSel.options[playerSel.selectedIndex] : null;
     const selectedPlayerName = selectedPlayerOption ? selectedPlayerOption.text.split(' (')[0] : '';
-    importedPlayerName = selectedPlayerName || null;
-    timelinePlayers[targetTimelineId - 1] = selectedPlayerName || null;
-
-    if (autoClear) {
-      timelineSkills = timelineSkills.filter(s => (s.timelineId || 1) !== targetTimelineId);
-    }
-
+    
     // Parent oGCDs to GCDs
     rawSkills.forEach(s => {
       s.instanceId = 'skill_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
@@ -4053,30 +4106,75 @@ async function fflogsApiImport() {
       }
     });
 
-    // Push to global timelineSkills
-    rawSkills.forEach(s => {
-      timelineSkills.push({
-        instanceId: s.instanceId,
-        skillId: s.skillId,
-        name: s.name,
-        icon: s.icon,
-        classification: s.classification,
-        cast: s.cast,
-        recast: s.recast,
-        startTime: Math.round(s.startTime * 1000) / 1000,
-        duration: s.duration,
-        track: s.track,
-        parentGcdId: s.parentGcdId,
-        relativeOffset: Math.round(s.relativeOffset * 1000) / 1000,
-        clip: 0,
-        idle: 0,
-        timelineId: targetTimelineId
-      });
-    });
+    if (activeTab === 'compare') {
+      const playerObj = {
+        name: selectedPlayerName || '未命名玩家',
+        jobId: selectedPlayer.type.toLowerCase(),
+        jobName: targetJobData.name,
+        jobIcon: targetJobData.skills[0]?.icon || './icons/general/potion.png',
+        gcd: 2.50,
+        skills: rawSkills.map(s => ({
+          instanceId: s.instanceId,
+          skillId: s.skillId,
+          name: s.name,
+          icon: s.icon,
+          classification: s.classification,
+          cast: s.cast,
+          recast: s.recast,
+          startTime: Math.round(s.startTime * 1000) / 1000,
+          duration: s.duration,
+          track: s.track,
+          parentGcdId: s.parentGcdId,
+          relativeOffset: Math.round(s.relativeOffset * 1000) / 1000,
+          clip: 0,
+          idle: 0
+        }))
+      };
+      
+      recalculatePlayerTimeline(playerObj);
+      
+      // Check if player already exists in list, if so replace, else add
+      const existingIdx = comparePlayers.findIndex(p => p.name === playerObj.name);
+      if (existingIdx !== -1) {
+        comparePlayers[existingIdx] = playerObj;
+      } else {
+        comparePlayers.push(playerObj);
+      }
+      
+      renderCompareTimeline();
+    } else {
+      importedPlayerName = selectedPlayerName || null;
+      timelinePlayers[targetTimelineId - 1] = selectedPlayerName || null;
 
-    recalculateTimeline();
-    renderTimeline();
-    autoSave();
+      if (autoClear) {
+        timelineSkills = timelineSkills.filter(s => (s.timelineId || 1) !== targetTimelineId);
+      }
+
+      // Push to global timelineSkills
+      rawSkills.forEach(s => {
+        timelineSkills.push({
+          instanceId: s.instanceId,
+          skillId: s.skillId,
+          name: s.name,
+          icon: s.icon,
+          classification: s.classification,
+          cast: s.cast,
+          recast: s.recast,
+          startTime: Math.round(s.startTime * 1000) / 1000,
+          duration: s.duration,
+          track: s.track,
+          parentGcdId: s.parentGcdId,
+          relativeOffset: Math.round(s.relativeOffset * 1000) / 1000,
+          clip: 0,
+          idle: 0,
+          timelineId: targetTimelineId
+        });
+      });
+
+      recalculateTimeline();
+      renderTimeline();
+      autoSave();
+    }
 
     const modal = document.getElementById('fflogs-api-modal');
     if (modal) modal.classList.remove('active');
@@ -4175,3 +4273,376 @@ function promptImportTargetChoice() {
     modal.classList.add('active');
   });
 }
+
+// --- Multiplayer Cast Comparison Functions ---
+
+function recalculatePlayerTimeline(player) {
+  const gcds = player.skills.filter(s => s.track === 'gcd').sort((a, b) => a.startTime - b.startTime);
+  const ogcds = player.skills.filter(s => s.track === 'ogcd');
+  
+  let nextAvailableGcdTime = -PREPULL_TIME;
+  const playerGcdDuration = player.gcd || 2.50;
+  
+  for (let i = 0; i < gcds.length; i++) {
+    const gcd = gcds[i];
+    
+    if (gcd.startTime < nextAvailableGcdTime) {
+      gcd.startTime = nextAvailableGcdTime;
+    }
+    
+    gcd.startTime = Math.round(gcd.startTime * 1000) / 1000;
+    
+    const parsedRecast = parseTimeToSeconds(gcd.recast);
+    const parsedCast = parseTimeToSeconds(gcd.cast);
+    const recastVal = (parsedRecast >= 1.8) ? playerGcdDuration : parsedRecast;
+    gcd.duration = Math.max(parsedCast, recastVal);
+    
+    const myOgcds = ogcds.filter(o => o.parentGcdId === gcd.instanceId).sort((a, b) => a.relativeOffset - b.relativeOffset);
+    
+    let currentLockEnd = gcd.startTime + parsedCast;
+    
+    for (const ogcd of myOgcds) {
+      ogcd.startTime = gcd.startTime + ogcd.relativeOffset;
+      
+      if (ogcd.startTime < gcd.startTime + parsedCast) {
+        ogcd.startTime = gcd.startTime + parsedCast;
+        ogcd.relativeOffset = ogcd.startTime - gcd.startTime;
+      }
+      
+      if (ogcd.startTime < currentLockEnd) {
+        ogcd.startTime = currentLockEnd;
+        ogcd.relativeOffset = ogcd.startTime - gcd.startTime;
+      }
+      
+      ogcd.startTime = Math.round(ogcd.startTime * 1000) / 1000;
+      ogcd.relativeOffset = Math.round(ogcd.relativeOffset * 1000) / 1000;
+      currentLockEnd = ogcd.startTime + 0.6;
+    }
+    
+    const normalGcdEnd = gcd.startTime + gcd.duration;
+    if (currentLockEnd > normalGcdEnd) {
+      const calculatedClip = currentLockEnd - normalGcdEnd;
+      if (calculatedClip >= 2.0) {
+        gcd.clip = 0;
+        nextAvailableGcdTime = normalGcdEnd;
+      } else {
+        gcd.clip = calculatedClip;
+        nextAvailableGcdTime = currentLockEnd;
+      }
+    } else {
+      gcd.clip = 0;
+      nextAvailableGcdTime = normalGcdEnd;
+    }
+    nextAvailableGcdTime = Math.round(nextAvailableGcdTime * 1000) / 1000;
+  }
+  
+  // Calculate idle times
+  for (let i = 0; i < gcds.length; i++) {
+    const gcd = gcds[i];
+    const normalGcdEnd = gcd.startTime + gcd.duration;
+    const currentLockEnd = normalGcdEnd + gcd.clip;
+    const availableTime = Math.round(Math.max(normalGcdEnd, currentLockEnd) * 1000) / 1000;
+    
+    if (i < gcds.length - 1) {
+      const nextGcd = gcds[i + 1];
+      if (nextGcd.startTime > availableTime) {
+        gcd.idle = Math.round((nextGcd.startTime - availableTime) * 1000) / 1000;
+      } else {
+        gcd.idle = 0;
+      }
+    } else {
+      gcd.idle = 0;
+    }
+  }
+  
+  // Orphaned ogcds
+  const orphanOgcds = ogcds.filter(o => !o.parentGcdId);
+  for (const ogcd of orphanOgcds) {
+    ogcd.startTime = Math.round(ogcd.startTime * 1000) / 1000;
+  }
+}
+
+function renderCompareTimeline() {
+  const container = document.getElementById('compare-timeline-tracks-container');
+  const playerListEl = document.getElementById('compare-players-list');
+  const lengthDisplay = document.getElementById('compare-timeline-length-display');
+  
+  if (!container || !playerListEl) return;
+  
+  // 1. Render Left Sidebar Player List
+  if (comparePlayers.length === 0) {
+    playerListEl.innerHTML = `
+      <div class="empty-state">
+        <i class="fa-solid fa-users"></i>
+        <p>請使用匯入按鈕匯入 FFXIV Log</p>
+      </div>
+    `;
+    container.innerHTML = '';
+    lengthDisplay.innerHTML = `<i class="fa-regular fa-clock"></i> 軸總長: 0s`;
+    return;
+  }
+  
+  // Render player cards in sidebar
+  playerListEl.innerHTML = '';
+  comparePlayers.forEach((p, idx) => {
+    const card = document.createElement('div');
+    card.className = 'compare-player-card';
+    card.style.cssText = 'background-color: rgba(255,255,255,0.03); padding: 12px; border-radius: 6px; border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px;';
+    card.innerHTML = `
+      <div style="display: flex; align-items: center; justify-content: space-between;">
+        <div style="display: flex; align-items: center; gap: 8px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; max-width: 80%;">
+          <img src="${p.jobIcon}" style="width: 20px; height: 20px; border-radius: 3px; flex-shrink: 0;">
+          <span style="font-weight: 600; font-size: 13px; color: var(--color-text-normal); overflow: hidden; text-overflow: ellipsis;">${p.name} (${p.jobName})</span>
+        </div>
+        <button class="btn-delete-player" data-index="${idx}" style="background: none; border: none; color: var(--color-danger); cursor: pointer; font-size: 13px;" title="刪除此成員"><i class="fa-solid fa-trash-can"></i></button>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--color-text-muted);">
+        <label style="white-space: nowrap;"><i class="fa-solid fa-clock"></i> GCD (秒):</label>
+        <input type="number" class="compare-gcd-input custom-input" data-index="${idx}" value="${p.gcd.toFixed(2)}" step="0.01" min="1.50" max="3.00" style="width: 60px; height: 24px; padding: 2px 4px; font-size: 12px; text-align: center;">
+      </div>
+    `;
+    
+    // Bind delete click
+    card.querySelector('.btn-delete-player').addEventListener('click', () => {
+      comparePlayers.splice(idx, 1);
+      renderCompareTimeline();
+    });
+    
+    // Bind GCD change
+    card.querySelector('.compare-gcd-input').addEventListener('change', (e) => {
+      let val = parseFloat(e.target.value);
+      if (isNaN(val) || val < 1.50) val = 1.50;
+      if (val > 3.00) val = 3.00;
+      e.target.value = val.toFixed(2);
+      comparePlayers[idx].gcd = val;
+      recalculatePlayerTimeline(comparePlayers[idx]);
+      renderCompareTimeline();
+    });
+    
+    playerListEl.appendChild(card);
+  });
+  
+  // 2. Render Timeline Editor Tracks
+  container.innerHTML = '';
+  
+  // Find maximum time to scale the editor width
+  let maxTime = 120; // default 2 minutes
+  bossMechanics.forEach(m => {
+    if (m.time > maxTime) maxTime = m.time;
+  });
+  comparePlayers.forEach(p => {
+    p.skills.forEach(s => {
+      if (s.startTime + s.duration > maxTime) maxTime = s.startTime + s.duration;
+    });
+  });
+  
+  const timelineWidth = (maxTime + PREPULL_TIME) * pixelsPerSecond;
+  const editorWidth = timelineWidth + 200;
+  
+  // Draw compare ruler ticks
+  const rulerEl = document.getElementById('compare-timeline-ruler');
+  rulerEl.innerHTML = '';
+  rulerEl.parentElement.style.width = `${editorWidth}px`;
+  rulerEl.style.width = `${editorWidth}px`;
+  for (let t = -PREPULL_TIME; t <= maxTime; t += 0.5) {
+    const tick = document.createElement('div');
+    tick.style.left = `${180 + (t + PREPULL_TIME) * pixelsPerSecond}px`;
+    
+    if (t % 5 === 0) {
+      tick.className = 'ruler-tick major';
+      tick.innerHTML = `<span>${formatTime(t)}</span>`;
+    } else if (t % 1 === 0) {
+      tick.className = 'ruler-tick minor';
+    } else if (pixelsPerSecond >= 80) {
+      tick.className = 'ruler-tick subminor';
+    } else {
+      continue;
+    }
+    rulerEl.appendChild(tick);
+  }
+  
+  // Render Boss Track in comparison view
+  const bossTrackEl = document.getElementById('compare-boss-track');
+  bossTrackEl.innerHTML = '';
+  // Remove all boss guide lines in compare-timeline
+  const existingGuides = rulerEl.parentElement.querySelectorAll('.boss-line, .combat-start-line');
+  existingGuides.forEach(g => g.remove());
+  
+  bossMechanics.forEach(mech => {
+    const el = document.createElement('div');
+    el.className = 'placed-mechanic';
+    el.style.left = `${(mech.time + PREPULL_TIME) * pixelsPerSecond}px`;
+    el.innerHTML = `<span class="mechanic-name">${mech.name}</span>`;
+    
+    // Custom tooltip
+    el.addEventListener('mousemove', (e) => {
+      tooltip.style.display = 'block';
+      tooltip.style.left = `${e.clientX + 15}px`;
+      tooltip.style.top = `${e.clientY + 15}px`;
+      tooltip.querySelector('.tooltip-icon').src = './icons/general/potion.png';
+      tooltip.querySelector('.tooltip-name').textContent = mech.name;
+      tooltip.querySelector('.tooltip-badge').textContent = '首領機制';
+      tooltip.querySelector('.tooltip-badge').style.backgroundColor = 'var(--color-danger)';
+      tooltip.querySelector('.tooltip-lv').textContent = '-';
+      tooltip.querySelector('.tooltip-mp').textContent = '-';
+      tooltip.querySelector('.tooltip-times').textContent = '即時';
+      tooltip.querySelector('.tooltip-range').textContent = '-';
+      tooltip.querySelector('.tooltip-description').textContent = `首領於第 ${formatTime(mech.time)} 施放機制「${mech.name}」`;
+    });
+    el.addEventListener('mouseleave', hideTooltip);
+    bossTrackEl.appendChild(el);
+    
+    // Boss guide line
+    const guide = document.createElement('div');
+    guide.className = 'boss-line';
+    guide.style.left = `${180 + (mech.time + PREPULL_TIME) * pixelsPerSecond}px`;
+    rulerEl.parentElement.appendChild(guide);
+  });
+  
+  // Combat pull start line
+  const startLine = document.createElement('div');
+  startLine.className = 'combat-start-line';
+  startLine.style.left = `${180 + PREPULL_TIME * pixelsPerSecond}px`;
+  const startLabel = document.createElement('span');
+  startLabel.className = 'combat-start-label';
+  startLabel.innerHTML = '<i class="fa-solid fa-flag-checkered"></i> 開怪 (Pull)';
+  startLine.appendChild(startLabel);
+  rulerEl.parentElement.appendChild(startLine);
+
+  // Update total length display
+  lengthDisplay.innerHTML = `<i class="fa-regular fa-clock"></i> 軸總長: ${Math.ceil(maxTime)}s`;
+
+  // Draw Player Tracks
+  comparePlayers.forEach((p, pIdx) => {
+    const group = document.createElement('div');
+    group.className = 'timeline-group';
+    group.style.cssText = 'border-bottom: 2px solid rgba(255,255,255,0.05); margin-bottom: 8px; position: relative;';
+    group.innerHTML = `
+      <div class="timeline-group-header" style="display:flex; height:24px; background:rgba(255,255,255,0.03); align-items:center;">
+        <div class="track-info" style="width:180px; flex-shrink:0; background:#0f1118; border-right:2px solid rgba(255,255,255,0.1); height:100%; display:flex; align-items:center; padding:0 15px; font-size:11px; font-weight:bold; color:var(--color-text-normal); sticky:left; left:0; z-index:5; box-shadow:4px 0 10px rgba(0,0,0,0.2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+          <img src="${p.jobIcon}" style="width:14px; height:14px; margin-right:6px; border-radius:2px;">
+          ${p.name} (${p.jobName})
+        </div>
+        <div style="flex:1; border-right: 1px solid rgba(255,255,255,0.05); height:100%;"></div>
+      </div>
+      
+      <!-- Buff Track -->
+      <div class="timeline-track-wrapper buff-track-wrapper">
+        <div class="track-info">
+          <span class="track-title"><i class="fa-solid fa-wand-magic-sparkles"></i> 團輔覆蓋 (Buffs)</span>
+        </div>
+        <div class="timeline-track track-content" id="compare-buff-track-${pIdx}"></div>
+      </div>
+      
+      <!-- GCD Skill Track -->
+      <div class="timeline-track-wrapper gcd-track-wrapper">
+        <div class="track-info">
+          <span class="track-title"><i class="fa-solid fa-bolt"></i> 戰技 / 魔法 (GCD)</span>
+        </div>
+        <div class="timeline-track track-content" id="compare-gcd-track-${pIdx}">
+          <div class="gcd-slots-bg" style="background-size: calc(${pixelsPerSecond}px * ${p.gcd}) 100%;"></div>
+        </div>
+      </div>
+      
+      <!-- oGCD Skill Track -->
+      <div class="timeline-track-wrapper ogcd-track-wrapper">
+        <div class="track-info">
+          <span class="track-title"><i class="fa-solid fa-hourglass-start"></i> 能力技 (oGCD)</span>
+        </div>
+        <div class="timeline-track track-content" id="compare-ogcd-track-${pIdx}"></div>
+      </div>
+    `;
+    container.appendChild(group);
+    
+    const tGcd = group.querySelector(`#compare-gcd-track-${pIdx}`);
+    const tOgcd = group.querySelector(`#compare-ogcd-track-${pIdx}`);
+    const tBuff = group.querySelector(`#compare-buff-track-${pIdx}`);
+    
+    // Draw Buff Overlays
+    p.skills.forEach(skill => {
+      const buffConfig = BUFF_MAP[skill.name];
+      if (buffConfig) {
+        const overlay = document.createElement('div');
+        overlay.className = 'buff-overlay';
+        overlay.style.left = `${(skill.startTime + PREPULL_TIME) * pixelsPerSecond}px`;
+        overlay.style.width = `${buffConfig.duration * pixelsPerSecond}px`;
+        overlay.style.backgroundColor = buffConfig.color;
+        overlay.style.borderColor = buffConfig.color.replace('0.45', '0.8').replace('0.4', '0.8');
+        overlay.innerHTML = `<img src="${skill.icon}" style="width:16px;height:16px;margin-right:6px;border-radius:3px;"> ${buffConfig.label}`;
+        tBuff.appendChild(overlay);
+      }
+    });
+    
+    // Draw GCD skills
+    const gcds = p.skills.filter(s => s.track === 'gcd');
+    gcds.forEach(skill => {
+      const el = document.createElement('div');
+      el.className = 'placed-skill gcd-type';
+      el.style.left = `${(skill.startTime + PREPULL_TIME) * pixelsPerSecond}px`;
+      el.style.width = `${skill.duration * pixelsPerSecond}px`;
+      el.innerHTML = `
+        <img src="${skill.icon}" alt="${skill.name}">
+        <span class="placed-skill-name">${skill.name}</span>
+      `;
+      
+      const castTime = parseTimeToSeconds(skill.cast);
+      if (skill.duration > castTime) {
+        const recastMesh = document.createElement('div');
+        recastMesh.className = 'recast-lock-indicator';
+        recastMesh.style.left = `${castTime * pixelsPerSecond}px`;
+        recastMesh.style.width = `${(skill.duration - castTime) * pixelsPerSecond}px`;
+        el.appendChild(recastMesh);
+      }
+      
+      if (skill.clip > 0) {
+        const clipWarning = document.createElement('div');
+        clipWarning.className = 'gcd-clip-warning';
+        clipWarning.style.left = `${(skill.startTime + skill.duration + PREPULL_TIME) * pixelsPerSecond}px`;
+        clipWarning.style.width = `${skill.clip * pixelsPerSecond}px`;
+        clipWarning.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> 卡 ${skill.clip.toFixed(3)}s`;
+        tGcd.appendChild(clipWarning);
+      }
+      
+      if (skill.idle >= 2.0) {
+        const idleWarning = document.createElement('div');
+        idleWarning.className = 'gcd-clip-warning gcd-idle-warning';
+        idleWarning.style.left = `${(skill.startTime + skill.duration + skill.clip + PREPULL_TIME) * pixelsPerSecond}px`;
+        idleWarning.style.width = `${skill.idle * pixelsPerSecond}px`;
+        idleWarning.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> 空轉 ${skill.idle.toFixed(3)}s`;
+        tGcd.appendChild(idleWarning);
+      }
+      
+      const originalSkill = skillsDatabase[p.jobId]?.skills.find(s => s.id === skill.skillId) || skill;
+      const tooltipSkill = { ...originalSkill, startTime: skill.startTime, playerName: p.name };
+      el.addEventListener('mousemove', (e) => showTooltip(e, tooltipSkill));
+      el.addEventListener('mouseleave', hideTooltip);
+      
+      tGcd.appendChild(el);
+    });
+    
+    // Draw oGCD skills
+    const ogcds = p.skills.filter(s => s.track === 'ogcd');
+    ogcds.forEach(skill => {
+      const el = document.createElement('div');
+      el.className = 'ogcd-pill';
+      el.style.left = `${(skill.startTime + PREPULL_TIME) * pixelsPerSecond}px`;
+      
+      const isRole = skill.skillId.includes('tank_action') || skill.skillId.includes('healer_action') || skill.skillId.includes('melee_action') || skill.skillId.includes('ranged_action') || skill.skillId.includes('caster_action');
+      if (isRole) el.classList.add('role-type');
+      
+      el.innerHTML = `
+        <img src="${skill.icon}" alt="${skill.name}">
+        <span class="ogcd-pill-name">${skill.name}</span>
+      `;
+      
+      const originalSkill = skillsDatabase[p.jobId]?.skills.find(s => s.id === skill.skillId) || skill;
+      const tooltipSkill = { ...originalSkill, startTime: skill.startTime, playerName: p.name };
+      el.addEventListener('mousemove', (e) => showTooltip(e, tooltipSkill));
+      el.addEventListener('mouseleave', hideTooltip);
+      
+      tOgcd.appendChild(el);
+    });
+  });
+}
+
+window.renderCompareTimeline = renderCompareTimeline;

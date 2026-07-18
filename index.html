@@ -42,12 +42,13 @@
         <div class="header-tabs">
           <button id="tab-btn-mit" class="header-tab-btn active"><i class="fa-solid fa-users"></i> 團隊技能排軸</button>
           <button id="tab-btn-timeline" class="header-tab-btn"><i class="fa-solid fa-user-ninja"></i> 個人技能排軸</button>
+          <button id="tab-btn-compare" class="header-tab-btn"><i class="fa-solid fa-code-compare"></i> 多人施法比較</button>
         </div>
       </div>
       
       <!-- Toolbar Controls (Starts hidden because Tab 1 is default) -->
       <div id="timeline-toolbar" class="toolbar hidden">
-        <div class="control-group">
+        <div class="control-group" id="job-select-group">
           <label for="job-select"><i class="fa-solid fa-shield-halved"></i> 選擇職業:</label>
           <select id="job-select" class="custom-select">
             <option value="" disabled selected>請選擇職業</option>
@@ -66,7 +67,7 @@
           </select>
         </div>
 
-        <div class="divider"></div>
+        <div class="divider" id="toolbar-divider"></div>
 
         <div class="btn-group">
           <button id="btn-cloud-save" class="btn btn-primary" title="保存計畫紀錄"><i class="fa-solid fa-cloud-arrow-up"></i> 保存紀錄</button>
@@ -265,6 +266,65 @@
         </div>
       </section>
 
+      </main>
+    </div>
+    
+    <!-- Tab 3 View: Multiplayer Cast Comparison Workspace -->
+    <div id="compare-workspace-view" class="hidden">
+      <!-- Main Content Workspace -->
+      <main class="app-workspace">
+      
+      <!-- Left Sidebar: Player Names & GCD Settings -->
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <h2>已匯入成員</h2>
+        </div>
+        <div class="skills-list-container" id="compare-players-list">
+          <div class="empty-state">
+            <i class="fa-solid fa-users"></i>
+            <p>請使用匯入按鈕匯入 FFXIV Log</p>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Center & Right: Timeline Comparison Editor -->
+      <section class="timeline-section">
+        
+        <!-- Timeline Workspace Area -->
+        <div class="timeline-container-outer">
+          
+          <!-- Timeline View Ruler and tracks -->
+          <div class="timeline-editor" id="compare-timeline-editor">
+            <!-- Ruler Ticks -->
+            <div class="timeline-ruler" id="compare-timeline-ruler"></div>
+            
+            <!-- Boss Mechanics Track -->
+            <div class="boss-track-outer">
+              <div class="boss-track" id="compare-boss-track">
+                <!-- Boss mechanics markers are placed here -->
+              </div>
+            </div>
+
+            <!-- Dynamic Comparison Tracks Container -->
+            <div id="compare-timeline-tracks-container" style="display:flex; flex-direction:column; width:100%;">
+              <!-- Comparison player tracks will be rendered dynamically here -->
+            </div>
+
+            <!-- Active Playhead Line -->
+            <div class="playhead" id="compare-playhead"></div>
+            <!-- Hover Guide Line -->
+            <div class="hover-guide" id="compare-hover-guide"></div>
+          </div>
+        </div>
+
+        <!-- Length display bar (no trash bin or save/cloud controls, no export) -->
+        <div class="timeline-bottom-bar">
+          <div class="timeline-status-info">
+            <span id="compare-timeline-length-display"><i class="fa-regular fa-clock"></i> 軸總長: 0s</span>
+          </div>
+        </div>
+      </section>
+      
       </main>
     </div>
     
