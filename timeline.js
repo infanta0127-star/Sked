@@ -705,6 +705,12 @@ function setupEventListeners() {
   const outerContainers = document.querySelectorAll('.timeline-container-outer');
   outerContainers.forEach(container => {
     container.addEventListener('wheel', (e) => {
+      // If team planner is in vertical grid mode, let it scroll vertically natively
+      const mitEditor = container.querySelector('#mit-timeline-editor');
+      if (mitEditor && mitEditor.classList.contains('vertical-grid-mode')) {
+        return;
+      }
+      
       if (e.deltaY !== 0) {
         e.preventDefault();
         container.scrollLeft += e.deltaY;
