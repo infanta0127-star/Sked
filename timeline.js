@@ -206,6 +206,54 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!response.ok) throw new Error('無法讀取技能資料庫！請先執行 scraper.js');
     skillsDatabase = await response.json();
     
+    // Inject general Potion skill to all jobs
+    const potionSkill = {
+      id: "potion",
+      name: "爆發藥",
+      level: "1級",
+      classification: "能力",
+      cast: "即時",
+      recast: "270秒",
+      cost: "-",
+      range: "0m 0m",
+      effect: "使用爆發藥提高屬性 (持續 30 秒)",
+      icon: "https://xivapi.com/i/020000/020701_hr1.png",
+      aliases: [
+        "grade 2 gemdraught of intelligence",
+        "grade 2 gemdraught of strength",
+        "grade 2 gemdraught of dexterity",
+        "grade 2 gemdraught of mind",
+        "grade 1 gemdraught of intelligence",
+        "grade 1 gemdraught of strength",
+        "grade 1 gemdraught of dexterity",
+        "grade 1 gemdraught of mind",
+        "grade 8 tincture of strength",
+        "grade 8 tincture of dexterity",
+        "grade 8 tincture of intelligence",
+        "grade 8 tincture of mind",
+        "grade 7 tincture of strength",
+        "grade 7 tincture of dexterity",
+        "grade 7 tincture of intelligence",
+        "grade 7 tincture of mind",
+        "grade 6 tincture of strength",
+        "grade 6 tincture of dexterity",
+        "grade 6 tincture of intelligence",
+        "grade 6 tincture of mind",
+        "grade 5 tincture of strength",
+        "grade 5 tincture of dexterity",
+        "grade 5 tincture of intelligence",
+        "grade 5 tincture of mind",
+        "potion",
+        "tincture",
+        "gemdraught"
+      ]
+    };
+    for (const jobKey in skillsDatabase) {
+      if (skillsDatabase[jobKey] && skillsDatabase[jobKey].skills) {
+        skillsDatabase[jobKey].skills.push(potionSkill);
+      }
+    }
+    
     // 嘗試讀取副本時間軸索引檔
     try {
       const dutyResp = await fetch('./data/duties/index.json');
@@ -2305,6 +2353,34 @@ function importFflogsEvents(text, filterPlayer, clearTimeline, targetTimelineId 
     "lord of crowns": "王冠之領主",
     "lady of crowns": "王冠之貴婦",
     "crown play": "小奧秘卡",
+    "grade 2 gemdraught of intelligence": "爆發藥",
+    "grade 2 gemdraught of strength": "爆發藥",
+    "grade 2 gemdraught of dexterity": "爆發藥",
+    "grade 2 gemdraught of mind": "爆發藥",
+    "grade 1 gemdraught of intelligence": "爆發藥",
+    "grade 1 gemdraught of strength": "爆發藥",
+    "grade 1 gemdraught of dexterity": "爆發藥",
+    "grade 1 gemdraught of mind": "爆發藥",
+    "grade 8 tincture of strength": "爆發藥",
+    "grade 8 tincture of dexterity": "爆發藥",
+    "grade 8 tincture of intelligence": "爆發藥",
+    "grade 8 tincture of mind": "爆發藥",
+    "grade 7 tincture of strength": "爆發藥",
+    "grade 7 tincture of dexterity": "爆發藥",
+    "grade 7 tincture of intelligence": "爆發藥",
+    "grade 7 tincture of mind": "爆發藥",
+    "grade 6 tincture of strength": "爆發藥",
+    "grade 6 tincture of dexterity": "爆發藥",
+    "grade 6 tincture of intelligence": "爆發藥",
+    "grade 6 tincture of mind": "爆發藥",
+    "grade 5 tincture of strength": "爆發藥",
+    "grade 5 tincture of dexterity": "爆發藥",
+    "grade 5 tincture of intelligence": "爆發藥",
+    "grade 5 tincture of mind": "爆發藥",
+    "potion": "爆發藥",
+    "tincture": "爆發藥",
+    "gemdraught": "爆發藥",
+    "爆发药": "爆發藥",
     
     // Healer role actions
     "repose": "沉靜",
@@ -2359,7 +2435,8 @@ function importFflogsEvents(text, filterPlayer, clearTimeline, targetTimelineId 
 
   // Helper function to resolve skill name to Traditional Chinese database name
   function resolveSkillName(rawName) {
-    const lower = rawName.toLowerCase();
+    const cleaned = rawName.replace(/\[HQ\]/gi, '').trim();
+    const lower = cleaned.toLowerCase();
     
     // Direct match in translation table
     if (skillTranslation[lower]) {
@@ -2367,7 +2444,7 @@ function importFflogsEvents(text, filterPlayer, clearTimeline, targetTimelineId 
     }
     
     // Direct check if it matches database skill name (Traditional Chinese)
-    const exactMatch = jobDb.skills.find(s => s.name === rawName);
+    const exactMatch = jobDb.skills.find(s => s.name === cleaned);
     if (exactMatch) return exactMatch.name;
 
     // Check with normalized name
