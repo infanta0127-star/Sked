@@ -4028,13 +4028,14 @@ async function fflogsApiImport() {
     // Deduplicate begins casting vs casts
     const uniqueEvents = [];
     const castHistory = {};
+    const lastPushedTime = {};
     for (const pe of parsedEvents) {
       const key = pe.skill.id;
       const castDuration = parseTimeToSeconds(pe.skill.cast);
+      let eventTime = pe.relSec;
+      
       if (pe.type === 'begincast') {
         pe.completionTime = pe.relSec + castDuration;
-        castHistory[key] = pe.relSec;
-        uniqueEvents.push(pe);
       } else {
         pe.completionTime = pe.relSec;
         const lastBegin = castHistory[key];
@@ -4055,9 +4056,23 @@ async function fflogsApiImport() {
         if (castDurationSec > 0) {
           adjustedTime = Math.max(-PREPULL_TIME, pe.relSec - castDurationSec);
         }
+        eventTime = adjustedTime;
         pe.relSec = adjustedTime;
-        uniqueEvents.push(pe);
       }
+
+      // Skip ghost/duplicate events for the same skill within 1.0s
+      if (lastPushedTime[key] !== undefined) {
+        const timeDiff = Math.abs(eventTime - lastPushedTime[key]);
+        if (timeDiff < 1.0) {
+          continue;
+        }
+      }
+
+      if (pe.type === 'begincast') {
+        castHistory[key] = pe.relSec;
+      }
+      lastPushedTime[key] = eventTime;
+      uniqueEvents.push(pe);
     }
 
     // Build raw entries
