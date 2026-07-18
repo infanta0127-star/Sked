@@ -103,8 +103,11 @@ let currentJobId = '';
 let currentDutyFile = '';
 let timelineGCDDuration = 2.50;
 let pixelsPerSecond = 60;
-let timelineSkills = []; // { instanceId, skillId, name, icon, classification, cast, recast, startTime, duration, track, parentGcdId, relativeOffset, clip }
+let timelineSkills = []; // { instanceId, skillId, name, icon, classification, cast, recast, startTime, duration, track, parentGcdId, relativeOffset, clip, timelineId }
 let bossMechanics = [];  // { id, time, name }
+let importedPlayerName = null; // Name of the imported player from log API / paste
+let activeTimelinesCount = 1;  // Support up to 3 timelines
+let timelinePlayers = [null, null, null]; // Player name for each timeline
 let playbackState = { isPlaying: false, currentTime: -PREPULL_TIME, animationFrameId: null, startTimeStamp: 0 };
 let draggedItem = null;  // { source: 'sidebar'|'timeline', skillId/instanceId, type: 'skill'|'mechanic' }
 
@@ -146,9 +149,9 @@ const playhead = document.getElementById('playhead');
 
 // Tracks
 const bossTrack = document.getElementById('boss-track');
-const buffTrack = document.getElementById('buff-track');
-const gcdTrack = document.getElementById('gcd-track');
-const ogcdTrack = document.getElementById('ogcd-track');
+let buffTrack = null;
+let gcdTrack = null;
+let ogcdTrack = null;
 const dragTrash = document.getElementById('drag-trash');
 
 // Buttons
@@ -181,6 +184,7 @@ const exportOptionsClose = document.getElementById('export-options-close');
 const importOptMit = document.getElementById('import-opt-mit');
 const importOptJson = document.getElementById('import-opt-json');
 const importOptFflogs = document.getElementById('import-opt-fflogs');
+const importOptFflogsApi = document.getElementById('import-opt-fflogs-api');
 
 const exportOptJson = document.getElementById('export-opt-json');
 const exportOptText = document.getElementById('export-opt-text');
@@ -410,6 +414,9 @@ function setupEventListeners() {
     currentJobId = e.target.value;
     timelineSkills = [];
     bossMechanics = [];
+    importedPlayerName = null;
+    activeTimelinesCount = 1;
+    timelinePlayers = [null, null, null];
     loadJobSkills(currentJobId);
     recalculateTimeline();
     renderTimeline();
@@ -521,6 +528,17 @@ function setupEventListeners() {
     });
   }
 
+  if (importOptFflogsApi) {
+    importOptFflogsApi.addEventListener('click', () => {
+      importOptionsModal.classList.remove('active');
+      if (!currentJobId) {
+        alert('請先選擇職業再使用 FFLogs API 匯入！');
+        return;
+      }
+      openFFLogsApiModal();
+    });
+  }
+
   if (fflogsModalClose) {
     fflogsModalClose.addEventListener('click', () => fflogsModal.classList.remove('active'));
   }
@@ -539,17 +557,35 @@ function setupEventListeners() {
       const playerName = fflogsPlayerName.value.trim();
       const clearBefore = fflogsClearTimeline.checked;
       
-      try {
-        const count = importFflogsEvents(text, playerName, clearBefore);
-        if (count > 0) {
-          alert(`已成功解析並匯入 ${count} 個技能事件！`);
-          fflogsModal.classList.remove('active');
-        } else {
-          alert('解析失敗：找不到符合當前特職的技能事件。請確認您貼上的文字格式正確且包含您的特職技能。');
+      (async () => {
+        try {
+          let targetTimelineId = 1;
+          let autoClear = clearBefore;
+          
+          if (timelineSkills.length > 0) {
+            const choice = await promptImportTargetChoice();
+            if (!choice) return; // Cancelled
+            if (choice.action === 'new') {
+              activeTimelinesCount++;
+              targetTimelineId = activeTimelinesCount;
+              autoClear = false;
+            } else {
+              targetTimelineId = choice.timelineId;
+              autoClear = true;
+            }
+          }
+          
+          const count = importFflogsEvents(text, playerName, autoClear, targetTimelineId);
+          if (count > 0) {
+            alert(`已成功解析並匯入 ${count} 個技能事件！`);
+            fflogsModal.classList.remove('active');
+          } else {
+            alert('解析失敗：找不到符合當前特職的技能事件。請確認您貼上的文字格式正確且包含您的特職技能。');
+          }
+        } catch (err) {
+          alert(`匯入出錯: ${err.message}`);
         }
-      } catch (err) {
-        alert(`匯入出錯: ${err.message}`);
-      }
+      })();
     });
   }
 
@@ -578,6 +614,9 @@ function setupEventListeners() {
     if (confirm('確定要清空時間軸嗎？')) {
       timelineSkills = [];
       bossMechanics = [];
+      importedPlayerName = null;
+      activeTimelinesCount = 1;
+      timelinePlayers = [null, null, null];
       recalculateTimeline();
       renderTimeline();
       autoSave();
@@ -607,31 +646,44 @@ function setupEventListeners() {
 
   // Modal Close Events
   savesModalClose.addEventListener('click', () => savesModal.classList.remove('active'));
+  const choiceModal = document.getElementById('fflogs-import-choice-modal');
   window.addEventListener('click', (e) => {
     if (e.target === savesModal) savesModal.classList.remove('active');
     if (e.target === fflogsModal) fflogsModal.classList.remove('active');
     if (e.target === importOptionsModal) importOptionsModal.classList.remove('active');
     if (e.target === exportOptionsModal) exportOptionsModal.classList.remove('active');
+    if (e.target === choiceModal) choiceModal.classList.remove('active');
   });
 
-  // Drag and drop events for tracks
-  const tracks = [bossTrack, gcdTrack, ogcdTrack];
-  tracks.forEach(track => {
-    track.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      track.classList.add('drag-hover');
-    });
-
-    track.addEventListener('dragleave', () => {
-      track.classList.remove('drag-hover');
-    });
-
-    track.addEventListener('drop', (e) => {
-      e.preventDefault();
-      track.classList.remove('drag-hover');
-      handleDrop(e, track.dataset.trackType);
-    });
+  // Drag and drop events for tracks (Boss track only, GCD/oGCD bound dynamically)
+  bossTrack.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    bossTrack.classList.add('drag-hover');
   });
+  bossTrack.addEventListener('dragleave', () => {
+    bossTrack.classList.remove('drag-hover');
+  });
+  bossTrack.addEventListener('drop', (e) => {
+    e.preventDefault();
+    bossTrack.classList.remove('drag-hover');
+    handleDrop(e, bossTrack.dataset.trackType, 1);
+  });
+
+  // Add Timeline Track Button
+  const btnAddTimelineTrack = document.getElementById('btn-add-timeline-track');
+  if (btnAddTimelineTrack) {
+    btnAddTimelineTrack.addEventListener('click', () => {
+      if (activeTimelinesCount >= 3) {
+        showToast('⚠️ 最多只能新增 3 條時間軸記錄');
+        return;
+      }
+      activeTimelinesCount++;
+      recalculateTimeline();
+      renderTimeline();
+      autoSave();
+      showToast(`✅ 已新增排軸 ${activeTimelinesCount}`);
+    });
+  }
 
   // Trash Bin Drag-Drop
   dragTrash.addEventListener('dragover', (e) => {
@@ -840,102 +892,93 @@ function appendSkillToTimeline(skill) {
 
 // 6. Snapping & Weaving Calculation Engine
 function recalculateTimeline() {
-  const gcds = timelineSkills.filter(s => s.track === 'gcd').sort((a, b) => a.startTime - b.startTime);
-  const ogcds = timelineSkills.filter(s => s.track === 'ogcd');
-  
-  let nextAvailableGcdTime = -PREPULL_TIME;
-  
-  for (let i = 0; i < gcds.length; i++) {
-    const gcd = gcds[i];
+  for (let tId = 1; tId <= activeTimelinesCount; tId++) {
+    const gcds = timelineSkills.filter(s => s.track === 'gcd' && (s.timelineId || 1) === tId).sort((a, b) => a.startTime - b.startTime);
+    const ogcds = timelineSkills.filter(s => s.track === 'ogcd' && (s.timelineId || 1) === tId);
     
-    // 1. Magnetic snapping: GCDs can't overlap with the previous GCD
-    if (gcd.startTime < nextAvailableGcdTime) {
-      gcd.startTime = nextAvailableGcdTime;
-    }
+    let nextAvailableGcdTime = -PREPULL_TIME;
     
-    // Round to 1 decimal place to prevent floating point inaccuracies
-    gcd.startTime = Math.round(gcd.startTime * 10) / 10;
-    
-    const parsedRecast = parseTimeToSeconds(gcd.recast);
-    const parsedCast = parseTimeToSeconds(gcd.cast);
-    // If recast is >= 1.8s (standard GCDs or long cooldown GCD spells), we treat its timeline duration as standard GCD
-    // to prevent its long cooldown from blocking/delaying subsequent GCDs.
-    const recastVal = (parsedRecast >= 1.8) ? timelineGCDDuration : parsedRecast;
-    gcd.duration = Math.max(parsedCast, recastVal);
-    
-    // 2. Position all oGCDs parented to this GCD block
-    const myOgcds = ogcds.filter(o => o.parentGcdId === gcd.instanceId).sort((a, b) => a.relativeOffset - b.relativeOffset);
-    
-    let currentLockEnd = gcd.startTime + parsedCast;
-    
-    for (const ogcd of myOgcds) {
-      // Calculate absolute start time from relative offset
-      ogcd.startTime = gcd.startTime + ogcd.relativeOffset;
+    for (let i = 0; i < gcds.length; i++) {
+      const gcd = gcds[i];
       
-      // Can't cast oGCD before cast completes (clipping lock starts at cast completion)
-      if (ogcd.startTime < gcd.startTime + parsedCast) {
-        ogcd.startTime = gcd.startTime + parsedCast;
-        ogcd.relativeOffset = ogcd.startTime - gcd.startTime;
+      // 1. Magnetic snapping: GCDs can't overlap with the previous GCD
+      if (gcd.startTime < nextAvailableGcdTime) {
+        gcd.startTime = nextAvailableGcdTime;
       }
       
-      // Can't start before the previous animation lock ends
-      if (ogcd.startTime < currentLockEnd) {
-        ogcd.startTime = currentLockEnd;
-        ogcd.relativeOffset = ogcd.startTime - gcd.startTime;
+      // Round to 1 decimal place to prevent floating point inaccuracies
+      gcd.startTime = Math.round(gcd.startTime * 10) / 10;
+      
+      const parsedRecast = parseTimeToSeconds(gcd.recast);
+      const parsedCast = parseTimeToSeconds(gcd.cast);
+      const recastVal = (parsedRecast >= 1.8) ? timelineGCDDuration : parsedRecast;
+      gcd.duration = Math.max(parsedCast, recastVal);
+      
+      // 2. Position all oGCDs parented to this GCD block
+      const myOgcds = ogcds.filter(o => o.parentGcdId === gcd.instanceId).sort((a, b) => a.relativeOffset - b.relativeOffset);
+      
+      let currentLockEnd = gcd.startTime + parsedCast;
+      
+      for (const ogcd of myOgcds) {
+        ogcd.startTime = gcd.startTime + ogcd.relativeOffset;
+        
+        if (ogcd.startTime < gcd.startTime + parsedCast) {
+          ogcd.startTime = gcd.startTime + parsedCast;
+          ogcd.relativeOffset = ogcd.startTime - gcd.startTime;
+        }
+        
+        if (ogcd.startTime < currentLockEnd) {
+          ogcd.startTime = currentLockEnd;
+          ogcd.relativeOffset = ogcd.startTime - gcd.startTime;
+        }
+        
+        ogcd.startTime = Math.round(ogcd.startTime * 10) / 10;
+        ogcd.relativeOffset = Math.round(ogcd.relativeOffset * 10) / 10;
+        currentLockEnd = ogcd.startTime + 0.6;
       }
       
-      // Round oGCD times
-      ogcd.startTime = Math.round(ogcd.startTime * 10) / 10;
-      ogcd.relativeOffset = Math.round(ogcd.relativeOffset * 10) / 10;
-      
-      // Update lock end (standard FFXIV animation lock is 0.6s)
-      currentLockEnd = ogcd.startTime + 0.6;
-    }
-    
-    // 3. Check for GCD clipping
-    const normalGcdEnd = gcd.startTime + gcd.duration;
-    if (currentLockEnd > normalGcdEnd) {
-      const calculatedClip = currentLockEnd - normalGcdEnd;
-      if (calculatedClip >= 2.0) {
-        // If the gap is >= 2.0s, it's idling, not clipping!
+      // 3. Check for GCD clipping
+      const normalGcdEnd = gcd.startTime + gcd.duration;
+      if (currentLockEnd > normalGcdEnd) {
+        const calculatedClip = currentLockEnd - normalGcdEnd;
+        if (calculatedClip >= 2.0) {
+          gcd.clip = 0;
+          nextAvailableGcdTime = normalGcdEnd;
+        } else {
+          gcd.clip = calculatedClip;
+          nextAvailableGcdTime = currentLockEnd;
+        }
+      } else {
         gcd.clip = 0;
         nextAvailableGcdTime = normalGcdEnd;
-      } else {
-        gcd.clip = calculatedClip;
-        nextAvailableGcdTime = currentLockEnd; // Forces next GCD to be delayed
       }
-    } else {
-      gcd.clip = 0;
-      nextAvailableGcdTime = normalGcdEnd; // Next GCD starts on schedule
+      nextAvailableGcdTime = Math.round(nextAvailableGcdTime * 10) / 10;
     }
     
-    // Round next available time
-    nextAvailableGcdTime = Math.round(nextAvailableGcdTime * 10) / 10;
-  }
-
-  // 3b. Calculate idle times between GCDs
-  for (let i = 0; i < gcds.length; i++) {
-    const gcd = gcds[i];
-    const normalGcdEnd = gcd.startTime + gcd.duration;
-    const currentLockEnd = normalGcdEnd + gcd.clip;
-    const availableTime = Math.round(Math.max(normalGcdEnd, currentLockEnd) * 10) / 10;
-    
-    if (i < gcds.length - 1) {
-      const nextGcd = gcds[i + 1];
-      if (nextGcd.startTime > availableTime) {
-        gcd.idle = Math.round((nextGcd.startTime - availableTime) * 10) / 10;
+    // 3b. Calculate idle times between GCDs
+    for (let i = 0; i < gcds.length; i++) {
+      const gcd = gcds[i];
+      const normalGcdEnd = gcd.startTime + gcd.duration;
+      const currentLockEnd = normalGcdEnd + gcd.clip;
+      const availableTime = Math.round(Math.max(normalGcdEnd, currentLockEnd) * 10) / 10;
+      
+      if (i < gcds.length - 1) {
+        const nextGcd = gcds[i + 1];
+        if (nextGcd.startTime > availableTime) {
+          gcd.idle = Math.round((nextGcd.startTime - availableTime) * 10) / 10;
+        } else {
+          gcd.idle = 0;
+        }
       } else {
         gcd.idle = 0;
       }
-    } else {
-      gcd.idle = 0;
     }
-  }
-
-  // 4. Place orphaned oGCDs absolutely
-  const orphanOgcds = ogcds.filter(o => !o.parentGcdId);
-  for (const ogcd of orphanOgcds) {
-    ogcd.startTime = Math.round(ogcd.startTime * 10) / 10;
+    
+    // 4. Place orphaned oGCDs absolutely
+    const orphanOgcds = ogcds.filter(o => !o.parentGcdId);
+    for (const ogcd of orphanOgcds) {
+      ogcd.startTime = Math.round(ogcd.startTime * 10) / 10;
+    }
   }
 }
 
@@ -943,11 +986,92 @@ function recalculateTimeline() {
 function renderTimeline() {
   document.documentElement.style.setProperty('--pixels-per-second', `${pixelsPerSecond}px`);
   
-  // Clean Tracks
-  gcdTrack.innerHTML = '<div class="gcd-slots-bg" id="gcd-slots-bg"></div>';
-  ogcdTrack.innerHTML = '';
+  // Update the Add Track button state
+  const btnAddTimelineTrack = document.getElementById('btn-add-timeline-track');
+  if (btnAddTimelineTrack) {
+    btnAddTimelineTrack.disabled = (activeTimelinesCount >= 3);
+  }
+
+  // 0. Render Dynamic Tracks
+  const tracksContainer = document.getElementById('personal-timeline-tracks-container');
+  if (tracksContainer) {
+    tracksContainer.innerHTML = '';
+    for (let i = 1; i <= activeTimelinesCount; i++) {
+      const playerName = timelinePlayers[i - 1];
+      const isImported = playerName !== null;
+      const hoverTitle = isImported ? `匯入玩家: ${playerName}` : `自訂排軸 ${i}`;
+      const userTag = isImported ? `<span style="font-size:10px; color:#00f0ff; margin-left:6px;" title="${hoverTitle}"><i class="fa-solid fa-user-tag"></i> ${playerName}</span>` : '';
+      
+      const groupHtml = `
+        <div class="timeline-group" data-timeline-id="${i}" style="border-bottom: 2px solid rgba(255,255,255,0.05); margin-bottom: 8px;">
+          <div class="timeline-group-header" style="display:flex; height:24px; background:rgba(255,255,255,0.03); align-items:center;" title="${hoverTitle}">
+            <div class="track-info" style="width:180px; flex-shrink:0; background:#0f1118; border-right:2px solid rgba(255,255,255,0.1); height:100%; display:flex; align-items:center; padding:0 15px; font-size:11px; font-weight:bold; color:var(--color-text-muted); sticky:left; left:0; z-index:5; box-shadow:4px 0 10px rgba(0,0,0,0.2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+              排軸 ${i} ${userTag}
+            </div>
+            <div style="flex:1; border-right: 1px solid rgba(255,255,255,0.05); height:100%;"></div>
+          </div>
+          
+          <!-- Buff Alignment Track -->
+          <div class="timeline-track-wrapper buff-track-wrapper">
+            <div class="track-info">
+              <span class="track-title"><i class="fa-solid fa-wand-magic-sparkles"></i> 團輔覆蓋 (Buffs)</span>
+            </div>
+            <div class="timeline-track track-content" id="buff-track-${i}" data-track-type="buff" data-timeline-id="${i}"></div>
+          </div>
+          
+          <!-- GCD Skill Track -->
+          <div class="timeline-track-wrapper gcd-track-wrapper">
+            <div class="track-info">
+              <span class="track-title"><i class="fa-solid fa-bolt"></i> 戰技 / 魔法 (GCD)</span>
+            </div>
+            <div class="timeline-track track-content" id="gcd-track-${i}" data-track-type="gcd" data-timeline-id="${i}">
+              <div class="gcd-slots-bg" id="gcd-slots-bg-${i}"></div>
+            </div>
+          </div>
+          
+          <!-- oGCD Skill Track -->
+          <div class="timeline-track-wrapper ogcd-track-wrapper">
+            <div class="track-info">
+              <span class="track-title"><i class="fa-solid fa-hourglass-start"></i> 能力技 (oGCD)</span>
+            </div>
+            <div class="timeline-track track-content" id="ogcd-track-${i}" data-track-type="ogcd" data-timeline-id="${i}"></div>
+          </div>
+        </div>
+      `;
+      tracksContainer.innerHTML += groupHtml;
+    }
+  }
+
+  // 0b. Bind drag-drop listeners to the dynamically created tracks
+  for (let i = 1; i <= activeTimelinesCount; i++) {
+    const tGcd = document.getElementById(`gcd-track-${i}`);
+    const tOgcd = document.getElementById(`ogcd-track-${i}`);
+    
+    [tGcd, tOgcd].forEach(track => {
+      if (!track) return;
+      track.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        track.classList.add('drag-hover');
+      });
+      track.addEventListener('dragleave', () => {
+        track.classList.remove('drag-hover');
+      });
+      track.addEventListener('drop', (e) => {
+        e.preventDefault();
+        track.classList.remove('drag-hover');
+        const tId = parseInt(track.dataset.timelineId) || 1;
+        handleDrop(e, track.dataset.trackType, tId);
+      });
+    });
+  }
+
+  // 0c. Set backward compatibility track references
+  buffTrack = document.getElementById('buff-track-1');
+  gcdTrack = document.getElementById('gcd-track-1');
+  ogcdTrack = document.getElementById('ogcd-track-1');
+
+  // Clean static tracks (boss only)
   bossTrack.innerHTML = '';
-  buffTrack.innerHTML = '';
   
   // Remove existing boss lines
   const lines = timelineEditor.querySelectorAll('.boss-line');
@@ -967,9 +1091,10 @@ function renderTimeline() {
   
   // 2. Draw Ticks in Ruler
   timelineRuler.innerHTML = '';
+
   for (let t = -PREPULL_TIME; t <= maxTime; t += 0.5) {
     const tick = document.createElement('div');
-    tick.style.left = `${TRACK_INFO_WIDTH + (t + PREPULL_TIME) * pixelsPerSecond}px`;
+    tick.style.left = `${180 + (t + PREPULL_TIME) * pixelsPerSecond}px`;
     
     if (t % 5 === 0) {
       tick.className = 'ruler-tick major';
@@ -977,7 +1102,6 @@ function renderTimeline() {
     } else if (t % 1 === 0) {
       tick.className = 'ruler-tick minor';
     } else if (pixelsPerSecond >= 80) {
-      // Show sub-second markers at high zoom levels
       tick.className = 'ruler-tick subminor';
     } else {
       continue;
@@ -995,7 +1119,7 @@ function renderTimeline() {
     
     el.innerHTML = `
       <div class="mechanic-time">${formatTime(mech.time)}</div>
-      <div class="mechanic-name">${mech.name}</div>
+      <div class="mechanic-name" title="${mech.name}">${mech.name}</div>
     `;
     
     // Drag handlers
@@ -1004,9 +1128,9 @@ function renderTimeline() {
       e.dataTransfer.setData('text/plain', mech.id);
     });
     
-    // Double click to rename
+    // Click to rename
     el.addEventListener('dblclick', () => {
-      const newName = prompt('修改機制名稱:', mech.name);
+      const newName = prompt('請輸入新的機制名稱:', mech.name);
       if (newName) {
         mech.name = newName;
         renderTimeline();
@@ -1019,14 +1143,14 @@ function renderTimeline() {
     // Draw vertical guide line
     const guide = document.createElement('div');
     guide.className = 'boss-line';
-    guide.style.left = `${TRACK_INFO_WIDTH + (mech.time + PREPULL_TIME) * pixelsPerSecond}px`;
+    guide.style.left = `${180 + (mech.time + PREPULL_TIME) * pixelsPerSecond}px`;
     timelineEditor.appendChild(guide);
   });
   
   // 3b. Draw Combat Start Line (0.0s)
   const startLine = document.createElement('div');
   startLine.className = 'combat-start-line';
-  startLine.style.left = `${TRACK_INFO_WIDTH + PREPULL_TIME * pixelsPerSecond}px`;
+  startLine.style.left = `${180 + PREPULL_TIME * pixelsPerSecond}px`;
   
   const startLabel = document.createElement('span');
   startLabel.className = 'combat-start-label';
@@ -1045,7 +1169,9 @@ function renderTimeline() {
       overlay.style.backgroundColor = buffConfig.color;
       overlay.style.borderColor = buffConfig.color.replace('0.45', '0.8').replace('0.4', '0.8');
       overlay.innerHTML = `<img src="${skill.icon}" style="width:16px;height:16px;margin-right:6px;border-radius:3px;"> ${buffConfig.label}`;
-      buffTrack.appendChild(overlay);
+      
+      const targetBuffTrack = document.getElementById('buff-track-' + (skill.timelineId || 1)) || buffTrack;
+      if (targetBuffTrack) targetBuffTrack.appendChild(overlay);
     }
   });
 
@@ -1064,14 +1190,7 @@ function renderTimeline() {
       <span class="placed-skill-name">${skill.name}</span>
     `;
     
-    // Cast progress bar
     const castTime = parseTimeToSeconds(skill.cast);
-    if (castTime > 0) {
-      const castBar = document.createElement('div');
-      castBar.className = 'cast-indicator';
-      castBar.style.width = `${castTime * pixelsPerSecond}px`;
-      el.appendChild(castBar);
-    }
     
     // Recast locking mesh
     if (skill.duration > castTime) {
@@ -1082,6 +1201,8 @@ function renderTimeline() {
       el.appendChild(recastMesh);
     }
     
+    const targetGcdTrack = document.getElementById('gcd-track-' + (skill.timelineId || 1)) || gcdTrack;
+
     // Red clip overlay placed in the gap after the current GCD block
     if (skill.clip > 0) {
       const clipWarning = document.createElement('div');
@@ -1089,7 +1210,7 @@ function renderTimeline() {
       clipWarning.style.left = `${(skill.startTime + skill.duration + PREPULL_TIME) * pixelsPerSecond}px`;
       clipWarning.style.width = `${skill.clip * pixelsPerSecond}px`;
       clipWarning.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> 卡 ${skill.clip.toFixed(1)}s`;
-      gcdTrack.appendChild(clipWarning);
+      if (targetGcdTrack) targetGcdTrack.appendChild(clipWarning);
     }
 
     // Amber idle warning placed in the empty gap before the next GCD block
@@ -1099,7 +1220,7 @@ function renderTimeline() {
       idleWarning.style.left = `${(skill.startTime + skill.duration + skill.clip + PREPULL_TIME) * pixelsPerSecond}px`;
       idleWarning.style.width = `${skill.idle * pixelsPerSecond}px`;
       idleWarning.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> 空轉 ${skill.idle.toFixed(1)}s`;
-      gcdTrack.appendChild(idleWarning);
+      if (targetGcdTrack) targetGcdTrack.appendChild(idleWarning);
     }
     
     // Drag handlers
@@ -1113,7 +1234,7 @@ function renderTimeline() {
     el.addEventListener('mousemove', (e) => showTooltip(e, originalSkill));
     el.addEventListener('mouseleave', hideTooltip);
     
-    gcdTrack.appendChild(el);
+    if (targetGcdTrack) targetGcdTrack.appendChild(el);
   });
   
   // 6. Draw Placed oGCDs (Pills)
@@ -1147,7 +1268,8 @@ function renderTimeline() {
     el.addEventListener('mousemove', (e) => showTooltip(e, originalSkill));
     el.addEventListener('mouseleave', hideTooltip);
     
-    ogcdTrack.appendChild(el);
+    const targetOgcdTrack = document.getElementById('ogcd-track-' + (skill.timelineId || 1)) || ogcdTrack;
+    if (targetOgcdTrack) targetOgcdTrack.appendChild(el);
   });
   
   // 7. Update Status Indicator Panel
@@ -1382,11 +1504,15 @@ function getExportableData() {
     jobId: currentJobId,
     gcd: timelineGCDDuration,
     dutyFile: currentDutyFile,
+    importedPlayerName: timelinePlayers[0],
+    activeTimelinesCount: activeTimelinesCount,
+    timelinePlayers: timelinePlayers,
     skills: timelineSkills.map(s => ({
       skillId: s.skillId,
       startTime: s.startTime,
       parentGcdId: s.parentGcdId,
-      relativeOffset: s.relativeOffset
+      relativeOffset: s.relativeOffset,
+      timelineId: s.timelineId || 1
     })),
     mechanics: bossMechanics
   };
@@ -1409,6 +1535,10 @@ function loadPlanData(data) {
   
   loadJobSkills(currentJobId);
   
+  activeTimelinesCount = data.activeTimelinesCount || 1;
+  timelinePlayers = data.timelinePlayers || [data.importedPlayerName || null, null, null];
+  importedPlayerName = timelinePlayers[0];
+
   // Reconstruct timeline skills
   const job = skillsDatabase[currentJobId];
   timelineSkills = [];
@@ -1436,7 +1566,8 @@ function loadPlanData(data) {
       parentGcdId: s.parentGcdId,
       relativeOffset: s.relativeOffset,
       clip: 0,
-      idle: 0
+      idle: 0,
+      timelineId: s.timelineId || 1
     });
   });
   
@@ -1491,11 +1622,15 @@ function saveTimelineProfile() {
     jobId: currentJobId,
     gcd: timelineGCDDuration,
     dutyFile: currentDutyFile,
+    importedPlayerName: timelinePlayers[0],
+    activeTimelinesCount: activeTimelinesCount,
+    timelinePlayers: timelinePlayers,
     skills: timelineSkills.map(s => ({
       skillId: s.skillId,
       startTime: s.startTime,
       parentGcdId: s.parentGcdId,
-      relativeOffset: s.relativeOffset
+      relativeOffset: s.relativeOffset,
+      timelineId: s.timelineId || 1
     })),
     mechanics: bossMechanics,
     updatedAt: new Date().toISOString()
@@ -1940,7 +2075,7 @@ function importTimelineJSON(e) {
   reader.readAsText(file);
 }
 
-function importFflogsEvents(text, filterPlayer, clearTimeline) {
+function importFflogsEvents(text, filterPlayer, clearTimeline, targetTimelineId = 1) {
   if (!currentJobId) throw new Error('請先選擇特職');
   const jobDb = skillsDatabase[currentJobId];
   if (!jobDb) throw new Error('技能資料庫中找不到該特職資料');
@@ -2200,6 +2335,8 @@ function importFflogsEvents(text, filterPlayer, clearTimeline) {
     targetPlayer = maxActor;
     console.log('Auto-detected target player from log:', targetPlayer);
   }
+  importedPlayerName = targetPlayer || null;
+  timelinePlayers[targetTimelineId - 1] = targetPlayer || null;
 
   // Filter events by player (if targetPlayer is determined)
   let filteredEvents = matchedEvents;
@@ -2287,7 +2424,7 @@ function importFflogsEvents(text, filterPlayer, clearTimeline) {
 
   // Clear timeline if requested
   if (clearTimeline) {
-    timelineSkills = [];
+    timelineSkills = timelineSkills.filter(s => (s.timelineId || 1) !== targetTimelineId);
   }
 
   // Parent oGCDs to preceding GCDs
@@ -2327,7 +2464,8 @@ function importFflogsEvents(text, filterPlayer, clearTimeline) {
       parentGcdId: s.parentGcdId,
       relativeOffset: Math.round(s.relativeOffset * 10) / 10,
       clip: 0,
-      idle: 0
+      idle: 0,
+      timelineId: targetTimelineId
     });
   });
 
@@ -2514,17 +2652,17 @@ async function downloadTimelineImage() {
     ctx.strokeStyle = '#ff3333';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.roundRect(x, 45, 120, 48, 6);
+    ctx.roundRect(x, 50, 96, 36, 6);
     ctx.fill();
     ctx.stroke();
     
     ctx.fillStyle = '#ffb3b3';
-    ctx.font = 'bold 11px sans-serif';
-    ctx.fillText(mech.name, x + 8, 82);
+    ctx.font = 'bold 10px sans-serif';
+    ctx.fillText(mech.name, x + 6, 77);
     
     ctx.fillStyle = '#94a3b8';
-    ctx.font = '9px monospace';
-    ctx.fillText(formatTime(mech.time), x + 8, 60);
+    ctx.font = '8px monospace';
+    ctx.fillText(formatTime(mech.time), x + 6, 62);
   });
   
   // 2. Draw Buff Overlays
@@ -2762,8 +2900,14 @@ async function saveIndivPlanToSupabase() {
       currentIndivPlanName = name.trim();
 
       const skillsToSave = [...timelineSkills];
-      if (currentDutyFile) {
-        skillsToSave.push({ isMetadata: true, dutyFile: currentDutyFile });
+      if (currentDutyFile || activeTimelinesCount > 1 || timelinePlayers.some(p => p !== null)) {
+        skillsToSave.push({ 
+          isMetadata: true, 
+          dutyFile: currentDutyFile, 
+          player: timelinePlayers[0],
+          activeTimelinesCount: activeTimelinesCount,
+          timelinePlayers: timelinePlayers
+        });
       }
 
       const { data, error } = await sb.from('individual_plans')
@@ -2852,8 +2996,14 @@ async function loadIndivPlansModal() {
             if (ok) {
               try {
                 const skillsToSave = [...timelineSkills];
-                if (currentDutyFile) {
-                  skillsToSave.push({ isMetadata: true, dutyFile: currentDutyFile });
+                if (currentDutyFile || activeTimelinesCount > 1 || timelinePlayers.some(p => p !== null)) {
+                  skillsToSave.push({ 
+                    isMetadata: true, 
+                    dutyFile: currentDutyFile, 
+                    player: timelinePlayers[0],
+                    activeTimelinesCount: activeTimelinesCount,
+                    timelinePlayers: timelinePlayers
+                  });
                 }
                 const { error: updErr } = await sb.from('individual_plans')
                   .update({
@@ -2947,6 +3097,9 @@ async function loadIndivPlanById(planId) {
 
     const meta = (plan.skills || []).find(s => s.isMetadata);
     currentDutyFile = meta ? meta.dutyFile : '';
+    importedPlayerName = meta ? meta.player : null;
+    activeTimelinesCount = meta && meta.activeTimelinesCount ? meta.activeTimelinesCount : 1;
+    timelinePlayers = meta && meta.timelinePlayers ? meta.timelinePlayers : [importedPlayerName, null, null];
     
     if (dutySelect) {
       dutySelect.value = currentDutyFile;
@@ -3182,3 +3335,554 @@ function showUpdateNotification() {
 // Start checking
 initVersionCheck();
 
+
+// ============================================================
+// FFLogs API Import Module
+// ============================================================
+const FFLOGS_EDGE_FN = 'https://bvsvmuktyhkoekjamwkm.supabase.co/functions/v1/fflogs-proxy';
+
+// --- GraphQL helper ---
+async function fflogsQuery(query, variables = {}) {
+  const res = await fetch(FFLOGS_EDGE_FN, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query, variables }),
+  });
+  if (!res.ok) throw new Error(`Edge Function error: ${res.status}`);
+  const json = await res.json();
+  if (json.errors) throw new Error(json.errors.map(e => e.message).join(', '));
+  return json.data;
+}
+
+// --- Extract report code from FFLogs URL ---
+function extractReportCode(url) {
+  const m = url.match(/reports\/([A-Za-z0-9]+)/);
+  return m ? m[1] : null;
+}
+
+// --- Modal state ---
+let fflogsApiReportCode = null;
+let fflogsApiFights = [];
+let fflogsApiPlayers = [];
+
+function openFFLogsApiModal() {
+  const modal = document.getElementById('fflogs-api-modal');
+  if (!modal) return;
+  // Reset state
+  document.getElementById('fflogs-api-url').value = '';
+  document.getElementById('fflogs-api-fight-section').style.display = 'none';
+  document.getElementById('fflogs-api-player-section').style.display = 'none';
+  document.getElementById('fflogs-api-options-section').style.display = 'none';
+  document.getElementById('fflogs-api-import').style.display = 'none';
+  fflogsApiSetStatus('');
+  fflogsApiReportCode = null;
+  modal.classList.add('active');
+}
+
+function fflogsApiSetStatus(msg, isError = false) {
+  const el = document.getElementById('fflogs-api-status');
+  if (!el) return;
+  el.style.display = msg ? 'block' : 'none';
+  el.style.color = isError ? '#ff6b6b' : 'var(--color-text-muted)';
+  el.innerHTML = msg;
+}
+
+// --- Fetch report fights + players ---
+// --- Parse playerDetails JSON blob into flat array ---
+function parsePlayerDetails(pd) {
+  const players = [];
+  if (!pd) return players;
+  // pd may be the raw JSON scalar returned by FFLogs
+  const details = pd?.data?.playerDetails || pd?.playerDetails || pd || {};
+  for (const role of Object.values(details)) {
+    if (Array.isArray(role)) {
+      for (const p of role) {
+        if (p.id && p.name) players.push({ id: p.id, name: p.name, type: p.type || '' });
+      }
+    }
+  }
+  return players;
+}
+
+// --- Populate player selector from a fight's playerDetails ---
+async function fflogsApiUpdatePlayers(fightId) {
+  const playerSel = document.getElementById('fflogs-api-player-select');
+  if (!playerSel || !fflogsApiReportCode) return;
+
+  playerSel.disabled = true;
+  playerSel.innerHTML = '<option>正在載入玩家...</option>';
+
+  try {
+    const data = await fflogsQuery(`
+      query($code: String!, $fightId: [Int]!) {
+        reportData {
+          report(code: $code) {
+            playerDetails(fightIDs: $fightId)
+          }
+        }
+      }
+    `, { code: fflogsApiReportCode, fightId: [fightId] });
+
+    const pd = data.reportData.report.playerDetails;
+    fflogsApiPlayers = parsePlayerDetails(pd);
+
+    playerSel.innerHTML = '';
+    if (fflogsApiPlayers.length > 0) {
+      fflogsApiPlayers.forEach(p => {
+        playerSel.innerHTML += `<option value="${p.id}">${p.name} (${p.type})</option>`;
+      });
+      document.getElementById('fflogs-api-player-section').style.display = 'flex';
+    } else {
+      playerSel.innerHTML = '<option value="0">全部玩家</option>';
+    }
+  } catch {
+    playerSel.innerHTML = '<option value="0">無法載入玩家</option>';
+  }
+  playerSel.disabled = false;
+}
+
+// --- Extract URL query parameters helper ---
+function extractUrlParams(url) {
+  try {
+    const urlObj = new URL(url);
+    const fight = urlObj.searchParams.get('fight');
+    const phase = urlObj.searchParams.get('phase');
+    return {
+      fight: fight ? parseInt(fight) : null,
+      phase: phase ? parseInt(phase) : null
+    };
+  } catch {
+    const fightMatch = url.match(/[?&]fight=(\d+)/);
+    const phaseMatch = url.match(/[?&]phase=(\d+)/);
+    return {
+      fight: fightMatch ? parseInt(fightMatch[1]) : null,
+      phase: phaseMatch ? parseInt(phaseMatch[1]) : null
+    };
+  }
+}
+
+async function fflogsApiFetchReport() {
+  const urlInput = document.getElementById('fflogs-api-url').value.trim();
+  const code = extractReportCode(urlInput);
+  if (!code) {
+    fflogsApiSetStatus('⚠️ 請輸入有效的 FFLogs 報告連結（例如 https://www.fflogs.com/reports/ABC123）', true);
+    return;
+  }
+  fflogsApiReportCode = code;
+  fflogsApiSetStatus('<i class="fa-solid fa-spinner fa-spin"></i> 正在查詢報告...');
+
+  try {
+    const data = await fflogsQuery(`
+      query($code: String!) {
+        reportData {
+          report(code: $code) {
+            fights(killType: All) {
+              id name kill startTime endTime
+            }
+          }
+        }
+      }
+    `, { code });
+
+    const report = data.reportData.report;
+    fflogsApiFights = report.fights || [];
+
+    if (fflogsApiFights.length === 0) {
+      fflogsApiSetStatus('⚠️ 找不到戰鬥段落', true);
+      return;
+    }
+
+    // Populate fight selector
+    const fightSel = document.getElementById('fflogs-api-fight-select');
+    fightSel.innerHTML = '';
+    fflogsApiFights.forEach(f => {
+      const dur = ((f.endTime - f.startTime) / 1000).toFixed(0);
+      const label = `${f.name}${f.kill ? ' ✅' : ''} (${Math.floor(dur/60)}:${String(dur%60).padStart(2,'0')})`;
+      fightSel.innerHTML += `<option value="${f.id}">${label}</option>`;
+    });
+    document.getElementById('fflogs-api-fight-section').style.display = 'flex';
+    document.getElementById('fflogs-api-options-section').style.display = 'flex';
+    document.getElementById('fflogs-api-import').style.display = 'inline-flex';
+
+    // Parse URL params for auto-select
+    const urlParams = extractUrlParams(urlInput);
+    let targetFightId = fflogsApiFights[0].id;
+
+    if (urlParams.fight !== null) {
+      const matchedFight = fflogsApiFights.find(f => f.id === urlParams.fight);
+      if (matchedFight) {
+        targetFightId = matchedFight.id;
+        fightSel.value = targetFightId;
+      }
+    }
+
+    // Load players for the target fight
+    await fflogsApiUpdatePlayers(targetFightId);
+
+    let statusMsg = `✅ 找到 ${fflogsApiFights.length} 個戰鬥段落，請選擇後匯入。`;
+    if (urlParams.phase !== null) {
+      statusMsg += ` (已偵測到第 ${urlParams.phase} 階段過濾，匯入時將自動對齊)`;
+    }
+    fflogsApiSetStatus(statusMsg);
+
+  } catch (err) {
+    fflogsApiSetStatus(`❌ 查詢失敗：${err.message}`, true);
+  }
+}
+
+// --- Fetch casts and import ---
+async function fflogsApiImport() {
+  const fightId = parseInt(document.getElementById('fflogs-api-fight-select').value);
+  const sourceId = parseInt(document.getElementById('fflogs-api-player-select').value);
+  const clearFirst = document.getElementById('fflogs-api-clear-timeline').checked;
+  const urlInput = document.getElementById('fflogs-api-url').value.trim();
+
+  if (!fflogsApiReportCode || !fightId) return;
+
+  // Check if player's job matches current active job and prompt auto-switch if mismatch
+  const selectedPlayer = fflogsApiPlayers.find(p => p.id === sourceId);
+  if (selectedPlayer) {
+    const playerJob = selectedPlayer.type.toLowerCase();
+    if (playerJob !== currentJobId && skillsDatabase[playerJob]) {
+      const playerJobName = skillsDatabase[playerJob]?.name || playerJob;
+      const currentJobName = skillsDatabase[currentJobId]?.name || currentJobId;
+      const ok = await window.showCustomConfirm(
+        '職業不符',
+        `您選擇的玩家職業是「${playerJobName}」，但目前時間軸是「${currentJobName}」。\n是否要自動切換為「${playerJobName}」並開始匯入？`
+      );
+      if (!ok) {
+        fflogsApiSetStatus('⚠️ 匯入已取消（職業不符）', true);
+        return;
+      }
+      
+      // Switch active job
+      currentJobId = playerJob;
+      jobSelect.value = currentJobId;
+      syncCustomDropdown(jobSelect);
+      loadJobSkills(currentJobId);
+      timelineSkills = [];
+      bossMechanics = [];
+    }
+  }
+
+  let targetTimelineId = 1;
+  let autoClear = clearFirst;
+  
+  if (timelineSkills.length > 0) {
+    const choice = await promptImportTargetChoice();
+    if (!choice) {
+      document.getElementById('fflogs-api-import').disabled = false;
+      fflogsApiSetStatus('⚠️ 匯入已取消', true);
+      return;
+    }
+    
+    if (choice.action === 'new') {
+      activeTimelinesCount++;
+      targetTimelineId = activeTimelinesCount;
+      autoClear = false;
+    } else {
+      targetTimelineId = choice.timelineId;
+      autoClear = true;
+    }
+  }
+
+  fflogsApiSetStatus('<i class="fa-solid fa-spinner fa-spin"></i> 正在抓取施放事件...');
+  document.getElementById('fflogs-api-import').disabled = true;
+
+  // Find fight start time
+  const fight = fflogsApiFights.find(f => f.id === fightId);
+  const fightStart = fight ? fight.startTime : 0;
+
+  // Build filterExpression if phase parameter is present
+  const urlParams = extractUrlParams(urlInput);
+  let filterExpr = "";
+  if (urlParams.phase !== null) {
+    filterExpr = `encounterPhase = ${urlParams.phase}`;
+  }
+
+  try {
+    const data = await fflogsQuery(`
+      query($code: String!, $fightId: Int!, $sourceId: Int!, $filterExpr: String) {
+        reportData {
+          report(code: $code) {
+            masterData {
+              abilities {
+                gameID
+                name
+              }
+            }
+            events(
+              fightIDs: [$fightId]
+              dataType: Casts
+              sourceID: $sourceId
+              filterExpression: $filterExpr
+              limit: 10000
+            ) { data }
+          }
+        }
+      }
+    `, {
+      code: fflogsApiReportCode,
+      fightId,
+      sourceId,
+      filterExpr: filterExpr || null
+    });
+
+    const events = data.reportData.report.events.data || [];
+    if (events.length === 0) {
+      fflogsApiSetStatus('⚠️ 沒有找到施放事件，請確認玩家選擇是否正確', true);
+      document.getElementById('fflogs-api-import').disabled = false;
+      return;
+    }
+
+    // Build ability ID -> name map
+    const abilities = data.reportData.report.masterData?.abilities || [];
+    const abilityMap = {};
+    abilities.forEach(a => {
+      abilityMap[a.gameID] = a.name;
+    });
+
+    // Determine the base timestamp for alignment
+    let alignmentStart = fightStart;
+    if (urlParams.phase !== null) {
+      const castEvents = events.filter(ev => ev.type === 'cast' || ev.type === 'begincast');
+      if (castEvents.length > 0) {
+        alignmentStart = Math.min(...castEvents.map(ev => ev.timestamp));
+      }
+    }
+
+    // Match skills to database
+    const activeJobData = skillsDatabase[currentJobId];
+    if (!activeJobData) throw new Error('找不到當前職業技能資料');
+
+    const parsedEvents = [];
+    for (const ev of events) {
+      if (ev.type !== 'cast' && ev.type !== 'begincast') continue;
+      
+      const abilityName = abilityMap[ev.abilityGameID];
+      if (!abilityName) continue;
+
+      const evNameLower = abilityName.toLowerCase();
+      const matched = activeJobData.skills.find(s =>
+        s.name.toLowerCase() === evNameLower ||
+        (s.aliases && s.aliases.some(alias => alias.toLowerCase() === evNameLower))
+      );
+      if (!matched) continue;
+
+      const relSec = (ev.timestamp - alignmentStart) / 1000;
+      if (relSec < 0) continue;
+
+      parsedEvents.push({
+        type: ev.type,
+        timestamp: ev.timestamp,
+        relSec,
+        skill: matched
+      });
+    }
+
+    parsedEvents.sort((a, b) => a.timestamp - b.timestamp);
+
+    // Deduplicate begins casting vs casts
+    const uniqueEvents = [];
+    const castHistory = {};
+    for (const pe of parsedEvents) {
+      const key = pe.skill.id;
+      if (pe.type === 'begincast') {
+        castHistory[key] = pe.relSec;
+        uniqueEvents.push(pe);
+      } else {
+        const lastBegin = castHistory[key];
+        if (lastBegin !== undefined && (pe.relSec - lastBegin) < 10) {
+          continue;
+        }
+        const castDuration = parseTimeToSeconds(pe.skill.cast);
+        let adjustedTime = pe.relSec;
+        if (castDuration > 0) {
+          adjustedTime = Math.max(0, pe.relSec - castDuration);
+        }
+        pe.relSec = adjustedTime;
+        uniqueEvents.push(pe);
+      }
+    }
+
+    // Build raw entries
+    const rawSkills = [];
+    uniqueEvents.forEach(pe => {
+      const isGcd = (pe.skill.classification === '戰技' || pe.skill.classification === '魔法');
+      const track = isGcd ? 'gcd' : 'ogcd';
+      const castDur = parseTimeToSeconds(pe.skill.cast);
+      const duration = Math.max(castDur, isGcd ? timelineGCDDuration : 0.6);
+
+      rawSkills.push({
+        skillId: pe.skill.id,
+        name: pe.skill.name,
+        icon: pe.skill.icon,
+        classification: pe.skill.classification,
+        cast: pe.skill.cast,
+        recast: pe.skill.recast,
+        startTime: pe.relSec,
+        duration: duration,
+        track: track,
+        isGcd: isGcd,
+        parentGcdId: null,
+        relativeOffset: 0
+      });
+    });
+
+    if (rawSkills.length === 0) {
+      fflogsApiSetStatus('⚠️ 沒有找到匹配的施放事件，請確認玩家選擇是否正確', true);
+      document.getElementById('fflogs-api-import').disabled = false;
+      return;
+    }
+
+    const playerSel = document.getElementById('fflogs-api-player-select');
+    const selectedPlayerOption = playerSel && playerSel.selectedIndex !== -1 ? playerSel.options[playerSel.selectedIndex] : null;
+    const selectedPlayerName = selectedPlayerOption ? selectedPlayerOption.text.split(' (')[0] : '';
+    importedPlayerName = selectedPlayerName || null;
+    timelinePlayers[targetTimelineId - 1] = selectedPlayerName || null;
+
+    if (autoClear) {
+      timelineSkills = timelineSkills.filter(s => (s.timelineId || 1) !== targetTimelineId);
+    }
+
+    // Parent oGCDs to GCDs
+    rawSkills.forEach(s => {
+      s.instanceId = 'skill_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+    });
+
+    const gcds = rawSkills.filter(s => s.isGcd).sort((a, b) => a.startTime - b.startTime);
+    const ogcds = rawSkills.filter(s => !s.isGcd);
+
+    ogcds.forEach(ogcd => {
+      const parent = gcds.slice().reverse().find(g => g.startTime <= ogcd.startTime);
+      if (parent) {
+        ogcd.parentGcdId = parent.instanceId;
+        ogcd.relativeOffset = ogcd.startTime - parent.startTime;
+      } else {
+        ogcd.parentGcdId = null;
+        ogcd.relativeOffset = 0;
+      }
+    });
+
+    // Push to global timelineSkills
+    rawSkills.forEach(s => {
+      timelineSkills.push({
+        instanceId: s.instanceId,
+        skillId: s.skillId,
+        name: s.name,
+        icon: s.icon,
+        classification: s.classification,
+        cast: s.cast,
+        recast: s.recast,
+        startTime: Math.round(s.startTime * 10) / 10,
+        duration: s.duration,
+        track: s.track,
+        parentGcdId: s.parentGcdId,
+        relativeOffset: Math.round(s.relativeOffset * 10) / 10,
+        clip: 0,
+        idle: 0,
+        timelineId: targetTimelineId
+      });
+    });
+
+    recalculateTimeline();
+    renderTimeline();
+    autoSave();
+
+    const modal = document.getElementById('fflogs-api-modal');
+    if (modal) modal.classList.remove('active');
+    showToast(`✅ 成功匯入 ${rawSkills.length} 個技能事件`);
+
+  } catch (err) {
+    fflogsApiSetStatus(`❌ 匯入失敗：${err.message}`, true);
+    document.getElementById('fflogs-api-import').disabled = false;
+  }
+}
+
+// --- Wire up modal events (after DOM ready) ---
+document.addEventListener('DOMContentLoaded', () => {
+  const modal        = document.getElementById('fflogs-api-modal');
+  const closeBtn     = document.getElementById('fflogs-api-modal-close');
+  const cancelBtn    = document.getElementById('fflogs-api-cancel');
+  const fetchBtn     = document.getElementById('fflogs-api-fetch-report');
+  const importBtn    = document.getElementById('fflogs-api-import');
+  const urlInput     = document.getElementById('fflogs-api-url');
+  const fightSelect  = document.getElementById('fflogs-api-fight-select');
+
+  if (closeBtn)  closeBtn.addEventListener('click',  () => modal.classList.remove('active'));
+  if (cancelBtn) cancelBtn.addEventListener('click', () => modal.classList.remove('active'));
+  if (fetchBtn)  fetchBtn.addEventListener('click',  fflogsApiFetchReport);
+  if (importBtn) importBtn.addEventListener('click', fflogsApiImport);
+  if (urlInput)  urlInput.addEventListener('keydown', e => { if (e.key === 'Enter') fflogsApiFetchReport(); });
+  if (modal) modal.addEventListener('click', e => { if (e.target === modal) modal.classList.remove('active'); });
+  if (fightSelect) {
+    fightSelect.addEventListener('change', () => {
+      const fightId = parseInt(fightSelect.value);
+      if (fightId) {
+        fflogsApiUpdatePlayers(fightId);
+      }
+    });
+  }
+});
+
+// Helper for choosing import target track when timeline has existing events
+function promptImportTargetChoice() {
+  return new Promise((resolve) => {
+    const modal = document.getElementById('fflogs-import-choice-modal');
+    const buttonsContainer = document.getElementById('fflogs-import-choice-buttons');
+    const closeBtn = document.getElementById('fflogs-import-choice-close');
+    const cancelBtn = document.getElementById('fflogs-import-choice-cancel');
+    
+    if (!modal || !buttonsContainer) {
+      resolve(null);
+      return;
+    }
+    
+    buttonsContainer.innerHTML = '';
+    
+    // 1. New timeline option (if count < 3)
+    if (activeTimelinesCount < 3) {
+      const btnNew = document.createElement('button');
+      btnNew.className = 'btn btn-accent';
+      btnNew.style.width = '100%';
+      btnNew.style.justifyContent = 'flex-start';
+      btnNew.style.padding = '10px 14px';
+      btnNew.style.fontSize = '13px';
+      btnNew.innerHTML = `<i class="fa-solid fa-folder-plus" style="margin-right:8px;"></i> 新增為新排軸 (排軸 ${activeTimelinesCount + 1})`;
+      btnNew.addEventListener('click', () => {
+        modal.classList.remove('active');
+        resolve({ action: 'new' });
+      });
+      buttonsContainer.appendChild(btnNew);
+    }
+    
+    // 2. Overwrite option for each active timeline
+    for (let i = 1; i <= activeTimelinesCount; i++) {
+      const btnOverwrite = document.createElement('button');
+      btnOverwrite.className = 'btn btn-secondary';
+      btnOverwrite.style.width = '100%';
+      btnOverwrite.style.justifyContent = 'flex-start';
+      btnOverwrite.style.padding = '10px 14px';
+      btnOverwrite.style.fontSize = '13px';
+      
+      const playerName = timelinePlayers[i - 1];
+      const playerText = playerName ? ` (${playerName})` : '';
+      btnOverwrite.innerHTML = `<i class="fa-solid fa-arrow-right-to-bracket" style="margin-right:8px;"></i> 覆蓋 排軸 ${i}${playerText}`;
+      btnOverwrite.addEventListener('click', () => {
+        modal.classList.remove('active');
+        resolve({ action: 'overwrite', timelineId: i });
+      });
+      buttonsContainer.appendChild(btnOverwrite);
+    }
+    
+    const cleanup = () => {
+      modal.classList.remove('active');
+      resolve(null);
+    };
+    
+    closeBtn.onclick = cleanup;
+    cancelBtn.onclick = cleanup;
+    
+    modal.classList.add('active');
+  });
+}

@@ -644,13 +644,13 @@ body {
 }
 
 /* Buff Track specifics */
-#buff-track {
+#buff-track, [id^="buff-track-"] {
   height: var(--buff-track-height);
   background-color: rgba(255, 170, 0, 0.01);
 }
 
 /* GCD Track specifics */
-#gcd-track {
+#gcd-track, [id^="gcd-track-"] {
   height: var(--timeline-track-height);
   background-color: rgba(0, 240, 255, 0.01);
 }
@@ -667,7 +667,7 @@ body {
 }
 
 /* oGCD Track specifics */
-#ogcd-track {
+#ogcd-track, [id^="ogcd-track-"] {
   height: var(--timeline-track-height);
   background-color: rgba(216, 0, 255, 0.01);
 }
@@ -839,13 +839,13 @@ body {
 /* Boss Mechanic Marker */
 .placed-mechanic {
   position: absolute;
-  top: 5px;
-  height: 48px;
-  width: 140px;
+  top: 12px;
+  height: 36px;
+  width: 96px;
   background-color: rgba(43, 16, 18, 0.9);
   border: 1px solid var(--color-boss);
   border-radius: 6px;
-  padding: 4px 8px;
+  padding: 2px 6px;
   cursor: grab;
   box-shadow: 0 4px 10px rgba(255, 51, 51, 0.15);
   transition: border-color 0.2s, background-color 0.2s;
@@ -862,18 +862,20 @@ body {
 }
 
 .mechanic-time {
-  font-size: 9px;
+  font-size: 8px;
   font-family: monospace;
   color: var(--color-text-muted);
+  line-height: 1;
 }
 
 .mechanic-name {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   color: #ffb3b3;
   white-space: nowrap;
   text-overflow: ellipsis;
   overflow: hidden;
+  line-height: 1.2;
 }
 
 /* Vertical indicator lines from boss mechanic */
@@ -1165,7 +1167,7 @@ body {
   bottom: 0;
   width: 2px;
   background-color: var(--color-danger);
-  z-index: 5;
+  z-index: 3;
   pointer-events: none;
   box-shadow: 0 0 8px var(--color-danger);
 }

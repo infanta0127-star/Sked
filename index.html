@@ -74,6 +74,7 @@
           <button id="btn-import-menu" class="btn btn-accent" title="開啟匯入選項"><i class="fa-solid fa-file-import"></i> 匯入</button>
           <button id="btn-export-menu" class="btn btn-secondary" title="開啟匯出選項"><i class="fa-solid fa-file-export"></i> 匯出</button>
           <button id="btn-clear" class="btn btn-danger" title="清空時間軸"><i class="fa-solid fa-trash-can"></i></button>
+          <button id="btn-add-timeline-track" class="btn btn-primary" title="新增排軸"><i class="fa-solid fa-plus"></i> 新增排軸</button>
         </div>
       </div>
     </header>
@@ -240,35 +241,9 @@
               </div>
             </div>
 
-            <!-- Buff Alignment Track -->
-            <div class="timeline-track-wrapper buff-track-wrapper">
-              <div class="track-info">
-                <span class="track-title"><i class="fa-solid fa-wand-magic-sparkles"></i> 團輔覆蓋 (Buffs)</span>
-              </div>
-              <div class="timeline-track track-content" id="buff-track" data-track-type="buff">
-                <!-- Group Buff spans are overlayed here -->
-              </div>
-            </div>
-
-            <!-- GCD Skill Track -->
-            <div class="timeline-track-wrapper gcd-track-wrapper">
-              <div class="track-info">
-                <span class="track-title"><i class="fa-solid fa-bolt"></i> 戰技 / 魔法 (GCD)</span>
-              </div>
-              <div class="timeline-track track-content" id="gcd-track" data-track-type="gcd">
-                <!-- GCD skills are slotted here -->
-                <div class="gcd-slots-bg" id="gcd-slots-bg"></div>
-              </div>
-            </div>
-
-            <!-- oGCD Skill Track -->
-            <div class="timeline-track-wrapper ogcd-track-wrapper">
-              <div class="track-info">
-                <span class="track-title"><i class="fa-solid fa-hourglass-start"></i> 能力技 (oGCD)</span>
-              </div>
-              <div class="timeline-track track-content" id="ogcd-track" data-track-type="ogcd">
-                <!-- oGCD skills are placed here -->
-              </div>
+            <!-- Dynamic Personal Planner Tracks Container (Supports multiple timelines) -->
+            <div id="personal-timeline-tracks-container" style="display:flex; flex-direction:column; width:100%;">
+              <!-- Timelines will be rendered dynamically here -->
             </div>
 
             <!-- Active Playhead Line -->
@@ -359,6 +334,70 @@
       </div>
     </div>
 
+    <!-- Modal for FFLogs API Import -->
+    <div class="modal" id="fflogs-api-modal">
+      <div class="modal-content" style="width: 560px; max-width: 95%;">
+        <div class="modal-header">
+          <h3><i class="fa-solid fa-cloud-arrow-down"></i> 從 FFLogs API 匯入</h3>
+          <span class="modal-close" id="fflogs-api-modal-close">&times;</span>
+        </div>
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 14px; padding: 20px;">
+          <!-- Step 1: URL input -->
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            <label style="font-weight:bold; font-size:13px;"><i class="fa-solid fa-link"></i> FFLogs 報告連結</label>
+            <div style="display:flex; gap:8px;">
+              <input type="text" id="fflogs-api-url" class="custom-input" placeholder="https://www.fflogs.com/reports/ABC123..." style="flex:1; padding:8px 10px; border-radius:6px; border:1px solid var(--border-color); background:var(--bg-main); color:#fff; font-size:13px;">
+              <button id="fflogs-api-fetch-report" class="btn btn-primary" style="white-space:nowrap;"><i class="fa-solid fa-magnifying-glass"></i> 查詢</button>
+            </div>
+          </div>
+          <!-- Step 2: Fight selector -->
+          <div id="fflogs-api-fight-section" style="display:none; flex-direction:column; gap:6px;">
+            <label style="font-weight:bold; font-size:13px;"><i class="fa-solid fa-swords"></i> 選擇戰鬥段落</label>
+            <select id="fflogs-api-fight-select" class="custom-select" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border-color); background:var(--bg-main); color:#fff; font-size:13px;"></select>
+          </div>
+          <!-- Step 3: Player selector -->
+          <div id="fflogs-api-player-section" style="display:none; flex-direction:column; gap:6px;">
+            <label style="font-weight:bold; font-size:13px;"><i class="fa-solid fa-user"></i> 選擇玩家</label>
+            <select id="fflogs-api-player-select" class="custom-select" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border-color); background:var(--bg-main); color:#fff; font-size:13px;"></select>
+          </div>
+          <!-- Options -->
+          <div id="fflogs-api-options-section" style="display:none; gap:15px; font-size:13px; align-items:center;">
+            <label style="display:flex; align-items:center; gap:5px; cursor:pointer; color:#fff;">
+              <input type="checkbox" id="fflogs-api-clear-timeline" checked style="cursor:pointer;"> 匯入前清空時間軸
+            </label>
+          </div>
+          <!-- Status message -->
+          <div id="fflogs-api-status" style="font-size:13px; color:var(--color-text-muted); display:none;"></div>
+          <!-- Buttons -->
+          <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:4px;">
+            <button id="fflogs-api-cancel" class="btn btn-secondary">取消</button>
+            <button id="fflogs-api-import" class="btn btn-primary" style="display:none;"><i class="fa-solid fa-cloud-arrow-down"></i> 開始匯入</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal for FFLogs Import Target Choice -->
+    <div class="modal" id="fflogs-import-choice-modal">
+      <div class="modal-content" style="width: 420px; max-width: 95%;">
+        <div class="modal-header">
+          <h3><i class="fa-solid fa-file-import"></i> 匯入目標選擇</h3>
+          <span class="modal-close" id="fflogs-import-choice-close">&times;</span>
+        </div>
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 14px; padding: 20px;">
+          <p style="font-size: 13px; color: var(--color-text-muted); line-height: 1.5; margin: 0;">
+            偵測到目前已有排軸記錄。請選擇要如何處理匯入的資料：
+          </p>
+          <div style="display: flex; flex-direction: column; gap: 10px;" id="fflogs-import-choice-buttons">
+            <!-- Dynamic choice buttons go here -->
+          </div>
+          <div style="display: flex; justify-content: flex-end; margin-top: 10px;">
+            <button id="fflogs-import-choice-cancel" class="btn btn-secondary" style="width: 100%;">取消</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Modal for Import Options -->
     <div class="modal" id="import-options-modal">
       <div class="modal-content" style="width: 400px; max-width: 95%;">
@@ -369,7 +408,8 @@
         <div class="modal-body" style="display: flex; flex-direction: column; gap: 12px; padding: 20px;">
           <button id="import-opt-mit" class="btn btn-accent" style="width: 100%; justify-content: flex-start; padding: 12px 16px; font-size: 14px; text-align: left; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-rotate"></i> 從團隊排軸匯入</button>
           <button id="import-opt-json" class="btn btn-secondary" style="width: 100%; justify-content: flex-start; padding: 12px 16px; font-size: 14px; text-align: left; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-file-import"></i> 匯入 JSON 檔案</button>
-          <button id="import-opt-fflogs" class="btn btn-accent" style="width: 100%; justify-content: flex-start; padding: 12px 16px; font-size: 14px; text-align: left; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-paste"></i> 匯入 FF Logs 戰鬥事件</button>
+          <button id="import-opt-fflogs-api" class="btn btn-primary" style="width: 100%; justify-content: flex-start; padding: 12px 16px; font-size: 14px; text-align: left; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-cloud-arrow-down"></i> 從 FFLogs API 匯入 <span style="font-size:11px; background:rgba(0,240,255,0.15); color:#00f0ff; padding:2px 6px; border-radius:4px; margin-left:auto;">NEW</span></button>
+          <button id="import-opt-fflogs" class="btn btn-secondary" style="width: 100%; justify-content: flex-start; padding: 12px 16px; font-size: 14px; text-align: left; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-paste"></i> 手動貼上 FF Logs 文字</button>
         </div>
       </div>
     </div>
