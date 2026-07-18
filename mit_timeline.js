@@ -1781,9 +1781,8 @@ function createShareModal() {
             <h3>分享減排計畫</h3>
             <div class="share-form-group">
                 <label for="share-permission">權限設定</label>
-                <select id="share-permission" class="share-select">
-                    <option value="view">僅查看 (唯讀模式)</option>
-                    <option value="edit">可編輯 (共同編輯模式)</option>
+                <select id="share-permission" class="share-select" disabled style="opacity: 0.8; background: rgba(0,0,0,0.2);">
+                    <option value="view" selected>僅查看 (唯讀模式)</option>
                 </select>
             </div>
             <div class="share-form-group">
@@ -2001,6 +2000,48 @@ async function handleUrlSharingTokens() {
     const token = mitViewToken || mitEditToken;
     
     if (token) {
+        // Show only the Team Planner page, hide header tabs
+        const tabBtnTimeline = document.getElementById('tab-btn-timeline');
+        const tabBtnCompare = document.getElementById('tab-btn-compare');
+        if (tabBtnTimeline) tabBtnTimeline.style.display = 'none';
+        if (tabBtnCompare) tabBtnCompare.style.display = 'none';
+
+        const mitPlanningView = document.getElementById('mit-planning-view');
+        const timelineWorkspaceView = document.getElementById('timeline-workspace-view');
+        const compareWorkspaceView = document.getElementById('compare-workspace-view');
+        const timelineToolbar = document.getElementById('timeline-toolbar');
+        
+        if (mitPlanningView) mitPlanningView.classList.remove('hidden');
+        if (timelineWorkspaceView) timelineWorkspaceView.classList.add('hidden');
+        if (compareWorkspaceView) compareWorkspaceView.classList.add('hidden');
+        if (timelineToolbar) timelineToolbar.classList.add('hidden');
+
+        // Disable selectors
+        const dutySelect = document.getElementById('mit-duty-select');
+        const layoutSelect = document.getElementById('mit-layout-select');
+        if (dutySelect) {
+            dutySelect.disabled = true;
+            dutySelect.style.pointerEvents = 'none';
+            dutySelect.style.opacity = '0.7';
+        }
+        if (layoutSelect) {
+            layoutSelect.disabled = true;
+            layoutSelect.style.pointerEvents = 'none';
+            layoutSelect.style.opacity = '0.7';
+        }
+
+        // Hide top right buttons
+        const btnSave = document.getElementById('mit-btn-save');
+        const btnLoad = document.getElementById('mit-btn-load');
+        const btnShare = document.getElementById('mit-btn-share');
+        const btnImport = document.getElementById('mit-btn-import');
+        const btnExport = document.getElementById('mit-btn-export');
+        if (btnSave) btnSave.style.display = 'none';
+        if (btnLoad) btnLoad.style.display = 'none';
+        if (btnShare) btnShare.style.display = 'none';
+        if (btnImport) btnImport.style.display = 'none';
+        if (btnExport) btnExport.style.display = 'none';
+
         try {
             // 1. Initial trial call without password
             let { data, error } = await sb.rpc('get_team_plan_by_token', { p_token: token, p_password: null }).maybeSingle();
