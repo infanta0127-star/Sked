@@ -952,7 +952,7 @@ function appendSkillToTimeline(skill) {
     classification: skill.classification,
     cast: skill.cast,
     recast: skill.recast,
-    startTime: Math.round(startTime * 10) / 10,
+    startTime: Math.round(startTime * 1000) / 1000,
     duration: Math.max(parsedCast, isGcd ? timelineGCDDuration : 0.6),
     track,
     parentGcdId,
@@ -985,8 +985,8 @@ function recalculateTimeline() {
         gcd.startTime = nextAvailableGcdTime;
       }
       
-      // Round to 1 decimal place to prevent floating point inaccuracies
-      gcd.startTime = Math.round(gcd.startTime * 10) / 10;
+      // Round to 3 decimal places to prevent floating point inaccuracies
+      gcd.startTime = Math.round(gcd.startTime * 1000) / 1000;
       
       const parsedRecast = parseTimeToSeconds(gcd.recast);
       const parsedCast = parseTimeToSeconds(gcd.cast);
@@ -1011,8 +1011,8 @@ function recalculateTimeline() {
           ogcd.relativeOffset = ogcd.startTime - gcd.startTime;
         }
         
-        ogcd.startTime = Math.round(ogcd.startTime * 10) / 10;
-        ogcd.relativeOffset = Math.round(ogcd.relativeOffset * 10) / 10;
+        ogcd.startTime = Math.round(ogcd.startTime * 1000) / 1000;
+        ogcd.relativeOffset = Math.round(ogcd.relativeOffset * 1000) / 1000;
         currentLockEnd = ogcd.startTime + 0.6;
       }
       
@@ -1031,7 +1031,7 @@ function recalculateTimeline() {
         gcd.clip = 0;
         nextAvailableGcdTime = normalGcdEnd;
       }
-      nextAvailableGcdTime = Math.round(nextAvailableGcdTime * 10) / 10;
+      nextAvailableGcdTime = Math.round(nextAvailableGcdTime * 1000) / 1000;
     }
     
     // 3b. Calculate idle times between GCDs
@@ -1039,12 +1039,12 @@ function recalculateTimeline() {
       const gcd = gcds[i];
       const normalGcdEnd = gcd.startTime + gcd.duration;
       const currentLockEnd = normalGcdEnd + gcd.clip;
-      const availableTime = Math.round(Math.max(normalGcdEnd, currentLockEnd) * 10) / 10;
+      const availableTime = Math.round(Math.max(normalGcdEnd, currentLockEnd) * 1000) / 1000;
       
       if (i < gcds.length - 1) {
         const nextGcd = gcds[i + 1];
         if (nextGcd.startTime > availableTime) {
-          gcd.idle = Math.round((nextGcd.startTime - availableTime) * 10) / 10;
+          gcd.idle = Math.round((nextGcd.startTime - availableTime) * 1000) / 1000;
         } else {
           gcd.idle = 0;
         }
@@ -1056,7 +1056,7 @@ function recalculateTimeline() {
     // 4. Place orphaned oGCDs absolutely
     const orphanOgcds = ogcds.filter(o => !o.parentGcdId);
     for (const ogcd of orphanOgcds) {
-      ogcd.startTime = Math.round(ogcd.startTime * 10) / 10;
+      ogcd.startTime = Math.round(ogcd.startTime * 1000) / 1000;
     }
   }
 }
@@ -1361,14 +1361,14 @@ function renderTimeline() {
   updateStatusPanel();
 }
 
-// Helper: Format seconds to M:SS
+// Helper: Format seconds to M:SS.SSS
 function formatTime(seconds) {
   const isNegative = seconds < 0;
   const absSeconds = Math.abs(seconds);
   const m = Math.floor(absSeconds / 60);
   const s = Math.floor(absSeconds % 60);
-  const ms = Math.floor((absSeconds % 1) * 10);
-  return `${isNegative ? '-' : ''}${m}:${s.toString().padStart(2, '0')}.${ms}`;
+  const ms = Math.floor(Math.round((absSeconds * 1000) % 1000));
+  return `${isNegative ? '-' : ''}${m}:${s.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
 }
 
 function scrollToTime(timeSeconds) {
@@ -1420,7 +1420,7 @@ function handleDrop(e, targetTrackType, targetTimelineId = 1) {
       classification: skill.classification,
       cast: skill.cast,
       recast: skill.recast,
-      startTime: Math.round(startTime * 10) / 10,
+      startTime: Math.round(startTime * 1000) / 1000,
       duration: Math.max(parsedCast, isGcd ? timelineGCDDuration : 0.6),
       track: isGcd ? 'gcd' : 'ogcd',
       parentGcdId,
@@ -2631,11 +2631,11 @@ function importFflogsEvents(text, filterPlayer, clearTimeline, targetTimelineId 
       classification: s.classification,
       cast: s.cast,
       recast: s.recast,
-      startTime: Math.round(s.startTime * 10) / 10,
+      startTime: Math.round(s.startTime * 1000) / 1000,
       duration: s.duration,
       track: s.track,
       parentGcdId: s.parentGcdId,
-      relativeOffset: Math.round(s.relativeOffset * 10) / 10,
+      relativeOffset: Math.round(s.relativeOffset * 1000) / 1000,
       clip: 0,
       idle: 0,
       timelineId: targetTimelineId
@@ -3960,11 +3960,11 @@ async function fflogsApiImport() {
         classification: s.classification,
         cast: s.cast,
         recast: s.recast,
-        startTime: Math.round(s.startTime * 10) / 10,
+        startTime: Math.round(s.startTime * 1000) / 1000,
         duration: s.duration,
         track: s.track,
         parentGcdId: s.parentGcdId,
-        relativeOffset: Math.round(s.relativeOffset * 10) / 10,
+        relativeOffset: Math.round(s.relativeOffset * 1000) / 1000,
         clip: 0,
         idle: 0,
         timelineId: targetTimelineId

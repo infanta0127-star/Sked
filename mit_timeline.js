@@ -490,9 +490,12 @@ async function loadDutyMechanicsForPlan(dutyFile, savedMechanics) {
 }
 
 function formatTime(sec) {
-    const m = Math.floor(sec / 60).toString().padStart(2, '0');
-    const s = Math.floor(sec % 60).toString().padStart(2, '0');
-    return `${m}:${s}`;
+    const isNegative = sec < 0;
+    const absSec = Math.abs(sec);
+    const m = Math.floor(absSec / 60).toString().padStart(2, '0');
+    const s = Math.floor(absSec % 60).toString().padStart(2, '0');
+    const ms = Math.floor(Math.round((absSec * 1000) % 1000)).toString().padStart(3, '0');
+    return `${isNegative ? '-' : ''}${m}:${s}.${ms}`;
 }
 
 function getPlayerMitSkills(jobKey, slotIndex) {
