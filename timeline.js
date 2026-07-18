@@ -3504,6 +3504,7 @@ function syncCustomDropdown(selectEl) {
     selectEl.style.display = 'none';
     
     trigger.addEventListener('click', (e) => {
+      if (selectEl.disabled) return;
       e.stopPropagation();
       const isActive = container.classList.contains('active');
       
@@ -3583,6 +3584,16 @@ function syncCustomDropdown(selectEl) {
       });
     }
   });
+  
+  if (selectEl.disabled) {
+    container.classList.add('disabled');
+    container.style.pointerEvents = 'none';
+    container.style.opacity = '0.6';
+  } else {
+    container.classList.remove('disabled');
+    container.style.pointerEvents = '';
+    container.style.opacity = '';
+  }
   
   updateCustomDropdownSelection(selectEl, container);
 }
