@@ -347,6 +347,14 @@ function loadDutyTimeline(dutyData) {
   recalculateTimeline();
   renderTimeline();
   autoSave();
+  
+  // Auto-scroll to the first boss mechanic to prevent blank screen confusion
+  if (bossMechanics.length > 0) {
+    const earliestTime = Math.min(...bossMechanics.map(m => m.time));
+    setTimeout(() => {
+      scrollToTime(earliestTime - 2);
+    }, 100);
+  }
 }
 
 // 2. Setup Event Listeners
