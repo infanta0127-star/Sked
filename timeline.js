@@ -2459,6 +2459,7 @@ function importFflogsEvents(text, filterPlayer, clearTimeline, targetTimelineId 
         cast: skill.cast,
         recast: skill.recast,
         startTime: ev.time,
+        completionTime: ev.time + castTime,
         duration: Math.max(castTime, isGcd ? timelineGCDDuration : 0.6),
         track: isGcd ? 'gcd' : 'ogcd',
         isGcd: isGcd,
@@ -2485,6 +2486,7 @@ function importFflogsEvents(text, filterPlayer, clearTimeline, targetTimelineId 
           cast: skill.cast,
           recast: skill.recast,
           startTime: ev.time - castTime,
+          completionTime: ev.time,
           duration: Math.max(castTime, isGcd ? timelineGCDDuration : 0.6),
           track: isGcd ? 'gcd' : 'ogcd',
           isGcd: isGcd,
@@ -2502,6 +2504,7 @@ function importFflogsEvents(text, filterPlayer, clearTimeline, targetTimelineId 
           cast: skill.cast,
           recast: skill.recast,
           startTime: ev.time,
+          completionTime: ev.time,
           duration: 0.6, // default instant duration
           track: isGcd ? 'gcd' : 'ogcd',
           isGcd: isGcd,
@@ -2530,11 +2533,11 @@ function importFflogsEvents(text, filterPlayer, clearTimeline, targetTimelineId 
   const ogcds = finalSkills.filter(s => !s.isGcd);
 
   ogcds.forEach(ogcd => {
-    // Find closest preceding GCD
-    const parent = gcds.slice().reverse().find(g => g.startTime <= ogcd.startTime);
+    // Find closest preceding GCD based on completion times
+    const parent = gcds.slice().reverse().find(g => g.completionTime <= ogcd.completionTime);
     if (parent) {
       ogcd.parentGcdId = parent.instanceId;
-      ogcd.relativeOffset = ogcd.startTime - parent.startTime;
+      ogcd.relativeOffset = ogcd.completionTime - parent.startTime;
     } else {
       ogcd.parentGcdId = null;
       ogcd.relativeOffset = 0;
@@ -3779,12 +3782,14 @@ async function fflogsApiImport() {
     const castHistory = {};
     for (const pe of parsedEvents) {
       const key = pe.skill.id;
+      const castDuration = parseTimeToSeconds(pe.skill.cast);
       if (pe.type === 'begincast') {
+        pe.completionTime = pe.relSec + castDuration;
         castHistory[key] = pe.relSec;
         uniqueEvents.push(pe);
       } else {
+        pe.completionTime = pe.relSec;
         const lastBegin = castHistory[key];
-        const castDuration = parseTimeToSeconds(pe.skill.cast);
         let shouldSkip = false;
         if (lastBegin !== undefined) {
           const diff = pe.relSec - lastBegin;
@@ -3823,6 +3828,7 @@ async function fflogsApiImport() {
         cast: pe.skill.cast,
         recast: pe.skill.recast,
         startTime: pe.relSec,
+        completionTime: pe.completionTime,
         duration: duration,
         track: track,
         isGcd: isGcd,
@@ -3856,10 +3862,11 @@ async function fflogsApiImport() {
     const ogcds = rawSkills.filter(s => !s.isGcd);
 
     ogcds.forEach(ogcd => {
-      const parent = gcds.slice().reverse().find(g => g.startTime <= ogcd.startTime);
+      // Find closest preceding GCD based on completion times
+      const parent = gcds.slice().reverse().find(g => g.completionTime <= ogcd.completionTime);
       if (parent) {
         ogcd.parentGcdId = parent.instanceId;
-        ogcd.relativeOffset = ogcd.startTime - parent.startTime;
+        ogcd.relativeOffset = ogcd.completionTime - parent.startTime;
       } else {
         ogcd.parentGcdId = null;
         ogcd.relativeOffset = 0;
