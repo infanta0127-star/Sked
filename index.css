@@ -1221,7 +1221,7 @@ body {
 }
 
 /* Tab 2: Timeline Workspace View Wrapper */
-#timeline-workspace-view {
+#timeline-workspace-view, #compare-workspace-view {
   flex: 1;
   display: flex;
   flex-direction: column;
