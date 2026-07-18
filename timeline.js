@@ -1991,7 +1991,7 @@ async function importFfxivMitigationPlan(data) {
 
   const dutyKey = data.duty;
   window.trackEvent('personal_planner', 'import_from_team', { duty: dutyKey });
-  const dutyObj = dutiesDatabase.duties ? dutiesDatabase.duties.find(d => d.key === dutyKey) : null;
+  const dutyObj = dutiesDatabase.duties ? dutiesDatabase.duties.find(d => d.key === dutyKey || d.file === dutyKey) : null;
   let dutyData = null;
   if (dutyObj) {
     try {
