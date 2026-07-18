@@ -2463,13 +2463,15 @@ function importFflogsEvents(text, filterPlayer, clearTimeline, targetTimelineId 
         track: isGcd ? 'gcd' : 'ogcd',
         isGcd: isGcd,
         parentGcdId: null,
-        relativeOffset: 0
+        relativeOffset: 0,
+        isStartCast: true
       });
     } else {
       // Casts event
       if (castTime > 0) {
-        // Look back for a starts-casting event of same skill within 3.5s
-        const alreadyParsed = finalSkills.find(s => s.skillId === skill.id && Math.abs(s.startTime - (ev.time - castTime)) < 2.0);
+        // Look back for a starts-casting event of same skill within 2.0s
+        // ONLY match against skills that were explicitly added via isStartCast starts-casting events
+        const alreadyParsed = finalSkills.find(s => s.skillId === skill.id && s.isStartCast === true && Math.abs(s.startTime - (ev.time - castTime)) < 2.0);
         if (alreadyParsed) {
           // Yes, already recorded when it started casting, skip
           return;
@@ -2487,7 +2489,8 @@ function importFflogsEvents(text, filterPlayer, clearTimeline, targetTimelineId 
           track: isGcd ? 'gcd' : 'ogcd',
           isGcd: isGcd,
           parentGcdId: null,
-          relativeOffset: 0
+          relativeOffset: 0,
+          isStartCast: false
         });
       } else {
         // Instant cast
@@ -2503,7 +2506,8 @@ function importFflogsEvents(text, filterPlayer, clearTimeline, targetTimelineId 
           track: isGcd ? 'gcd' : 'ogcd',
           isGcd: isGcd,
           parentGcdId: null,
-          relativeOffset: 0
+          relativeOffset: 0,
+          isStartCast: false
         });
       }
     }
@@ -3780,13 +3784,23 @@ async function fflogsApiImport() {
         uniqueEvents.push(pe);
       } else {
         const lastBegin = castHistory[key];
-        if (lastBegin !== undefined && (pe.relSec - lastBegin) < 10) {
+        const castDuration = parseTimeToSeconds(pe.skill.cast);
+        let shouldSkip = false;
+        if (lastBegin !== undefined) {
+          const diff = pe.relSec - lastBegin;
+          if (diff >= 0 && diff <= castDuration + 0.5) {
+            shouldSkip = true;
+          }
+          // Clear history so we don't reuse it for subsequent instant casts
+          castHistory[key] = undefined;
+        }
+        if (shouldSkip) {
           continue;
         }
-        const castDuration = parseTimeToSeconds(pe.skill.cast);
+        const castDurationSec = castDuration;
         let adjustedTime = pe.relSec;
-        if (castDuration > 0) {
-          adjustedTime = Math.max(-PREPULL_TIME, pe.relSec - castDuration);
+        if (castDurationSec > 0) {
+          adjustedTime = Math.max(-PREPULL_TIME, pe.relSec - castDurationSec);
         }
         pe.relSec = adjustedTime;
         uniqueEvents.push(pe);
