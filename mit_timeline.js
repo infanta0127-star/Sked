@@ -1887,7 +1887,7 @@ function createShareModal() {
 
 function openShareModal() {
     if (!currentTeamPlanId) {
-        alert('請先點選「儲存至雲端」以儲存本計畫後，方可生成分享連結！');
+        alert('請先「保存紀錄」之後，再分享連結！');
         return;
     }
     
