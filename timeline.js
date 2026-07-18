@@ -2023,11 +2023,13 @@ async function importFfxivMitigationPlan(data) {
     loadJobSkills(jobId);
     
     // Setup Boss Mechanics
+    let officialMechs = [];
     if (dutyObj && dutyData) {
       currentDutyFile = dutyObj.file;
       dutySelect.value = currentDutyFile;
       populateDutyDropdown(dutiesDatabase, currentDutyFile);
       loadDutyTimeline(dutyData);
+      officialMechs = JSON.parse(JSON.stringify(bossMechanics));
     } else {
       currentDutyFile = '';
       dutySelect.value = '';
@@ -2035,17 +2037,63 @@ async function importFfxivMitigationPlan(data) {
       bossMechanics = [];
     }
     
-    // Also copy custom mechanics from the team plan
+    // Copy custom mechanics from the team plan
+    let parsedCustom = [];
     if (data.customMechanics && data.customMechanics.length > 0) {
-      bossMechanics = JSON.parse(JSON.stringify(data.customMechanics));
-      bossMechanics.sort((a, b) => a.time - b.time);
+      parsedCustom = JSON.parse(JSON.stringify(data.customMechanics));
+    } else if (data.customRowsByDuty && data.customRowsByDuty[data.duty]) {
+      data.customRowsByDuty[data.duty].forEach((cr, idx) => {
+        const time = parseDutyTime(cr.hitTime || cr.castingTime);
+        parsedCustom.push({
+          id: cr.id || `custom-imported-${idx}-${Date.now()}`,
+          time: time,
+          name: cr.skill || '未命名自訂機制'
+        });
+      });
+    }
+    
+    // Concatenate unsorted list (matching Format B indices)
+    const unsortedMechs = [...officialMechs, ...parsedCustom];
+    
+    bossMechanics = [...officialMechs, ...parsedCustom];
+    bossMechanics.sort((a, b) => a.time - b.time);
+    
+    // Normalize data.mits to Format A array of casts
+    let normalizedCasts = [];
+    if (Array.isArray(data.mits)) {
+      normalizedCasts = data.mits;
+    } else if (typeof data.mits === 'object' && data.mits !== null) {
+      for (const [key, times] of Object.entries(data.mits)) {
+        const parts = key.split('-');
+        if (parts.length >= 3) {
+          const dutyKey = parts[0];
+          if (dutyKey !== data.duty) continue;
+          
+          const slotStr = parts[1];
+          const slotIndex = parseInt(slotStr.replace('p', ''), 10);
+          const skillKey = parts.slice(2).join('-');
+          const jobKey = data.party[slotIndex];
+          
+          if (Array.isArray(times) && jobKey) {
+            times.forEach(time => {
+              const mech = unsortedMechs[time];
+              const startTime = mech ? mech.time : time;
+              normalizedCasts.push({
+                slotIndex: slotIndex,
+                skillKey: skillKey,
+                startTime: startTime
+              });
+            });
+          }
+        }
+      }
     }
     
     timelineSkills = [];
     const jobDb = skillsDatabase[jobId];
     if (jobDb) {
       // Filter casts for selected player slot
-      const casts = data.mits.filter(c => c.slotIndex === selectedMember.index);
+      const casts = normalizedCasts.filter(c => c.slotIndex === selectedMember.index);
       casts.forEach(c => {
         const chineseName = SKILL_NAME_MAP[c.skillKey] || c.skillKey;
         const skill = jobDb.skills.find(s => s.name === chineseName);

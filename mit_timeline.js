@@ -2194,7 +2194,7 @@ function importTeamPlanJSON(e) {
                                 const duration = skill ? skill.duration : 15;
                                 
                                 // Resolve mechanic index to actual seconds
-                                const mech = dutyMechs[time];
+                                const mech = mitBossMechanics[time];
                                 const startTime = mech ? mech.time : time;
                                 
                                 parsedMits.push({
