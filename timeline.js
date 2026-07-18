@@ -111,6 +111,8 @@ let timelinePlayers = [null, null, null]; // Player name for each timeline
 let playbackState = { isPlaying: false, currentTime: -PREPULL_TIME, animationFrameId: null, startTimeStamp: 0 };
 let draggedItem = null;  // { source: 'sidebar'|'timeline', skillId/instanceId, type: 'skill'|'mechanic' }
 window.isDraggingInProgress = false;
+let currentDutyCategory = '';
+let currentUltimatePhaseStarts = {};
 
 // Buff Mapping for FFXIV alignment
 const BUFF_MAP = {
@@ -405,6 +407,91 @@ function loadDutyTimeline(dutyData) {
   }
 }
 
+// Load boss mechanics from database, handles combining phases for Ultimate duties
+async function loadDuty(dutyFile, forceScroll = true) {
+  if (!dutyFile) {
+    bossMechanics = [];
+    currentDutyCategory = '';
+    currentUltimatePhaseStarts = {};
+    recalculateTimeline();
+    renderTimeline();
+    autoSave();
+    return;
+  }
+
+  const dutiesData = dutiesDatabase.duties || [];
+  const selectedDuty = dutiesData.find(d => d.file === dutyFile || d.key === dutyFile);
+  if (!selectedDuty) return;
+
+  const isUltimate = selectedDuty.category && selectedDuty.category.startsWith('ultimate');
+
+  if (isUltimate) {
+    if (currentDutyCategory === selectedDuty.category) {
+      // Switching phase within the same Ultimate
+      currentDutyFile = selectedDuty.file;
+      if (dutySelect) {
+        dutySelect.value = currentDutyFile;
+        populateDutyDropdown(dutiesDatabase, currentDutyFile);
+      }
+      if (forceScroll) {
+        const startSec = currentUltimatePhaseStarts[currentDutyFile] || 0;
+        scrollToTime(startSec - 2);
+      }
+      autoSave();
+      return;
+    }
+
+    // Load all phases of the ultimate (exclude duplicate "all" files)
+    const phaseDuties = dutiesData.filter(d => d.category === selectedDuty.category && !d.key.toLowerCase().includes('all'));
+    let combinedTimeline = [];
+    currentUltimatePhaseStarts = {};
+    
+    for (const pd of phaseDuties) {
+      const resp = await fetch(`./data/duties/${pd.file}`);
+      if (resp.ok) {
+        const dData = await resp.json();
+        if (dData && dData.timeline) {
+          combinedTimeline.push(...dData.timeline);
+          const times = dData.timeline.map(m => parseDutyTime(m.castingTime || m.hitTime));
+          if (times.length > 0) {
+            currentUltimatePhaseStarts[pd.file] = Math.min(...times);
+          } else {
+            currentUltimatePhaseStarts[pd.file] = 0;
+          }
+        }
+      }
+    }
+
+    // Sort combinedTimeline by hitTime/castingTime
+    combinedTimeline.sort((a, b) => {
+      const tA = parseDutyTime(a.castingTime || a.hitTime);
+      const tB = parseDutyTime(b.castingTime || b.hitTime);
+      return tA - tB;
+    });
+
+    currentDutyFile = selectedDuty.file;
+    currentDutyCategory = selectedDuty.category;
+    
+    loadDutyTimeline({ timeline: combinedTimeline });
+    
+    if (forceScroll) {
+      const startSec = currentUltimatePhaseStarts[currentDutyFile] || 0;
+      setTimeout(() => {
+        scrollToTime(startSec - 2);
+      }, 150);
+    }
+  } else {
+    // Normal duty
+    currentDutyCategory = '';
+    currentUltimatePhaseStarts = {};
+    const response = await fetch(`./data/duties/${selectedDuty.file}`);
+    if (!response.ok) throw new Error('無法載入副本資料');
+    const dutyData = await response.json();
+    currentDutyFile = selectedDuty.file;
+    loadDutyTimeline(dutyData);
+  }
+}
+
 // 2. Setup Event Listeners
 function setupEventListeners() {
   // Global dragstart and dragend listeners to manage dragging status
@@ -494,26 +581,22 @@ function setupEventListeners() {
   dutySelect.addEventListener('change', async (e) => {
     const dutyFile = e.target.value;
     populateDutyDropdown(dutiesDatabase, dutyFile);
-    if (bossMechanics.length > 0 && !confirm('載入新副本將清空目前首領機制軌道，確定要繼續嗎？')) {
+    
+    const dutiesData = dutiesDatabase.duties || [];
+    const selectedDuty = dutiesData.find(d => d.file === dutyFile);
+    const currentDuty = dutiesData.find(d => d.file === currentDutyFile);
+    const isSameUltimate = selectedDuty && currentDuty &&
+                           selectedDuty.category && selectedDuty.category.startsWith('ultimate') &&
+                           selectedDuty.category === currentDuty.category;
+    
+    if (!isSameUltimate && bossMechanics.length > 0 && !confirm('載入新副本將清空目前首領機制軌道，確定要繼續嗎？')) {
       dutySelect.value = currentDutyFile;
       populateDutyDropdown(dutiesDatabase, currentDutyFile);
       return;
     }
     
-    currentDutyFile = dutyFile;
-    if (!dutyFile) {
-      bossMechanics = [];
-      recalculateTimeline();
-      renderTimeline();
-      autoSave();
-      return;
-    }
-    
     try {
-      const response = await fetch(`./data/duties/${dutyFile}`);
-      if (!response.ok) throw new Error('無法載入副本資料');
-      const dutyData = await response.json();
-      loadDutyTimeline(dutyData);
+      await loadDuty(dutyFile);
     } catch (err) {
       console.error(err);
       alert('載入副本失敗: ' + err.message);
@@ -1314,7 +1397,8 @@ function renderTimeline() {
     
     // Tooltip
     const originalSkill = skillsDatabase[currentJobId].skills.find(s => s.id === skill.skillId);
-    el.addEventListener('mousemove', (e) => showTooltip(e, originalSkill));
+    const tooltipSkill = originalSkill ? { ...originalSkill, startTime: skill.startTime } : skill;
+    el.addEventListener('mousemove', (e) => showTooltip(e, tooltipSkill));
     el.addEventListener('mouseleave', hideTooltip);
     
     if (targetGcdTrack) targetGcdTrack.appendChild(el);
@@ -1350,7 +1434,8 @@ function renderTimeline() {
     
     // Tooltip
     const originalSkill = skillsDatabase[currentJobId].skills.find(s => s.id === skill.skillId);
-    el.addEventListener('mousemove', (e) => showTooltip(e, originalSkill));
+    const tooltipSkill = originalSkill ? { ...originalSkill, startTime: skill.startTime } : skill;
+    el.addEventListener('mousemove', (e) => showTooltip(e, tooltipSkill));
     el.addEventListener('mouseleave', hideTooltip);
     
     const targetOgcdTrack = document.getElementById('ogcd-track-' + (skill.timelineId || 1)) || ogcdTrack;
@@ -2040,17 +2125,6 @@ async function importFfxivMitigationPlan(data) {
   const dutyKey = data.duty;
   window.trackEvent('personal_planner', 'import_from_team', { duty: dutyKey });
   const dutyObj = dutiesDatabase.duties ? dutiesDatabase.duties.find(d => d.key === dutyKey || d.file === dutyKey) : null;
-  let dutyData = null;
-  if (dutyObj) {
-    try {
-      const response = await fetch(`./data/duties/${dutyObj.file}`);
-      if (response.ok) {
-        dutyData = await response.json();
-      }
-    } catch (e) {
-      console.warn('無法載入副本詳細資料:', e);
-    }
-  }
 
   const activePartyMembers = [];
   data.party.forEach((jobAbbrev, idx) => {
@@ -2080,11 +2154,8 @@ async function importFfxivMitigationPlan(data) {
     
     // Setup Boss Mechanics
     let officialMechs = [];
-    if (dutyObj && dutyData) {
-      currentDutyFile = dutyObj.file;
-      dutySelect.value = currentDutyFile;
-      populateDutyDropdown(dutiesDatabase, currentDutyFile);
-      loadDutyTimeline(dutyData);
+    if (dutyObj) {
+      await loadDuty(dutyObj.file, false);
       officialMechs = JSON.parse(JSON.stringify(bossMechanics));
     } else {
       currentDutyFile = '';
@@ -3000,10 +3071,32 @@ function showTooltip(e, skill) {
   // Set badge color based on type
   const badge = tooltip.querySelector('.tooltip-badge');
   badge.style.backgroundColor = skill.classification === '能力' ? 'var(--color-ogcd)' : 'var(--color-gcd)';
+
+  // Hover guide and current time display
+  const hoverGuide = document.getElementById('hover-guide');
+  const tooltipTime = document.getElementById('tooltip-time');
+  const tooltipTimeVal = document.getElementById('tooltip-time-val');
+  if (typeof skill.startTime === 'number') {
+    if (hoverGuide) {
+      hoverGuide.style.display = 'block';
+      hoverGuide.style.left = `${TRACK_INFO_WIDTH + (skill.startTime + PREPULL_TIME) * pixelsPerSecond}px`;
+    }
+    if (tooltipTime && tooltipTimeVal) {
+      tooltipTime.style.display = 'block';
+      tooltipTimeVal.textContent = `開始時間：${formatTime(skill.startTime)}`;
+    }
+  } else {
+    if (hoverGuide) hoverGuide.style.display = 'none';
+    if (tooltipTime) tooltipTime.style.display = 'none';
+  }
 }
 
 function hideTooltip() {
   tooltip.style.display = 'none';
+  const hoverGuide = document.getElementById('hover-guide');
+  if (hoverGuide) hoverGuide.style.display = 'none';
+  const tooltipTime = document.getElementById('tooltip-time');
+  if (tooltipTime) tooltipTime.style.display = 'none';
 }
 
 // ── Supabase Integration for Individual Plans ──
@@ -3045,8 +3138,8 @@ async function saveIndivPlanToSupabase() {
           }
         }
         
-        let baseName = dutyName.replace(/\s*\(([^)]+)\)/, '-$1').replace(/\s+/g, '-');
-        if (baseName === '無副本-(自訂時間軸)') {
+        let baseName = dutyName.replace(/\s*\(P\d+.*?\)/gi, '').replace(/\s*\(All\)/gi, '').replace(/\s*\(自訂時間軸\)/g, '').trim().replace(/\s+/g, '-');
+        if (!baseName || baseName === '無副本-(自訂時間軸)') {
           baseName = '無副本';
         }
         
@@ -3293,11 +3386,7 @@ async function loadIndivPlanById(planId) {
     // Load boss mechanics from duty file if it exists
     if (currentDutyFile) {
       try {
-        const response = await fetch(`./data/duties/${currentDutyFile}`);
-        if (response.ok) {
-          const dutyData = await response.json();
-          loadDutyTimeline(dutyData);
-        }
+        await loadDuty(currentDutyFile, false);
       } catch (err) {
         console.error('Failed to load duty mechanics for cloud save:', err);
       }
