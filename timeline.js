@@ -543,6 +543,9 @@ function setupEventListeners() {
       document.getElementById('btn-export-menu').style.display = '';
       document.getElementById('btn-add-timeline-track').style.display = '';
       document.getElementById('toolbar-divider').style.display = '';
+      if (btnImportMenu) {
+        btnImportMenu.innerHTML = `<i class="fa-solid fa-file-import"></i> 匯入`;
+      }
       
       window.trackEvent('navigation', 'tab_switch', { target: 'personal' });
     });
@@ -564,6 +567,9 @@ function setupEventListeners() {
       document.getElementById('btn-export-menu').style.display = 'none';
       document.getElementById('btn-add-timeline-track').style.display = 'none';
       document.getElementById('toolbar-divider').style.display = 'none';
+      if (btnImportMenu) {
+        btnImportMenu.innerHTML = `<i class="fa-solid fa-file-import"></i> 匯入FFLog`;
+      }
       
       renderCompareTimeline();
       window.trackEvent('navigation', 'tab_switch', { target: 'compare' });
@@ -682,7 +688,11 @@ function setupEventListeners() {
   // Action Menus
   if (btnImportMenu) {
     btnImportMenu.addEventListener('click', () => {
-      importOptionsModal.classList.add('active');
+      if (activeTab === 'compare') {
+        openFFLogsApiModal();
+      } else {
+        importOptionsModal.classList.add('active');
+      }
     });
   }
   if (importOptionsClose) {
