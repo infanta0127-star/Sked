@@ -1017,6 +1017,10 @@ function renderMitSkillsList() {
 function showMitTooltip(e, skill, jobName) {
     const tooltip = document.getElementById('skill-tooltip');
     if (!tooltip) return;
+    if (window.isDraggingInProgress) {
+        hideMitTooltip();
+        return;
+    }
     
     tooltip.style.display = 'block';
     tooltip.style.left = `${e.clientX + 15}px`;

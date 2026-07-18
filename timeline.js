@@ -110,6 +110,7 @@ let activeTimelinesCount = 1;  // Support up to 3 timelines
 let timelinePlayers = [null, null, null]; // Player name for each timeline
 let playbackState = { isPlaying: false, currentTime: -PREPULL_TIME, animationFrameId: null, startTimeStamp: 0 };
 let draggedItem = null;  // { source: 'sidebar'|'timeline', skillId/instanceId, type: 'skill'|'mechanic' }
+window.isDraggingInProgress = false;
 
 // Buff Mapping for FFXIV alignment
 const BUFF_MAP = {
@@ -350,6 +351,16 @@ function loadDutyTimeline(dutyData) {
 
 // 2. Setup Event Listeners
 function setupEventListeners() {
+  // Global dragstart and dragend listeners to manage dragging status
+  document.addEventListener('dragstart', () => {
+    window.isDraggingInProgress = true;
+    const tooltipEl = document.getElementById('skill-tooltip');
+    if (tooltipEl) tooltipEl.style.display = 'none';
+  });
+  document.addEventListener('dragend', () => {
+    window.isDraggingInProgress = false;
+    draggedItem = null;
+  });
   // Tab Switcher event listeners
   if (tabBtnMit && tabBtnTimeline) {
     tabBtnMit.addEventListener('click', () => {
@@ -713,7 +724,11 @@ function setupEventListeners() {
       
       if (e.deltaY !== 0) {
         e.preventDefault();
-        container.scrollLeft += e.deltaY;
+        if (e.ctrlKey) {
+          container.scrollTop += e.deltaY;
+        } else {
+          container.scrollLeft += e.deltaY;
+        }
       }
     }, { passive: false });
   });
@@ -761,6 +776,8 @@ function loadJobSkills(jobId) {
 
     // Drag start
     card.addEventListener('dragstart', (e) => {
+      window.isDraggingInProgress = true;
+      hideTooltip();
       draggedItem = { source: 'sidebar', skillId: skill.id, type: 'skill' };
       card.classList.add('dragging');
       e.dataTransfer.setData('text/plain', skill.id);
@@ -1130,6 +1147,8 @@ function renderTimeline() {
     
     // Drag handlers
     el.addEventListener('dragstart', (e) => {
+      isDraggingInProgress = true;
+      hideTooltip();
       draggedItem = { source: 'timeline', instanceId: mech.id, type: 'mechanic' };
       e.dataTransfer.setData('text/plain', mech.id);
     });
@@ -1231,6 +1250,8 @@ function renderTimeline() {
     
     // Drag handlers
     el.addEventListener('dragstart', (e) => {
+      isDraggingInProgress = true;
+      hideTooltip();
       draggedItem = { source: 'timeline', instanceId: skill.instanceId, type: 'skill' };
       e.dataTransfer.setData('text/plain', skill.instanceId);
     });
@@ -1265,6 +1286,8 @@ function renderTimeline() {
     
     // Drag handlers
     el.addEventListener('dragstart', (e) => {
+      isDraggingInProgress = true;
+      hideTooltip();
       draggedItem = { source: 'timeline', instanceId: skill.instanceId, type: 'skill' };
       e.dataTransfer.setData('text/plain', skill.instanceId);
     });
@@ -1298,7 +1321,7 @@ function scrollToTime(timeSeconds) {
 }
 
 // 8. Handle Drag-and-Drop Drop logic
-function handleDrop(e, targetTrackType) {
+function handleDrop(e, targetTrackType, targetTimelineId = 1) {
   const rect = timelineEditor.getBoundingClientRect();
   const mouseX = e.clientX - rect.left - TRACK_INFO_WIDTH;
   const rawTime = Math.max(-PREPULL_TIME, (mouseX / pixelsPerSecond) - PREPULL_TIME);
@@ -1324,7 +1347,7 @@ function handleDrop(e, targetTrackType) {
       startTime = Math.round(startTime * 2) / 2;
     } else {
       // Find parent GCD
-      const gcds = timelineSkills.filter(s => s.track === 'gcd').sort((a, b) => a.startTime - b.startTime);
+      const gcds = timelineSkills.filter(s => s.track === 'gcd' && (s.timelineId || 1) === targetTimelineId).sort((a, b) => a.startTime - b.startTime);
       const parent = gcds.reverse().find(g => g.startTime <= rawTime);
       if (parent) {
         parentGcdId = parent.instanceId;
@@ -1347,7 +1370,8 @@ function handleDrop(e, targetTrackType) {
       parentGcdId,
       relativeOffset,
       clip: 0,
-      idle: 0
+      idle: 0,
+      timelineId: targetTimelineId
     });
     
   } else if (draggedItem.source === 'timeline') {
@@ -1356,11 +1380,14 @@ function handleDrop(e, targetTrackType) {
       const skill = timelineSkills.find(s => s.instanceId === draggedItem.instanceId);
       if (!skill) return;
       
+      // Move to target timeline track
+      skill.timelineId = targetTimelineId;
+      
       if (skill.track === 'gcd') {
         skill.startTime = Math.round(rawTime * 2) / 2;
       } else {
-        // oGCD move: re-calculate parent GCD relationship
-        const gcds = timelineSkills.filter(s => s.track === 'gcd').sort((a, b) => a.startTime - b.startTime);
+        // oGCD move: re-calculate parent GCD relationship within target timeline
+        const gcds = timelineSkills.filter(s => s.track === 'gcd' && (s.timelineId || 1) === targetTimelineId).sort((a, b) => a.startTime - b.startTime);
         const parent = gcds.reverse().find(g => g.startTime <= rawTime);
         if (parent) {
           skill.parentGcdId = parent.instanceId;
@@ -2798,7 +2825,10 @@ async function downloadTimelineImage() {
 
 // 16. Custom Tooltip Popup Card
 function showTooltip(e, skill) {
-  if (!skill) return;
+  if (!skill || window.isDraggingInProgress) {
+    hideTooltip();
+    return;
+  }
   
   tooltip.style.display = 'block';
   tooltip.style.left = `${e.clientX + 15}px`;
@@ -3525,11 +3555,7 @@ async function fflogsApiFetchReport() {
     // Load players for the target fight
     await fflogsApiUpdatePlayers(targetFightId);
 
-    let statusMsg = `✅ 找到 ${fflogsApiFights.length} 個戰鬥段落，請選擇後匯入。`;
-    if (urlParams.phase !== null) {
-      statusMsg += ` (已偵測到第 ${urlParams.phase} 階段過濾，匯入時將自動對齊)`;
-    }
-    fflogsApiSetStatus(statusMsg);
+    fflogsApiSetStatus('');
 
   } catch (err) {
     fflogsApiSetStatus(`❌ 查詢失敗：${err.message}`, true);
@@ -3676,7 +3702,7 @@ async function fflogsApiImport() {
       if (!matched) continue;
 
       const relSec = (ev.timestamp - alignmentStart) / 1000;
-      if (relSec < 0) continue;
+      if (relSec < -PREPULL_TIME) continue;
 
       parsedEvents.push({
         type: ev.type,
@@ -3704,7 +3730,7 @@ async function fflogsApiImport() {
         const castDuration = parseTimeToSeconds(pe.skill.cast);
         let adjustedTime = pe.relSec;
         if (castDuration > 0) {
-          adjustedTime = Math.max(0, pe.relSec - castDuration);
+          adjustedTime = Math.max(-PREPULL_TIME, pe.relSec - castDuration);
         }
         pe.relSec = adjustedTime;
         uniqueEvents.push(pe);
