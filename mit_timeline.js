@@ -24,6 +24,7 @@ let currentTeamEditToken = null;
 let currentTeamReadToken = null;
 let currentTeamPlanName = '未命名團隊排軸';
 let currentTeamPlanOwnerId = null;
+let currentTeamSharePassword = null;
 let currentUser = null;
 
 // ── 3. DOM Elements ──
@@ -1799,6 +1800,13 @@ function createShareModal() {
                     <button id="share-btn-url-action" class="share-btn-primary" style="width: auto; white-space: nowrap; min-width: 100px;" disabled>生成網址</button>
                 </div>
             </div>
+
+            <!-- Delete Share Record Button -->
+            <div id="share-delete-section" class="share-form-group" style="margin-bottom:0; display:none;">
+                <button id="share-btn-delete-record" class="btn btn-secondary" style="width:100%; color:var(--color-danger); border-color:rgba(239,68,68,0.4); background:rgba(239,68,68,0.1); padding:8px 0; font-size:13px; font-weight:600;">
+                    <i class="fa-solid fa-trash-can"></i> 刪除分享紀錄
+                </button>
+            </div>
         </div>
     `;
     document.body.appendChild(overlay);
@@ -1807,6 +1815,7 @@ function createShareModal() {
     const overlayClose = () => closeShareModal();
     overlay.addEventListener('click', e => { if (e.target === overlay) overlayClose(); });
     document.getElementById('share-modal-close').addEventListener('click', overlayClose);
+    document.getElementById('share-btn-delete-record').addEventListener('click', handleShareDelete);
     
     const pwdInput = document.getElementById('share-password');
     const pwdBtn = document.getElementById('share-btn-password-action');
@@ -1885,7 +1894,7 @@ function createShareModal() {
     });
 }
 
-function openShareModal() {
+async function openShareModal() {
     if (!currentTeamPlanId) {
         alert('請先「保存紀錄」之後，再分享連結！');
         return;
@@ -1898,33 +1907,72 @@ function openShareModal() {
     }
     createShareModal();
     
+    // Fetch latest share status from DB
+    try {
+        const { data } = await sb.from('team_plans')
+            .select('share_password, read_token, edit_token')
+            .eq('id', currentTeamPlanId)
+            .maybeSingle();
+            
+        if (data) {
+            currentTeamSharePassword = data.share_password || null;
+            if (data.read_token) currentTeamReadToken = data.read_token;
+            if (data.edit_token) currentTeamEditToken = data.edit_token;
+        }
+    } catch (e) {
+        console.warn('Error fetching plan share status:', e);
+    }
+
     const permissionSelect = document.getElementById('share-permission');
     const pwdInput = document.getElementById('share-password');
     const pwdBtn = document.getElementById('share-btn-password-action');
     const urlInput = document.getElementById('share-url');
     const urlBtn = document.getElementById('share-btn-url-action');
+    const deleteSection = document.getElementById('share-delete-section');
     
-    // Reset all elements to initial state
     permissionSelect.value = 'view';
-    permissionSelect.disabled = false;
+    permissionSelect.disabled = true;
     
-    pwdInput.value = '';
-    pwdInput.disabled = false;
-    pwdInput.placeholder = '輸入或生成 8 碼英數字';
-    
-    pwdBtn.innerText = '生成密碼';
-    pwdBtn.disabled = false;
-    pwdBtn.style.borderColor = '';
-    pwdBtn.style.color = '';
-    
-    urlInput.value = '';
-    urlInput.placeholder = '請先完成密碼設定';
-    
-    urlBtn.innerText = '生成網址';
-    urlBtn.disabled = true;
-    urlBtn.style.backgroundColor = '';
-    urlBtn.style.borderColor = '';
-    urlBtn.style.color = '';
+    if (currentTeamSharePassword) {
+        // Already shared
+        pwdInput.value = currentTeamSharePassword;
+        pwdInput.disabled = true;
+        pwdBtn.innerText = '複製密碼';
+        pwdBtn.disabled = false;
+        pwdBtn.style.borderColor = '';
+        pwdBtn.style.color = '';
+        
+        const shareUrl = `${window.location.origin}${window.location.pathname}?mit_view=${currentTeamReadToken}`;
+        urlInput.value = shareUrl;
+        urlBtn.innerText = '複製網址';
+        urlBtn.disabled = false;
+        urlBtn.style.backgroundColor = '';
+        urlBtn.style.borderColor = '';
+        urlBtn.style.color = '';
+        
+        deleteSection.style.display = 'block';
+    } else {
+        // Not shared yet
+        pwdInput.value = '';
+        pwdInput.disabled = false;
+        pwdInput.placeholder = '輸入或生成 8 碼英數字';
+        
+        pwdBtn.innerText = '生成密碼';
+        pwdBtn.disabled = false;
+        pwdBtn.style.borderColor = '';
+        pwdBtn.style.color = '';
+        
+        urlInput.value = '';
+        urlInput.placeholder = '請先完成密碼設定';
+        
+        urlBtn.innerText = '生成網址';
+        urlBtn.disabled = true;
+        urlBtn.style.backgroundColor = '';
+        urlBtn.style.borderColor = '';
+        urlBtn.style.color = '';
+        
+        deleteSection.style.display = 'none';
+    }
     
     document.getElementById('share-modal-overlay').style.display = 'flex';
 }
@@ -1954,6 +2002,8 @@ async function handleShareApply() {
             throw new Error('設定失敗！您沒有修改此計畫分享設定的權限（必須是計畫擁有者）。');
         }
         
+        currentTeamSharePassword = password;
+        
         const token = (permission === 'edit') ? currentTeamEditToken : currentTeamReadToken;
         const paramName = (permission === 'edit') ? 'mit_edit' : 'mit_view';
         
@@ -1976,9 +2026,17 @@ async function handleShareApply() {
         const urlBtn = document.getElementById('share-btn-url-action');
         urlBtn.innerText = '複製網址';
         
+        // Change Password button to Copy button
+        const pwdBtn = document.getElementById('share-btn-password-action');
+        pwdBtn.innerText = '複製密碼';
+        
         // Disable password input & permission select to prevent edits
         document.getElementById('share-password').disabled = true;
         document.getElementById('share-permission').disabled = true;
+        
+        // Show delete section
+        const deleteSection = document.getElementById('share-delete-section');
+        if (deleteSection) deleteSection.style.display = 'block';
         
         // Temporarily highlight the URL button green to show success
         const origBg = urlBtn.style.backgroundColor;
@@ -1990,6 +2048,29 @@ async function handleShareApply() {
         
     } catch (err) {
         alert(`設定分享密碼失敗: ${err.message}`);
+    }
+}
+
+async function handleShareDelete() {
+    if (!currentTeamPlanId) return;
+    
+    if (!confirm('確定要刪除現有的分享紀錄與密碼嗎？\n刪除後原本的分享連結與密碼將會失效，您可以重新生成新的分享連結與密碼。')) {
+        return;
+    }
+    
+    try {
+        const { error } = await sb.from('team_plans')
+            .update({ share_password: null })
+            .eq('id', currentTeamPlanId);
+            
+        if (error) throw error;
+        
+        currentTeamSharePassword = null;
+        alert('已成功刪除分享紀錄！您可以重新設定密碼並生成新的分享網址。');
+        
+        openShareModal();
+    } catch (err) {
+        alert(`刪除分享紀錄失敗: ${err.message}`);
     }
 }
 
