@@ -689,6 +689,7 @@ function setupEventListeners() {
   if (btnImportMenu) {
     btnImportMenu.addEventListener('click', () => {
       if (activeTab === 'compare') {
+        window.trackEvent('多人比較', 'click_import_fflogs_btn');
         openFFLogsApiModal();
       } else {
         importOptionsModal.classList.add('active');
@@ -724,7 +725,7 @@ function setupEventListeners() {
   if (importOptFflogsApi) {
     importOptFflogsApi.addEventListener('click', () => {
       importOptionsModal.classList.remove('active');
-      window.trackEvent('personal_planner', 'click_import_fflogs_btn');
+      window.trackEvent('個人排軸', 'click_import_fflogs_btn');
       openFFLogsApiModal();
     });
   }
@@ -4162,9 +4163,19 @@ async function fflogsApiImport() {
       return;
     }
 
+    const fightSel = document.getElementById('fflogs-api-fight-select');
+    const selectedFightOption = fightSel && fightSel.selectedIndex !== -1 ? fightSel.options[fightSel.selectedIndex] : null;
+    const selectedFightText = selectedFightOption ? selectedFightOption.text : '';
+
     const playerSel = document.getElementById('fflogs-api-player-select');
     const selectedPlayerOption = playerSel && playerSel.selectedIndex !== -1 ? playerSel.options[playerSel.selectedIndex] : null;
     const selectedPlayerName = selectedPlayerOption ? selectedPlayerOption.text.split(' (')[0] : '';
+    
+    const fflogsReportPayload = {
+      'FFLogs 報告連結': urlInput,
+      '選擇戰鬥段落': selectedFightText,
+      '選擇玩家': selectedPlayerName
+    };
     
     // Parent oGCDs to GCDs
     rawSkills.forEach(s => {
@@ -4222,7 +4233,7 @@ async function fflogsApiImport() {
       }
       
       renderCompareTimeline();
-      window.trackEvent('compare_planner', 'import_fflogs', { fightId: fightId, reportCode: fflogsApiReportCode, player: selectedPlayerName, count: rawSkills.length });
+      window.trackEvent('多人比較', 'import_fflogs', fflogsReportPayload);
     } else {
       importedPlayerName = selectedPlayerName || null;
       timelinePlayers[targetTimelineId - 1] = selectedPlayerName || null;
@@ -4255,7 +4266,7 @@ async function fflogsApiImport() {
       recalculateTimeline();
       renderTimeline();
       autoSave();
-      window.trackEvent('personal_planner', 'import_fflogs', { fightId: fightId, reportCode: fflogsApiReportCode, job: targetJobData?.name || currentJobId, count: rawSkills.length });
+      window.trackEvent('個人排軸', 'import_fflogs', fflogsReportPayload);
     }
 
     const modal = document.getElementById('fflogs-api-modal');
