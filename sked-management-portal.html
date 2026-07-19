@@ -636,7 +636,7 @@
             <div class="section-header">
                 <div class="section-title">
                     <i class="fa-solid fa-chart-bar"></i>
-                    熱門功能使用排行 (全部歷史)
+                    熱門功能使用排行 (已排除管理者操作)
                 </div>
             </div>
             <div class="chart-row" id="analytics-chart-container">
@@ -645,20 +645,54 @@
         </div>
 
         <div class="section">
-            <div class="section-header">
-                <div class="section-title">
+            <div class="section-header" style="flex-wrap: wrap; gap: 12px; align-items: center;">
+                <div class="section-title" style="margin-right: auto;">
                     <i class="fa-solid fa-clock-rotate-left"></i>
-                    近期使用者行為日誌 (最新 100 筆)
+                    近期使用者行為日誌
                 </div>
-                <button class="btn btn-primary" id="btn-refresh-analytics" style="background: rgba(91,124,246,.15); color: var(--accent2); border: 1px solid rgba(91,124,246,.3);">
-                    <i class="fa-solid fa-arrows-rotate"></i> 重新整理
-                </button>
+                
+                <!-- Log Filter Toolbar -->
+                <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                    <!-- Range Filter -->
+                    <div style="display: flex; align-items: center; gap: 6px; font-size: 13px;">
+                        <span style="color: var(--muted);"><i class="fa-solid fa-calendar-days"></i> 顯示區間:</span>
+                        <select id="log-range-filter" style="background: var(--bg3); border: 1px solid var(--border); color: var(--text); padding: 4px 10px; border-radius: 6px; font-size: 13px; outline: none; cursor: pointer;">
+                            <option value="recent100" selected>最新 100 筆</option>
+                            <option value="today">本日 (Today)</option>
+                            <option value="week">本周 (This Week)</option>
+                        </select>
+                    </div>
+
+                    <!-- Category Filter -->
+                    <div style="display: flex; align-items: center; gap: 6px; font-size: 13px;">
+                        <span style="color: var(--muted);"><i class="fa-solid fa-layer-group"></i> 類別:</span>
+                        <select id="log-category-filter" style="background: var(--bg3); border: 1px solid var(--border); color: var(--text); padding: 4px 10px; border-radius: 6px; font-size: 13px; outline: none; cursor: pointer;">
+                            <option value="all" selected>全部分類</option>
+                            <option value="團隊排軸">團隊排軸</option>
+                            <option value="個人排軸">個人排軸</option>
+                            <option value="多人比較">多人比較</option>
+                            <option value="navigation">頁面導覽</option>
+                            <option value="auth">身份驗證</option>
+                        </select>
+                    </div>
+
+                    <!-- Show Admins Switch -->
+                    <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; user-select: none; background: var(--bg3); border: 1px solid var(--border); padding: 4px 10px; border-radius: 6px;">
+                        <input type="checkbox" id="log-show-admins-toggle" checked style="accent-color: var(--accent2); cursor: pointer;">
+                        <span>顯示管理者</span>
+                    </label>
+
+                    <!-- Refresh Button -->
+                    <button class="btn btn-primary" id="btn-refresh-analytics" style="background: rgba(91,124,246,.15); color: var(--accent2); border: 1px solid rgba(91,124,246,.3); padding: 4px 12px; font-size: 13px;">
+                        <i class="fa-solid fa-arrows-rotate"></i> 重新整理
+                    </button>
+                </div>
             </div>
             <div style="overflow-x: auto;">
                 <table class="activity-log-table">
                     <thead>
                         <tr>
-                            <th>時間</th>
+                            <th>時間 (UTC+8)</th>
                             <th>操作者</th>
                             <th>類別</th>
                             <th>事件名稱</th>
@@ -945,6 +979,7 @@ document.querySelectorAll('.portal-tab-btn').forEach(btn => {
 let allAnalyticsEvents = [];
 let recentAnalyticsLogs = [];
 let cachedUserMap = {};
+let adminUserIds = new Set();
 
 async function loadAnalytics() {
     try {
@@ -954,18 +989,22 @@ async function loadAnalytics() {
         // 1. Fetch users map
         const { data: users } = await sb.rpc('admin_get_all_users');
         cachedUserMap = {};
+        adminUserIds = new Set();
         if (users) {
             users.forEach(u => {
                 cachedUserMap[u.id] = u.email;
+                if (u.role === 'admin') {
+                    adminUserIds.add(u.id);
+                }
             });
         }
 
-        // 2. Fetch logs (fetch up to 100 recent events)
+        // 2. Fetch logs (fetch up to 1000 recent events to cover Today/Week filters)
         const { data: logs, error: logsError } = await sb
             .from('analytics_events')
             .select('*')
             .order('created_at', { ascending: false })
-            .limit(100);
+            .limit(1000);
             
         if (logsError) throw logsError;
         recentAnalyticsLogs = logs;
@@ -998,7 +1037,8 @@ async function loadAnalytics() {
         uniqueUsers.forEach(uid => {
             const opt = document.createElement('option');
             opt.value = `user:${uid}`;
-            opt.textContent = `👤 使用者: ${cachedUserMap[uid]}`;
+            const isAdmin = adminUserIds.has(uid);
+            opt.textContent = `👤 使用者: ${cachedUserMap[uid]}${isAdmin ? ' (管理員)' : ''}`;
             filterSelect.appendChild(opt);
         });
 
@@ -1027,7 +1067,7 @@ async function loadAnalytics() {
 function renderFilteredAnalytics() {
     const filterVal = document.getElementById('analytics-user-filter').value;
     
-    // Filter
+    // Filter by user/session dropdown
     let filteredEvents = allAnalyticsEvents;
     let filteredLogs = recentAnalyticsLogs;
 
@@ -1042,21 +1082,23 @@ function renderFilteredAnalytics() {
         }
     }
 
-    // 1. Calculate metrics
-    const totalEvents = filteredEvents.length;
-    const sessions = new Set(filteredEvents.map(e => e.session_id));
-    const shareCount = filteredEvents.filter(e => e.event_name === 'share_link').length;
+    // 1. Calculate metrics & Hot Features Ranking Chart (Req 1: Exclude admin operations)
+    const nonAdminEvents = filteredEvents.filter(e => !adminUserIds.has(e.user_id));
+
+    const totalEvents = nonAdminEvents.length;
+    const sessions = new Set(nonAdminEvents.map(e => e.session_id));
+    const shareCount = nonAdminEvents.filter(e => e.event_name === 'share_link').length;
 
     document.getElementById('stat-events-total').textContent = totalEvents;
     document.getElementById('stat-sessions-total').textContent = sessions.size;
     document.getElementById('stat-shares-total').textContent = shareCount;
 
-    // 2. Render horizontal bar chart
+    // 2. Render horizontal bar chart (excluding admins)
     const chartContainer = document.getElementById('analytics-chart-container');
     chartContainer.innerHTML = '';
 
     const featureCounts = {};
-    filteredEvents.forEach(e => {
+    nonAdminEvents.forEach(e => {
         featureCounts[e.event_name] = (featureCounts[e.event_name] || 0) + 1;
     });
 
@@ -1064,7 +1106,7 @@ function renderFilteredAnalytics() {
         .sort((a, b) => b[1] - a[1]);
 
     if (sortedFeatures.length === 0) {
-        chartContainer.innerHTML = '<div class="empty-state">此使用者範圍內尚無數據紀錄</div>';
+        chartContainer.innerHTML = '<div class="empty-state">尚無一般使用者數據紀錄</div>';
     } else {
         const maxCount = sortedFeatures[0][1];
         
@@ -1080,7 +1122,7 @@ function renderFilteredAnalytics() {
             'click_import_from_team_btn': '點擊【從團隊排軸匯入】按鈕',
             'import_fflogs': '從 FFLogs 匯入技能事件',
             'click_import_fflogs_btn': '點擊【從 FFLogs 匯入】按鈕',
-            'login': '管理員/使用者登入',
+            'login': '使用者登入',
             'register': '註冊新帳號',
             'logout': '登出帳號'
         };
@@ -1108,12 +1150,50 @@ function renderFilteredAnalytics() {
         chartContainer.appendChild(chartRow);
     }
 
-    // 3. Render log table
+    // 3. Render log table (Req 2)
     const logTbody = document.getElementById('analytics-log-tbody');
     logTbody.innerHTML = '';
 
-    if (filteredLogs.length === 0) {
-        logTbody.innerHTML = '<tr><td colspan="5" class="empty-state" style="text-align:center;">此篩選範圍內無近期日誌紀錄</td></tr>';
+    const rangeVal = document.getElementById('log-range-filter')?.value || 'recent100';
+    const categoryVal = document.getElementById('log-category-filter')?.value || 'all';
+    const showAdmins = document.getElementById('log-show-admins-toggle')?.checked ?? true;
+
+    let displayLogs = [...filteredLogs];
+
+    // A. Filter by admin switch
+    if (!showAdmins) {
+        displayLogs = displayLogs.filter(log => !adminUserIds.has(log.user_id));
+    }
+
+    // B. Filter by category
+    if (categoryVal !== 'all') {
+        displayLogs = displayLogs.filter(log => {
+            if (categoryVal === '團隊排軸') return log.event_category === 'team_planner' || log.event_category === '團隊排軸';
+            if (categoryVal === '個人排軸') return log.event_category === 'personal_planner' || log.event_category === '個人排軸';
+            if (categoryVal === '多人比較') return log.event_category === 'compare_planner' || log.event_category === 'compare' || log.event_category === '多人比較';
+            if (categoryVal === 'navigation') return log.event_category === 'navigation';
+            if (categoryVal === 'auth') return log.event_category === 'auth';
+            return log.event_category === categoryVal;
+        });
+    }
+
+    // C. Filter by time range
+    const now = new Date();
+    if (rangeVal === 'today') {
+        const todayStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' });
+        displayLogs = displayLogs.filter(log => {
+            const logDateStr = new Date(log.created_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' });
+            return logDateStr === todayStr;
+        });
+    } else if (rangeVal === 'week') {
+        const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        displayLogs = displayLogs.filter(log => new Date(log.created_at) >= sevenDaysAgo);
+    } else if (rangeVal === 'recent100') {
+        displayLogs = displayLogs.slice(0, 100);
+    }
+
+    if (displayLogs.length === 0) {
+        logTbody.innerHTML = '<tr><td colspan="5" class="empty-state" style="text-align:center;">此篩選範圍內無日誌紀錄</td></tr>';
     } else {
         function formatEventAction(ev) {
             const data = ev.event_data || {};
@@ -1157,7 +1237,7 @@ function renderFilteredAnalytics() {
             }
         }
 
-        filteredLogs.forEach(log => {
+        displayLogs.forEach(log => {
             const tr = document.createElement('tr');
             const localTime = new Date(log.created_at).toLocaleString('zh-TW', {
                 year: 'numeric', month: '2-digit', day: '2-digit',
@@ -1188,8 +1268,11 @@ function renderFilteredAnalytics() {
             
             // Resolve identity
             let identityText = '<span style="color:var(--muted); font-size:12px;">訪客 (Anonymous)</span>';
+            const isAdmin = adminUserIds.has(log.user_id);
+            const adminTag = isAdmin ? ' <span class="tag tag-admin" style="font-size:10px; padding:1px 4px; margin-left:4px;"><i class="fa-solid fa-crown"></i> 管理員</span>' : '';
+            
             if (log.user_id && cachedUserMap[log.user_id]) {
-                identityText = `<strong style="color:var(--accent2); font-size:12px;"><i class="fa-solid fa-circle-user"></i> ${cachedUserMap[log.user_id]}</strong>`;
+                identityText = `<strong style="color:var(--accent2); font-size:12px;"><i class="fa-solid fa-circle-user"></i> ${cachedUserMap[log.user_id]}</strong>${adminTag}`;
             } else if (log.session_id) {
                 identityText = `<span style="color:var(--muted); font-size:11px; font-family:monospace;"><i class="fa-solid fa-laptop"></i> ${log.session_id.substring(0, 8)}...</span>`;
             }
@@ -1206,8 +1289,11 @@ function renderFilteredAnalytics() {
     }
 }
 
-// Bind dropdown change event
+// Bind dropdown & filter change events
 document.getElementById('analytics-user-filter').addEventListener('change', renderFilteredAnalytics);
+document.getElementById('log-range-filter')?.addEventListener('change', renderFilteredAnalytics);
+document.getElementById('log-category-filter')?.addEventListener('change', renderFilteredAnalytics);
+document.getElementById('log-show-admins-toggle')?.addEventListener('change', renderFilteredAnalytics);
 document.getElementById('btn-refresh-analytics').addEventListener('click', loadAnalytics);
 </script>
 </body>
