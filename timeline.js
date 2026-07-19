@@ -4171,7 +4171,7 @@ async function fflogsApiImport() {
       }
       
       renderCompareTimeline();
-      window.trackEvent('compare_planner', 'import_fflogs', { fightId: selectedFightId, reportCode: fflogsApiReportCode, player: selectedPlayerName, count: rawSkills.length });
+      window.trackEvent('compare_planner', 'import_fflogs', { fightId: fightId, reportCode: fflogsApiReportCode, player: selectedPlayerName, count: rawSkills.length });
     } else {
       importedPlayerName = selectedPlayerName || null;
       timelinePlayers[targetTimelineId - 1] = selectedPlayerName || null;
@@ -4204,7 +4204,7 @@ async function fflogsApiImport() {
       recalculateTimeline();
       renderTimeline();
       autoSave();
-      window.trackEvent('personal_planner', 'import_fflogs', { fightId: selectedFightId, reportCode: fflogsApiReportCode, job: targetJobData?.name || currentJobId, count: rawSkills.length });
+      window.trackEvent('personal_planner', 'import_fflogs', { fightId: fightId, reportCode: fflogsApiReportCode, job: targetJobData?.name || currentJobId, count: rawSkills.length });
     }
 
     const modal = document.getElementById('fflogs-api-modal');
