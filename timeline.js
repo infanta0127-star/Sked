@@ -724,10 +724,6 @@ function setupEventListeners() {
   if (importOptFflogsApi) {
     importOptFflogsApi.addEventListener('click', () => {
       importOptionsModal.classList.remove('active');
-      if (!currentJobId) {
-        alert('請先選擇職業再使用 FFLogs 匯入！');
-        return;
-      }
       window.trackEvent('personal_planner', 'click_import_fflogs_btn');
       openFFLogsApiModal();
     });
@@ -3877,25 +3873,33 @@ async function fflogsApiImport() {
   const selectedPlayer = fflogsApiPlayers.find(p => p.id === sourceId);
   if (activeTab !== 'compare' && selectedPlayer) {
     const playerJob = selectedPlayer.type.toLowerCase();
-    if (playerJob !== currentJobId && skillsDatabase[playerJob]) {
-      const playerJobName = skillsDatabase[playerJob]?.name || playerJob;
-      const currentJobName = skillsDatabase[currentJobId]?.name || currentJobId;
-      const ok = await window.showCustomConfirm(
-        '職業不符',
-        `您選擇的玩家職業是「${playerJobName}」，但目前時間軸是「${currentJobName}」。\n是否要自動切換為「${playerJobName}」並開始匯入？`
-      );
-      if (!ok) {
-        fflogsApiSetStatus('⚠️ 匯入已取消（職業不符）', true);
-        return;
+    if (skillsDatabase[playerJob]) {
+      if (!currentJobId || timelineSkills.length === 0) {
+        // Automatically set active job if none chosen yet or timeline is empty
+        currentJobId = playerJob;
+        jobSelect.value = currentJobId;
+        syncCustomDropdown(jobSelect);
+        loadJobSkills(currentJobId);
+      } else if (playerJob !== currentJobId) {
+        const playerJobName = skillsDatabase[playerJob]?.name || playerJob;
+        const currentJobName = skillsDatabase[currentJobId]?.name || currentJobId;
+        const ok = await window.showCustomConfirm(
+          '職業不符',
+          `您選擇的玩家職業是「${playerJobName}」，但目前時間軸是「${currentJobName}」。\n是否要自動切換為「${playerJobName}」並開始匯入？`
+        );
+        if (!ok) {
+          fflogsApiSetStatus('⚠️ 匯入已取消（職業不符）', true);
+          return;
+        }
+        
+        // Switch active job
+        currentJobId = playerJob;
+        jobSelect.value = currentJobId;
+        syncCustomDropdown(jobSelect);
+        loadJobSkills(currentJobId);
+        timelineSkills = [];
+        bossMechanics = [];
       }
-      
-      // Switch active job
-      currentJobId = playerJob;
-      jobSelect.value = currentJobId;
-      syncCustomDropdown(jobSelect);
-      loadJobSkills(currentJobId);
-      timelineSkills = [];
-      bossMechanics = [];
     }
   }
 
