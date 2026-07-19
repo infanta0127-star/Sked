@@ -523,7 +523,7 @@ function setupEventListeners() {
       timelineWorkspaceView.classList.add('hidden');
       compareWorkspaceView.classList.add('hidden');
       timelineToolbar.classList.add('hidden');
-      window.trackEvent('navigation', 'tab_switch', { target: 'team' });
+      window.trackEvent('navigation', 'tab_switch', { target: '團隊技能排軸', code: 'team' });
     });
 
     tabBtnTimeline.addEventListener('click', () => {
@@ -547,7 +547,7 @@ function setupEventListeners() {
         btnImportMenu.innerHTML = `<i class="fa-solid fa-file-import"></i> 匯入`;
       }
       
-      window.trackEvent('navigation', 'tab_switch', { target: 'personal' });
+      window.trackEvent('navigation', 'tab_switch', { target: '個人技能排軸', code: 'personal' });
     });
 
     tabBtnCompare.addEventListener('click', () => {
@@ -572,7 +572,7 @@ function setupEventListeners() {
       }
       
       renderCompareTimeline();
-      window.trackEvent('navigation', 'tab_switch', { target: 'compare' });
+      window.trackEvent('navigation', 'tab_switch', { target: '多人施法比較', code: 'compare' });
     });
   }
 
