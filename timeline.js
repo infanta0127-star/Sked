@@ -1206,9 +1206,14 @@ function renderTimeline() {
       
       const groupHtml = `
         <div class="timeline-group" data-timeline-id="${i}" style="border-bottom: 2px solid rgba(255,255,255,0.05); margin-bottom: 8px;">
-          <div class="timeline-group-header" style="display:flex; height:24px; background:rgba(255,255,255,0.03); align-items:center;" title="${hoverTitle}">
-            <div class="track-info" style="width:180px; flex-shrink:0; background:#0f1118; border-right:2px solid rgba(255,255,255,0.1); height:100%; display:flex; align-items:center; padding:0 15px; font-size:11px; font-weight:bold; color:var(--color-text-muted); sticky:left; left:0; z-index:5; box-shadow:4px 0 10px rgba(0,0,0,0.2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-              排軸 ${i} ${userTag}
+          <div class="timeline-group-header" style="display:flex; height:24px; background:rgba(255,255,255,0.03); align-items:center;">
+            <div class="track-info" style="width:180px; flex-shrink:0; background:#0f1118; border-right:2px solid rgba(255,255,255,0.1); height:100%; display:flex; align-items:center; justify-content:space-between; padding:0 8px 0 12px; font-size:11px; font-weight:bold; color:var(--color-text-muted); sticky:left; left:0; z-index:5; box-shadow:4px 0 10px rgba(0,0,0,0.2); white-space:nowrap; overflow:hidden;">
+              <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; min-width:0;" title="${hoverTitle}">
+                排軸 ${i} ${userTag}
+              </span>
+              <button class="btn-delete-timeline-track" data-timeline-id="${i}" title="刪除排軸 ${i}" style="background:none; border:none; color:var(--color-text-muted); cursor:pointer; font-size:11px; padding:2px 6px; border-radius:4px; transition:all 0.2s; flex-shrink:0; margin-left:4px;">
+                <i class="fa-solid fa-trash-can"></i>
+              </button>
             </div>
             <div style="flex:1; border-right: 1px solid rgba(255,255,255,0.05); height:100%;"></div>
           </div>
@@ -1242,6 +1247,52 @@ function renderTimeline() {
       `;
       tracksContainer.innerHTML += groupHtml;
     }
+
+    // Bind delete timeline track listeners
+    tracksContainer.querySelectorAll('.btn-delete-timeline-track').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const targetId = parseInt(btn.dataset.timelineId, 10);
+        if (!targetId) return;
+
+        if (activeTimelinesCount === 1) {
+          const ok = await window.showCustomConfirm('清空排軸', '確定要清空排軸 1 的所有技能紀錄嗎？');
+          if (!ok) return;
+          timelineSkills = timelineSkills.filter(s => (s.timelineId || 1) !== 1);
+          timelinePlayers[0] = null;
+          importedPlayerName = null;
+          recalculateTimeline();
+          renderTimeline();
+          autoSave();
+          showToast('✅ 已清空排軸 1');
+        } else {
+          const ok = await window.showCustomConfirm('刪除排軸', `確定要刪除「排軸 ${targetId}」及其所有的技能紀錄嗎？`);
+          if (!ok) return;
+
+          // Remove skills belonging to targetId
+          timelineSkills = timelineSkills.filter(s => (s.timelineId || 1) !== targetId);
+
+          // Shift down timelineId for skills > targetId
+          timelineSkills.forEach(s => {
+            const tId = s.timelineId || 1;
+            if (tId > targetId) {
+              s.timelineId = tId - 1;
+            }
+          });
+
+          // Update timelinePlayers array
+          timelinePlayers.splice(targetId - 1, 1);
+          timelinePlayers.push(null);
+          importedPlayerName = timelinePlayers[0];
+
+          activeTimelinesCount = Math.max(1, activeTimelinesCount - 1);
+          recalculateTimeline();
+          renderTimeline();
+          autoSave();
+          showToast(`✅ 已刪除排軸 ${targetId}`);
+        }
+      });
+    });
   }
 
   // 0b. Bind drag-drop listeners to the dynamically created tracks
