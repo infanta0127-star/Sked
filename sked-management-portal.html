@@ -741,6 +741,26 @@ async function loadUsers() {
         return;
     }
 
+    // Backup client-side query for user latest activity timestamp from analytics_events
+    let clientAnalyticsMap = {};
+    try {
+        const { data: userLogs } = await sb
+            .from('analytics_events')
+            .select('user_id, created_at')
+            .not('user_id', 'is', null)
+            .order('created_at', { ascending: false });
+            
+        if (userLogs) {
+            userLogs.forEach(ev => {
+                if (!clientAnalyticsMap[ev.user_id]) {
+                    clientAnalyticsMap[ev.user_id] = ev.created_at;
+                }
+            });
+        }
+    } catch (e) {
+        console.warn('Backup analytics query:', e);
+    }
+
     const total = users.length;
     const active = users.filter(u => u.is_active).length;
     const inactive = total - active;
@@ -753,6 +773,16 @@ async function loadUsers() {
         return;
     }
 
+    function formatTime(timeStr) {
+        if (!timeStr) return '<span style="color:var(--muted)">尚未紀錄</span>';
+        const d = new Date(timeStr);
+        if (isNaN(d.getTime())) return '<span style="color:var(--muted)">尚未紀錄</span>';
+        return d.toLocaleString('zh-TW', { 
+            year: 'numeric', month: '2-digit', day: '2-digit', 
+            hour: '2-digit', minute: '2-digit', hour12: false 
+        });
+    }
+
     area.innerHTML = `
         <table class="user-table">
             <thead>
@@ -761,12 +791,15 @@ async function loadUsers() {
                     <th>邀請碼</th>
                     <th>角色</th>
                     <th>狀態</th>
+                    <th>最後使用時間</th>
                     <th>加入時間</th>
                     <th>操作</th>
                 </tr>
             </thead>
             <tbody>
-                ${users.map(u => `
+                ${users.map(u => {
+                    const lastActive = u.last_active_at || u.last_sign_in_at || clientAnalyticsMap[u.id];
+                    return `
                     <tr data-user-id="${u.id}" data-is-active="${u.is_active}">
                         <td class="email-cell">${u.email}</td>
                         <td>${u.invite_code ? `<span class="invite-code-chip">${u.invite_code}</span>` : '<span style="color:var(--muted)">—</span>'}</td>
@@ -781,6 +814,7 @@ async function loadUsers() {
                                 ${u.is_active ? '啟用' : '停用'}
                             </span>
                         </td>
+                        <td style="color:var(--accent2); font-size:12px; font-weight:500;">${formatTime(lastActive)}</td>
                         <td style="color:var(--muted); font-size:12px;">${new Date(u.created_at).toLocaleDateString('zh-TW')}</td>
                         <td>
                             ${u.id !== currentUser.id ? `
@@ -793,7 +827,7 @@ async function loadUsers() {
                             ` : '<span style="color:var(--muted); font-size:12px;">（自己）</span>'}
                         </td>
                     </tr>
-                `).join('')}
+                `}).join('')}
             </tbody>
         </table>
     `;

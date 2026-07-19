@@ -41,12 +41,14 @@ create policy "invite_codes_read_active" on public.invite_codes
 -- ── 4. Admin RPC: Get all users ──
 create or replace function public.admin_get_all_users()
 returns table (
-    id          uuid,
-    email       text,
-    is_active   boolean,
-    role        text,
-    invite_code text,
-    created_at  timestamptz
+    id              uuid,
+    email           text,
+    is_active       boolean,
+    role            text,
+    invite_code     text,
+    created_at      timestamptz,
+    last_sign_in_at timestamptz,
+    last_active_at  timestamptz
 )
 language plpgsql security definer as $$
 begin
@@ -64,7 +66,12 @@ begin
         p.is_active::boolean,
         p.role::text,
         p.invite_code::text,
-        p.created_at::timestamptz
+        p.created_at::timestamptz,
+        u.last_sign_in_at::timestamptz,
+        coalesce(
+            (select max(ae.created_at) from public.analytics_events ae where ae.user_id = p.id),
+            u.last_sign_in_at
+        )::timestamptz as last_active_at
     from public.profiles p
     join auth.users u on u.id = p.id
     order by p.created_at desc;
