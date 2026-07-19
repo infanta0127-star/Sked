@@ -721,25 +721,14 @@ function setupEventListeners() {
   }
   fileImportInput.addEventListener('change', importTimelineJSON);
 
-  if (importOptFflogs) {
-    importOptFflogs.addEventListener('click', () => {
-      importOptionsModal.classList.remove('active');
-      if (!currentJobId) {
-        alert('請先選擇職業再匯入 FF Logs！');
-        return;
-      }
-      fflogsPasteArea.value = '';
-      fflogsModal.classList.add('active');
-    });
-  }
-
   if (importOptFflogsApi) {
     importOptFflogsApi.addEventListener('click', () => {
       importOptionsModal.classList.remove('active');
       if (!currentJobId) {
-        alert('請先選擇職業再使用 FFLogs API 匯入！');
+        alert('請先選擇職業再使用 FFLogs 匯入！');
         return;
       }
+      window.trackEvent('personal_planner', 'click_import_fflogs_btn');
       openFFLogsApiModal();
     });
   }
@@ -4178,6 +4167,7 @@ async function fflogsApiImport() {
       }
       
       renderCompareTimeline();
+      window.trackEvent('compare_planner', 'import_fflogs', { fightId: selectedFightId, reportCode: fflogsApiReportCode, player: selectedPlayerName, count: rawSkills.length });
     } else {
       importedPlayerName = selectedPlayerName || null;
       timelinePlayers[targetTimelineId - 1] = selectedPlayerName || null;
@@ -4210,6 +4200,7 @@ async function fflogsApiImport() {
       recalculateTimeline();
       renderTimeline();
       autoSave();
+      window.trackEvent('personal_planner', 'import_fflogs', { fightId: selectedFightId, reportCode: fflogsApiReportCode, job: targetJobData?.name || currentJobId, count: rawSkills.length });
     }
 
     const modal = document.getElementById('fflogs-api-modal');
