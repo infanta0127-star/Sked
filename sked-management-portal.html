@@ -1036,11 +1036,13 @@ function renderFilteredAnalytics() {
             'save_cloud': '保存個人/團隊紀錄到雲端',
             'load_cloud': '讀取個人/團隊雲端紀錄',
             'share_link': '建立/複製分享連結',
-            'import_json': '自 JSON 檔案/剪貼簿匯入',
+            'import_json': '自 JSON 檔案匯入',
             'export_json': '匯出為 JSON 檔案',
             'export_image': '個人排軸導出成圖片',
             'import_from_team': '個人排軸載入團隊計畫',
-            'click_import_from_team_btn': '點擊載入團隊排軸按鈕',
+            'click_import_from_team_btn': '點擊【從團隊排軸匯入】按鈕',
+            'import_fflogs': '從 FFLogs 匯入技能事件',
+            'click_import_fflogs_btn': '點擊【從 FFLogs 匯入】按鈕',
             'login': '管理員/使用者登入',
             'register': '註冊新帳號',
             'logout': '登出帳號'
@@ -1080,9 +1082,19 @@ function renderFilteredAnalytics() {
             const data = ev.event_data || {};
             switch (ev.event_name) {
                 case 'tab_switch':
-                    return `切換至 ${data.target === 'team' ? '團隊排軸' : '個人排軸'} 頁籤`;
+                    const targetName = data.target || (data.code === 'team' ? '團隊技能排軸' : data.code === 'compare' ? '多人施法比較' : '個人技能排軸');
+                    return `切換至 <strong>${targetName}</strong> 頁籤`;
+                case 'import_fflogs':
+                    const url = data['FFLogs 報告連結'] || data.reportCode || '';
+                    const fight = data['選擇戰鬥段落'] || data.fightId || '未知段落';
+                    const player = data['選擇玩家'] || data.player || '未知玩家';
+                    const urlLink = url ? `<a href="${url}" target="_blank" style="color:var(--accent2); text-decoration:underline;">[報告連結]</a>` : '';
+                    return `從 FFLogs 匯入: <strong>${player}</strong> (${fight}) ${urlLink}`;
+                case 'click_import_fflogs_btn':
+                    const mode = (ev.event_category === '多人比較' || ev.event_category === 'compare_planner' || data.target === 'compare') ? '多人施法比較' : '個人技能排軸';
+                    return `點擊【從 FFLogs 匯入】按鈕 (${mode})`;
                 case 'save_cloud':
-                    return `保存個人/團隊雲端存檔: <strong>${data.name || '未命名'}</strong> (${data.type === 'new' ? '新存檔' : '覆蓋'})`;
+                    return `保存雲端存檔: <strong>${data.name || '未命名'}</strong> (${data.type === 'new' ? '新存檔' : '覆蓋'})`;
                 case 'load_cloud':
                     return `讀取雲端存檔: <strong>${data.name || '未命名'}</strong>`;
                 case 'share_link':
@@ -1096,24 +1108,41 @@ function renderFilteredAnalytics() {
                 case 'import_from_team':
                     return `匯入團隊計畫至個人排軸`;
                 case 'click_import_from_team_btn':
-                    return `點擊匯入團隊計畫按鈕`;
+                    return `點擊【從團隊排軸匯入】按鈕`;
                 case 'login':
-                    return `登入帳號`;
+                    return `登入帳號 (${data.email || ''})`;
                 case 'register':
-                    return `註冊新帳號`;
+                    return `註冊新帳號 (${data.email || ''})`;
                 case 'logout':
                     return `登出帳號`;
                 default:
-                    return JSON.stringify(data);
+                    return typeof data === 'object' ? JSON.stringify(data) : String(data);
             }
         }
 
         filteredLogs.forEach(log => {
             const tr = document.createElement('tr');
             const localTime = new Date(log.created_at).toLocaleString();
-            const categoryText = log.event_category === 'team_planner' ? '團隊排軸' :
-                                 log.event_category === 'personal_planner' ? '個人排軸' :
-                                 log.event_category === 'auth' ? '身份驗證' : '系統導覽';
+            
+            let categoryText = '系統導覽';
+            let badgeStyle = 'background: rgba(255,255,255,0.05); color: var(--text); border: 1px solid var(--border);';
+            
+            if (log.event_category === 'team_planner' || log.event_category === '團隊排軸') {
+                categoryText = '團隊排軸';
+                badgeStyle = 'background: rgba(91,124,246,0.15); color: #7c9ef8; border: 1px solid rgba(91,124,246,0.3);';
+            } else if (log.event_category === 'personal_planner' || log.event_category === '個人排軸') {
+                categoryText = '個人排軸';
+                badgeStyle = 'background: rgba(16,185,129,0.15); color: #34d399; border: 1px solid rgba(16,185,129,0.3);';
+            } else if (log.event_category === 'compare_planner' || log.event_category === 'compare' || log.event_category === '多人比較') {
+                categoryText = '多人比較';
+                badgeStyle = 'background: rgba(236,72,153,0.15); color: #f472b6; border: 1px solid rgba(236,72,153,0.3);';
+            } else if (log.event_category === 'auth') {
+                categoryText = '身份驗證';
+                badgeStyle = 'background: rgba(245,158,11,0.15); color: #fbbf24; border: 1px solid rgba(245,158,11,0.3);';
+            } else if (log.event_category === 'navigation') {
+                categoryText = '頁面導覽';
+                badgeStyle = 'background: rgba(6,182,212,0.15); color: #22d3ee; border: 1px solid rgba(6,182,212,0.3);';
+            }
             
             // Resolve identity
             let identityText = '<span style="color:var(--muted); font-size:12px;">訪客 (Anonymous)</span>';
@@ -1126,7 +1155,7 @@ function renderFilteredAnalytics() {
             tr.innerHTML = `
                 <td style="white-space:nowrap; color: var(--muted);">${localTime}</td>
                 <td>${identityText}</td>
-                <td><span class="badge" style="background: rgba(255,255,255,0.05); color: var(--text); border: 1px solid var(--border); font-size:11px; padding: 2px 6px;">${categoryText}</span></td>
+                <td><span class="badge" style="${badgeStyle} font-size:11px; padding: 2px 8px; border-radius: 4px; font-weight: 600;">${categoryText}</span></td>
                 <td style="font-family: monospace; font-weight: bold; color: var(--accent2);">${log.event_name}</td>
                 <td>${formatEventAction(log)}</td>
             `;
