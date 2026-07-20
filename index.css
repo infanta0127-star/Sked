@@ -2232,8 +2232,21 @@ body {
   padding: 8px;
   border-radius: 8px;
   border: 1px solid var(--border-color);
-  max-height: 100px;
-  overflow-y: auto;
+}
+
+/* Custom Slim Scrollbars for Job Panel Modal */
+#mit-panel-skills-modal ::-webkit-scrollbar {
+  width: 4px;
+}
+#mit-panel-skills-modal ::-webkit-scrollbar-track {
+  background: transparent;
+}
+#mit-panel-skills-modal ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+}
+#mit-panel-skills-modal ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .job-btn {
