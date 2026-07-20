@@ -1002,9 +1002,9 @@ function renderMitVerticalGrid(container) {
                     if (sIdx === 0) td.classList.add('job-separator-left');
                     
                     const casts = mitTimelineSkills.filter(c => c.slotIndex === i && c.skillKey === skill.id);
-                    const isCast = casts.some(c => Math.abs(c.startTime - mech.time) <= 1.0);
-                    const isActive = casts.some(c => mech.time > c.startTime && mech.time < c.startTime + c.duration);
-                    const isCooldown = casts.some(c => mech.time > c.startTime && mech.time < c.startTime + (skill.cooldown || 60));
+                    const isCast = casts.some(c => Math.abs(c.startTime - mech.time) <= 0.25);
+                    const isActive = !isCast && casts.some(c => mech.time > c.startTime + 0.25 && mech.time < c.startTime + c.duration);
+                    const isCooldown = !isCast && !isActive && casts.some(c => mech.time >= c.startTime + c.duration && mech.time < c.startTime + (skill.cooldown || 60));
                     
                     const wrapper = document.createElement('div');
                     wrapper.className = 'mit-checkbox-wrapper';
@@ -1017,7 +1017,7 @@ function renderMitVerticalGrid(container) {
                         input.checked = true;
                         input.addEventListener('change', () => toggleMitGridSkill(i, jobKey, skill.id, mech.time, false));
                     } else if (isActive) {
-                        input.checked = true;
+                        input.checked = false;
                         input.disabled = true;
                         input.classList.add('active-duration');
                         td.title = '持續時間覆蓋中';
