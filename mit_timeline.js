@@ -55,42 +55,25 @@ const tabBtnTimeline = document.getElementById('tab-btn-timeline');
 
 // ── 4. Initialize Application ──
 document.addEventListener('DOMContentLoaded', async () => {
-    // 1. Immediately render Auth UI in header so login button/profile is never hidden
-    updateAuthUI();
-
-    // 2. Fetch databases & setup core UI
     try {
-        const [skillsResp, dutiesResp] = await Promise.all([
-            fetch('./data/mit_skills.json').catch(() => fetch('data/mit_skills.json')),
-            fetch('./data/duties/index.json').catch(() => fetch('data/duties/index.json'))
-        ]);
+        // Fetch Mitigation Skills database
+        const skillsResp = await fetch('./data/mit_skills.json');
+        mitSkillsDatabase = await skillsResp.json();
+        
+        // Fetch Duties database
+        const dutiesResp = await fetch('./data/duties/index.json');
+        mitDutiesDatabase = await dutiesResp.json();
 
-        if (skillsResp && skillsResp.ok) {
-            mitSkillsDatabase = await skillsResp.json();
-        }
-        if (dutiesResp && dutiesResp.ok) {
-            mitDutiesDatabase = await dutiesResp.json();
-            populateMitDutyDropdown(mitDutiesDatabase);
-        }
+        // Populate Duty Select dropdown
+        populateMitDutyDropdown(mitDutiesDatabase);
 
         // Bind events & listeners
         setupMitEventListeners();
+        renderPartySelector();
+        renderMitSkillsList();
+        renderMitPlayerTracks();
 
-        // Load saved party composition (or default fallback)
-        await loadUserDefaultParty(currentUser);
-    } catch (err) {
-        console.error('Initialization error in mit_timeline.js:', err);
-    }
-
-    // 3. Authenticate with Supabase safely
-    try {
-        const { data } = await sb.auth.getSession();
-        if (data && data.session) {
-            currentUser = data.session.user || null;
-            updateAuthUI();
-            await loadUserDefaultParty(currentUser);
-        }
-
+        // Restore auth session & handle email auth / password recovery
         sb.auth.onAuthStateChange(async (event, session) => {
             currentUser = session?.user || null;
             updateAuthUI();
@@ -103,27 +86,38 @@ document.addEventListener('DOMContentLoaded', async () => {
             const params = new URLSearchParams(window.location.search);
             const hasShareToken = params.has('mit_view') || params.has('mit_edit');
             
-            if (currentUser && !hasShareToken) {
-                await loadUserDefaultParty(currentUser);
+            if (!currentUser && !hasShareToken) {
+                openAuthModal('login', true);
+            } else {
+                isAuthModalPersistent = false;
+                closeAuthModal();
+                if (currentUser && !hasShareToken) {
+                    await loadUserDefaultParty(currentUser);
+                }
             }
         });
-    } catch (authErr) {
-        console.warn('Supabase auth session check failed:', authErr);
-    }
 
-    // 4. Handle URL sharing tokens if present
-    try {
+        // Check if there are sharing tokens in the URL
         const params = new URLSearchParams(window.location.search);
         const hasShareToken = params.has('mit_view') || params.has('mit_edit');
         if (hasShareToken) {
             await handleUrlSharingTokens();
+        } else {
+            const { data: { session } } = await sb.auth.getSession();
+            currentUser = session?.user || null;
+            updateAuthUI();
+            if (!currentUser) {
+                openAuthModal('login', true);
+            } else {
+                await loadUserDefaultParty(currentUser);
+            }
         }
-    } catch (shareErr) {
-        console.warn('Sharing token handler error:', shareErr);
-    }
 
-    // 5. Render timeline
-    renderMitTimeline();
+        // Render timeline initially
+        renderMitTimeline();
+    } catch (err) {
+        console.error('Initialization error in mit_timeline.js:', err);
+    }
 });
 
 // ── 5. Auth UI Helpers ──
@@ -132,39 +126,30 @@ function updateAuthUI() {
     if (!profileArea) {
         profileArea = document.createElement('div');
         profileArea.id = 'user-profile-area';
-        profileArea.style.cssText = 'display:flex; align-items:center; gap:10px; margin-left:auto; z-index:10;';
-        const logoArea = document.querySelector('.logo-area');
-        if (logoArea) logoArea.appendChild(profileArea);
+        profileArea.style.cssText = 'display:flex; align-items:center; gap:10px; margin-left:auto;';
+        document.querySelector('.logo-area').appendChild(profileArea);
     }
-
-    if (!profileArea) return;
 
     if (currentUser) {
         const username = currentUser.email || '已登入';
         profileArea.innerHTML = `
-            <div style="display:flex; align-items:center; gap:8px; background:rgba(255,255,255,0.08); padding:5px 12px; border-radius:20px; border:1px solid rgba(255,255,255,0.15);">
-                <i class="fa-solid fa-circle-user" style="color:#00f0ff; font-size:16px;"></i>
-                <span style="font-size:13px; color:#fff; font-weight:600;">${username}</span>
-                <button id="btn-logout" class="btn-mini" style="background:none; border:none; color:var(--color-danger); cursor:pointer; font-size:14px; margin-left:4px;" title="登出"><i class="fa-solid fa-right-from-bracket"></i></button>
+            <div style="display:flex; align-items:center; gap:8px; background:rgba(255,255,255,0.05); padding:4px 10px; border-radius:20px; border:1px solid var(--border-color);">
+                <i class="fa-solid fa-circle-user" style="color:#7c9ef8;"></i>
+                <span style="font-size:12px; color:#fff; font-weight:600;">${username}</span>
+                <button id="btn-logout" class="btn-mini" style="background:none; border:none; color:var(--color-danger); cursor:pointer;" title="登出"><i class="fa-solid fa-right-from-bracket"></i></button>
             </div>
         `;
-        const logoutBtn = document.getElementById('btn-logout');
-        if (logoutBtn) {
-            logoutBtn.addEventListener('click', () => {
-                if (window.trackEvent) window.trackEvent('auth', 'logout');
-                sb.auth.signOut();
-            });
-        }
+        document.getElementById('btn-logout').addEventListener('click', () => {
+            window.trackEvent('auth', 'logout');
+            sb.auth.signOut();
+        });
     } else {
         profileArea.innerHTML = `
-            <button id="btn-login" class="btn btn-secondary" style="padding:6px 16px; font-size:13px; display:flex; align-items:center; gap:6px; font-weight:600;">
+            <button id="btn-login" class="btn btn-secondary" style="padding:5px 14px; font-size:12px; display:flex; align-items:center; gap:6px;">
                 <i class="fa-solid fa-right-to-bracket"></i> 登入 / 註冊
             </button>
         `;
-        const loginBtn = document.getElementById('btn-login');
-        if (loginBtn) {
-            loginBtn.addEventListener('click', () => openAuthModal('login'));
-        }
+        document.getElementById('btn-login').addEventListener('click', () => openAuthModal('login'));
     }
 }
 
@@ -552,16 +537,21 @@ function getPlayerMitSkills(jobKey, slotIndex) {
         allSkills = jobData.skills.filter(s => customIds.has(s.id));
     } else {
         const teamMitSkillIds = new Set([
+            // Tanks
             'pld_rep', 'pld_passage', 'pld_veil', 'pld_inter',
             'war_rep', 'war_shake', 'war_nascent',
             'drk_rep', 'drk_missionary', 'drk_tbn', 'drk_oblation',
             'gnb_rep', 'gnb_hol', 'gnb_corundum',
+            // Healers
             'whm_temp', 'whm_asy', 'whm_aqua', 'whm_bell', 'whm_pli',
             'sch_soil', 'sch_exp', 'sch_fey', 'sch_pro', 'sch_ser', 'sch_whi',
             'ast_cu', 'ast_sunsign', 'ast_neutral', 'ast_exalt', 'ast_celop', 'ast_horos',
             'sge_kera', 'sge_pan', 'sge_holos', 'sge_physis', 'sge_haima', 'sge_tauro', 'sge_phys2', 'sge_pneuma',
+            // Melee
             'mnk_feint', 'drg_feint', 'nin_feint', 'sam_feint', 'rpr_feint', 'vpr_feint',
+            // Phys Ranged
             'brd_troub', 'mch_tac', 'dnc_samba',
+            // Casters
             'blm_addle', 'smn_addle', 'rdm_addle', 'rdm_barrier', 'pct_addle', 'pct_tempera'
         ]);
 
@@ -1135,22 +1125,14 @@ function populateMitDutyDropdown(dutiesData, selectedValue = '') {
 // ── 7. Render functions ──
 
 function renderPartySelector() {
-    if (!partyGrid) return;
     partyGrid.innerHTML = '';
-
-    const DEFAULT_PARTY = ['PLD', 'DRK', 'WHM', 'SGE', 'SAM', 'RPR', 'BRD', 'PCT'];
-    if (!Array.isArray(mitParty) || mitParty.length !== 8) {
-        mitParty = [...DEFAULT_PARTY];
-    }
-
     const availableJobs = Object.keys(mitSkillsDatabase);
-    if (availableJobs.length === 0) return;
-
     const filterCheckbox = document.getElementById('mit-filter-roles-checkbox');
     const isFiltered = filterCheckbox ? filterCheckbox.checked : false;
     
     const slotLabels = ['T1', 'T2', 'H1', 'H2', 'D1', 'D2', 'D3', 'D4'];
     
+    // Role mapping for FFXIV jobs
     const JOB_ROLES = {
         'PLD': 'tank', 'WAR': 'tank', 'DRK': 'tank', 'GNB': 'tank',
         'WHM': 'healer', 'SCH': 'healer', 'AST': 'healer', 'SGE': 'healer',
@@ -1160,12 +1142,6 @@ function renderPartySelector() {
     };
     
     for (let i = 0; i < 8; i++) {
-        let currentJob = mitParty[i];
-        if (!currentJob || typeof currentJob !== 'string') {
-            currentJob = DEFAULT_PARTY[i];
-            mitParty[i] = currentJob;
-        }
-
         const wrapper = document.createElement('div');
         wrapper.style.display = 'flex';
         wrapper.style.flexDirection = 'column';
@@ -1180,16 +1156,17 @@ function renderPartySelector() {
         const select = document.createElement('select');
         select.dataset.slot = i;
         
+        // Determine expected role for this slot
         let expectedRole = 'dps';
         if (i < 2) expectedRole = 'tank';
         else if (i < 4) expectedRole = 'healer';
         
-        const currentJobUpper = (currentJob || '').toUpperCase();
-        if (isFiltered && JOB_ROLES[currentJobUpper] !== expectedRole) {
+        // If filtering is active and currently selected job is mismatched, assign fallback and clear timeline skills on slot
+        let currentSelectedJob = mitParty[i];
+        if (isFiltered && JOB_ROLES[currentSelectedJob.toUpperCase()] !== expectedRole) {
             const fallbackJob = availableJobs.find(jobKey => (JOB_ROLES[jobKey.toUpperCase()] || 'dps') === expectedRole);
             if (fallbackJob) {
                 mitParty[i] = fallbackJob;
-                currentJob = fallbackJob;
                 mitTimelineSkills = mitTimelineSkills.filter(cast => cast.slotIndex !== i);
             }
         }
@@ -1202,7 +1179,7 @@ function renderPartySelector() {
             
             const option = document.createElement('option');
             option.value = jobKey;
-            option.text = mitSkillsDatabase[jobKey]?.name || jobKey;
+            option.text = mitSkillsDatabase[jobKey].name;
             if (mitParty[i] === jobKey) {
                 option.selected = true;
             }
@@ -1211,6 +1188,7 @@ function renderPartySelector() {
         
         select.addEventListener('change', (e) => {
             mitParty[i] = e.target.value;
+            // Shift skills scheduled on this track to match the new job's keys, or clear them if mismatch
             mitTimelineSkills = mitTimelineSkills.filter(cast => cast.slotIndex !== i);
             renderMitSkillsList();
             renderMitPlayerTracks();
@@ -1315,14 +1293,11 @@ async function loadUserDefaultParty(user) {
 
     if (Array.isArray(savedParty) && savedParty.length === 8) {
         mitParty = [...savedParty];
-    } else {
-        mitParty = ['PLD', 'DRK', 'WHM', 'SGE', 'SAM', 'RPR', 'BRD', 'PCT'];
+        renderPartySelector();
+        renderMitSkillsList();
+        renderMitPlayerTracks();
+        renderMitTimeline();
     }
-    window.mitParty = mitParty;
-    renderPartySelector();
-    renderMitSkillsList();
-    renderMitPlayerTracks();
-    renderMitTimeline();
 }
 
 function renderMitSkillsList() {
@@ -1830,12 +1805,15 @@ function setupMitEventListeners() {
     if (mitFflogsUrlInput) mitFflogsUrlInput.addEventListener('keydown', e => { if (e.key === 'Enter') mitFflogsFetchReport(); });
     if (mitFflogsModal) mitFflogsModal.addEventListener('click', e => { if (e.target === mitFflogsModal) mitFflogsModal.classList.remove('active'); });
 
-    const btnRestoreDefaultPanel = document.getElementById('mit-btn-restore-default-panel');
+    // Job Skill Panel modal listeners
+    const btnSelectPanel = document.getElementById('mit-btn-select-panel');
+    const panelModalClose = document.getElementById('mit-panel-skills-close');
+    const btnSaveCustomPanel = document.getElementById('mit-btn-save-custom-panel');
+    const panelSkillsModal = document.getElementById('mit-panel-skills-modal');
 
     if (btnSelectPanel) btnSelectPanel.addEventListener('click', openMitPanelSkillsModal);
     if (panelModalClose) panelModalClose.addEventListener('click', closeMitPanelSkillsModal);
     if (btnSaveCustomPanel) btnSaveCustomPanel.addEventListener('click', handleSaveCustomPanels);
-    if (btnRestoreDefaultPanel) btnRestoreDefaultPanel.addEventListener('click', handleRestoreDefaultPanels);
     if (panelSkillsModal) {
         panelSkillsModal.addEventListener('click', (e) => {
             if (e.target === panelSkillsModal) closeMitPanelSkillsModal();
@@ -3711,38 +3689,5 @@ async function handleSaveCustomPanels() {
 
     closeMitPanelSkillsModal();
     alert('✅ 已成功保存您的職業技能面板設定！');
-}
-
-async function handleRestoreDefaultPanels() {
-    const jobName = mitSkillsDatabase[panelSelectedJob]?.name || panelSelectedJob;
-    const ok = await window.showCustomConfirm(
-        '恢復默認技能面板',
-        `確定要將【${jobName}】的面板技能恢復成系統默認嗎？`
-    );
-    if (!ok) return;
-
-    delete customJobPanels[panelSelectedJob];
-
-    try {
-        localStorage.setItem('sked_custom_job_panels', JSON.stringify(customJobPanels));
-    } catch (e) {}
-
-    if (currentTeamPlanId && currentUser) {
-        try {
-            await sb.from('team_plans')
-                .update({ custom_panels: customJobPanels })
-                .eq('id', currentTeamPlanId);
-        } catch (err) {
-            console.warn('Error saving custom panels to DB:', err);
-        }
-    }
-
-    renderPanelTabs();
-    renderPanelSkillsGrid();
-    renderMitSkillsList();
-    renderMitPlayerTracks();
-    renderMitTimeline();
-
-    alert(`✅ 已將【${jobName}】的技能面板恢復為系統默認設定`);
 }
 
