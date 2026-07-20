@@ -972,7 +972,7 @@ async function saveUserDefaultParty() {
 
 async function resetUserDefaultParty() {
     const DEFAULT_PARTY = ['PLD', 'DRK', 'WHM', 'SGE', 'SAM', 'RPR', 'BRD', 'PCT'];
-    if (!confirm('確定要將隊伍組成重置為預設職業（PLD, DRK, WHM, SGE, SAM, RPR, BRD, PCT）嗎？')) {
+    if (!confirm('確定要將隊伍組成重置為預設職業（騎士、暗黑騎士、白魔導士、賢者、武士、釤鐮客、吟遊詩人、繪靈法師）嗎？')) {
         return;
     }
 
