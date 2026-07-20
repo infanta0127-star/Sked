@@ -69,9 +69,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Bind events & listeners
         setupMitEventListeners();
-        renderPartySelector();
-        renderMitSkillsList();
-        renderMitPlayerTracks();
+
+        // Check current session & load saved party comp (or default party)
+        const { data: { session } } = await sb.auth.getSession();
+        currentUser = session?.user || null;
+        updateAuthUI();
+        await loadUserDefaultParty(currentUser);
 
         // Restore auth session & handle email auth / password recovery
         sb.auth.onAuthStateChange(async (event, session) => {
@@ -102,15 +105,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         const hasShareToken = params.has('mit_view') || params.has('mit_edit');
         if (hasShareToken) {
             await handleUrlSharingTokens();
-        } else {
-            const { data: { session } } = await sb.auth.getSession();
-            currentUser = session?.user || null;
-            updateAuthUI();
-            if (!currentUser) {
-                openAuthModal('login', true);
-            } else {
-                await loadUserDefaultParty(currentUser);
-            }
         }
 
         // Render timeline initially
@@ -1288,11 +1282,14 @@ async function loadUserDefaultParty(user) {
 
     if (Array.isArray(savedParty) && savedParty.length === 8) {
         mitParty = [...savedParty];
-        renderPartySelector();
-        renderMitSkillsList();
-        renderMitPlayerTracks();
-        renderMitTimeline();
+    } else {
+        mitParty = ['PLD', 'DRK', 'WHM', 'SGE', 'SAM', 'RPR', 'BRD', 'PCT'];
     }
+    window.mitParty = mitParty;
+    renderPartySelector();
+    renderMitSkillsList();
+    renderMitPlayerTracks();
+    renderMitTimeline();
 }
 
 function renderMitSkillsList() {
