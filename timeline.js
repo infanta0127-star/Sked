@@ -3160,6 +3160,8 @@ function showTooltip(e, skill) {
   tooltip.querySelector('.tooltip-name').textContent = skill.name;
   tooltip.querySelector('.tooltip-badge').textContent = skill.classification;
   tooltip.querySelector('.tooltip-lv').textContent = `Lv.${skill.level}`;
+  const mpLabel = tooltip.querySelector('#tooltip-mp-label');
+  if (mpLabel) mpLabel.textContent = '消費 MP:';
   tooltip.querySelector('.tooltip-mp').textContent = skill.cost || '-';
   tooltip.querySelector('.tooltip-times').textContent = `${skill.cast} / ${skill.recast}`;
   tooltip.querySelector('.tooltip-range').textContent = skill.range;

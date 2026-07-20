@@ -1368,6 +1368,8 @@ function showMitTooltip(e, skill, jobName) {
     tooltip.querySelector('.tooltip-badge').textContent = classification;
     
     tooltip.querySelector('.tooltip-lv').textContent = jobName || '防護職業';
+    const mpLabel = tooltip.querySelector('#tooltip-mp-label');
+    if (mpLabel) mpLabel.textContent = '持續時間:';
     tooltip.querySelector('.tooltip-mp').textContent = skill.duration ? `${skill.duration}秒` : '-';
     
     const castText = '即時';
