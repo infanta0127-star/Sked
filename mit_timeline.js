@@ -2681,6 +2681,49 @@ function parsePlayerDetailsFlat(pd) {
     return players;
 }
 
+function isFeintAbility(nameLower) {
+    return nameLower === '牽制' || nameLower === 'feint';
+}
+
+function isAddleAbility(nameLower) {
+    return nameLower === '昏亂' || nameLower === 'addle';
+}
+
+function isPhysRangedMitAbility(nameLower) {
+    return nameLower === '吟遊詩人的行進曲' || nameLower === '吟遊詩人的吟唱' || nameLower === 'troubadour' ||
+           nameLower === '策勵' || nameLower === 'tactician' ||
+           nameLower === '防守之桑巴' || nameLower === '桑巴' || nameLower === 'shield samba';
+}
+
+function matchAndAdaptMitSkill(targetJobAbbrev, abilityName) {
+    if (!abilityName || !mitSkillsDatabase[targetJobAbbrev]) return null;
+    const nameLower = abilityName.toLowerCase().trim();
+
+    // 1. Feint adaptation for Melee DPS
+    if (isFeintAbility(nameLower)) {
+        const feintSkill = mitSkillsDatabase[targetJobAbbrev].skills.find(s => s.name === '牽制' || (s.aliases && s.aliases.some(a => a.toLowerCase() === 'feint')));
+        if (feintSkill) return feintSkill;
+    }
+
+    // 2. Addle adaptation for Casters
+    if (isAddleAbility(nameLower)) {
+        const addleSkill = mitSkillsDatabase[targetJobAbbrev].skills.find(s => s.name === '昏亂' || (s.aliases && s.aliases.some(a => a.toLowerCase() === 'addle')));
+        if (addleSkill) return addleSkill;
+    }
+
+    // 3. Phys Ranged 15% mit adaptation for Phys Ranged
+    if (isPhysRangedMitAbility(nameLower)) {
+        const physMitSkill = mitSkillsDatabase[targetJobAbbrev].skills.find(s => 
+            s.id === 'brd_troub' || s.id === 'mch_tac' || s.id === 'dnc_samba' ||
+            s.name === '吟遊詩人的行進曲' || s.name === '策勵' || s.name === '防守之桑巴'
+        );
+        if (physMitSkill) return physMitSkill;
+    }
+
+    // 4. Standard match fallback
+    return matchMitSkill(targetJobAbbrev, abilityName);
+}
+
 async function mitFflogsImport() {
     const fightId = parseInt(document.getElementById('mit-fflogs-api-fight-select').value);
     const clearFirst = document.getElementById('mit-fflogs-api-clear-timeline').checked;
@@ -2714,14 +2757,35 @@ async function mitFflogsImport() {
             }
         }
 
-        // Step 2: Compare party composition (sorted arrays check)
-        const sortedLogJobs = logPlayers.map(p => p.jobAbbrev).sort();
-        const sortedMitParty = [...mitParty].sort();
+        // Step 2: Compare party composition (Tanks/Healers exact match, DPS role match)
+        const TANK_JOBS = ['PLD', 'WAR', 'DRK', 'GNB'];
+        const HEALER_JOBS = ['WHM', 'SCH', 'AST', 'SGE'];
+        const MELEE_JOBS = ['MNK', 'DRG', 'NIN', 'SAM', 'RPR', 'VPR'];
+        const PHYS_RANGED_JOBS = ['BRD', 'MCH', 'DNC'];
+        const CASTER_JOBS = ['BLM', 'SMN', 'RDM', 'PCT'];
 
-        const isMatch = sortedLogJobs.length === sortedMitParty.length &&
-                        sortedLogJobs.every((job, i) => job === sortedMitParty[i]);
+        const logTanks = logPlayers.filter(p => TANK_JOBS.includes(p.jobAbbrev));
+        const logHealers = logPlayers.filter(p => HEALER_JOBS.includes(p.jobAbbrev));
+        const logMelees = logPlayers.filter(p => MELEE_JOBS.includes(p.jobAbbrev));
+        const logPhysRanged = logPlayers.filter(p => PHYS_RANGED_JOBS.includes(p.jobAbbrev));
+        const logCasters = logPlayers.filter(p => CASTER_JOBS.includes(p.jobAbbrev));
 
-        if (!isMatch) {
+        // Check Tanks (must match mitParty[0] and mitParty[1])
+        const sortedLogTanks = logTanks.map(p => p.jobAbbrev).sort();
+        const sortedCurrentTanks = [mitParty[0], mitParty[1]].sort();
+        const tanksMatch = sortedLogTanks.length === 2 && sortedLogTanks.every((j, idx) => j === sortedCurrentTanks[idx]);
+
+        // Check Healers (must match mitParty[2] and mitParty[3])
+        const sortedLogHealers = logHealers.map(p => p.jobAbbrev).sort();
+        const sortedCurrentHealers = [mitParty[2], mitParty[3]].sort();
+        const healersMatch = sortedLogHealers.length === 2 && sortedLogHealers.every((j, idx) => j === sortedCurrentHealers[idx]);
+
+        // Check DPS roles: 2 Melees (D1, D2), 1 Phys Ranged (D3), 1 Caster (D4)
+        const meleesMatch = logMelees.length === 2;
+        const physRangedMatch = logPhysRanged.length === 1;
+        const castersMatch = logCasters.length === 1;
+
+        if (!tanksMatch || !healersMatch || !meleesMatch || !physRangedMatch || !castersMatch) {
             const mismatchMsg = '此Log與你的隊伍組成不匹配，請確認隊伍組成後再重新匯入。';
             mitFflogsSetStatus(`⚠️ ${mismatchMsg}`, true);
             alert(mismatchMsg);
@@ -2729,16 +2793,38 @@ async function mitFflogsImport() {
             return;
         }
 
-        // Step 3: Map players to 1-to-1 slot indices (0..7)
+        // Step 3: Map log players to target 1-to-1 slot indices (0..7) and target jobAbbrev
         const playerSlotMap = {};
-        const usedSlots = new Set();
-        for (const p of logPlayers) {
-            const slotIdx = mitParty.findIndex((job, idx) => job === p.jobAbbrev && !usedSlots.has(idx));
-            if (slotIdx !== -1) {
-                usedSlots.add(slotIdx);
-                playerSlotMap[p.id] = { slotIndex: slotIdx, jobAbbrev: p.jobAbbrev, name: p.name };
+
+        // Tanks -> slots 0 and 1
+        const usedTankSlots = new Set();
+        for (const p of logTanks) {
+            const slotIdx = [0, 1].find(idx => mitParty[idx] === p.jobAbbrev && !usedTankSlots.has(idx));
+            if (slotIdx !== undefined) {
+                usedTankSlots.add(slotIdx);
+                playerSlotMap[p.id] = { slotIndex: slotIdx, jobAbbrev: mitParty[slotIdx], name: p.name };
             }
         }
+
+        // Healers -> slots 2 and 3
+        const usedHealerSlots = new Set();
+        for (const p of logHealers) {
+            const slotIdx = [2, 3].find(idx => mitParty[idx] === p.jobAbbrev && !usedHealerSlots.has(idx));
+            if (slotIdx !== undefined) {
+                usedHealerSlots.add(slotIdx);
+                playerSlotMap[p.id] = { slotIndex: slotIdx, jobAbbrev: mitParty[slotIdx], name: p.name };
+            }
+        }
+
+        // D1 & D2 (Melee DPS) -> slots 4 and 5
+        playerSlotMap[logMelees[0].id] = { slotIndex: 4, jobAbbrev: mitParty[4], name: logMelees[0].name };
+        playerSlotMap[logMelees[1].id] = { slotIndex: 5, jobAbbrev: mitParty[5], name: logMelees[1].name };
+
+        // D3 (Phys Ranged) -> slot 6
+        playerSlotMap[logPhysRanged[0].id] = { slotIndex: 6, jobAbbrev: mitParty[6], name: logPhysRanged[0].name };
+
+        // D4 (Caster) -> slot 7
+        playerSlotMap[logCasters[0].id] = { slotIndex: 7, jobAbbrev: mitParty[7], name: logCasters[0].name };
 
         mitFflogsSetStatus('<i class="fa-solid fa-spinner fa-spin"></i> 正在抓取團隊技能事件...');
 
@@ -2804,7 +2890,7 @@ async function mitFflogsImport() {
             const abilityName = abilityMap[ev.abilityGameID];
             if (!abilityName) continue;
 
-            const matched = matchMitSkill(playerInfo.jobAbbrev, abilityName);
+            const matched = matchAndAdaptMitSkill(playerInfo.jobAbbrev, abilityName);
             if (!matched) continue;
 
             const relSec = (ev.timestamp - alignmentStart) / 1000;
