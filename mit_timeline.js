@@ -55,28 +55,42 @@ const tabBtnTimeline = document.getElementById('tab-btn-timeline');
 
 // ── 4. Initialize Application ──
 document.addEventListener('DOMContentLoaded', async () => {
-    try {
-        // Fetch Mitigation Skills database
-        const skillsResp = await fetch('./data/mit_skills.json');
-        mitSkillsDatabase = await skillsResp.json();
-        
-        // Fetch Duties database
-        const dutiesResp = await fetch('./data/duties/index.json');
-        mitDutiesDatabase = await dutiesResp.json();
+    // 1. Immediately render Auth UI in header so login button/profile is never hidden
+    updateAuthUI();
 
-        // Populate Duty Select dropdown
-        populateMitDutyDropdown(mitDutiesDatabase);
+    // 2. Fetch databases & setup core UI
+    try {
+        const [skillsResp, dutiesResp] = await Promise.all([
+            fetch('./data/mit_skills.json').catch(() => fetch('data/mit_skills.json')),
+            fetch('./data/duties/index.json').catch(() => fetch('data/duties/index.json'))
+        ]);
+
+        if (skillsResp && skillsResp.ok) {
+            mitSkillsDatabase = await skillsResp.json();
+        }
+        if (dutiesResp && dutiesResp.ok) {
+            mitDutiesDatabase = await dutiesResp.json();
+            populateMitDutyDropdown(mitDutiesDatabase);
+        }
 
         // Bind events & listeners
         setupMitEventListeners();
 
-        // Check current session & load saved party comp (or default party)
-        const { data: { session } } = await sb.auth.getSession();
-        currentUser = session?.user || null;
-        updateAuthUI();
+        // Load saved party composition (or default fallback)
         await loadUserDefaultParty(currentUser);
+    } catch (err) {
+        console.error('Initialization error in mit_timeline.js:', err);
+    }
 
-        // Restore auth session & handle email auth / password recovery
+    // 3. Authenticate with Supabase safely
+    try {
+        const { data } = await sb.auth.getSession();
+        if (data && data.session) {
+            currentUser = data.session.user || null;
+            updateAuthUI();
+            await loadUserDefaultParty(currentUser);
+        }
+
         sb.auth.onAuthStateChange(async (event, session) => {
             currentUser = session?.user || null;
             updateAuthUI();
@@ -89,29 +103,27 @@ document.addEventListener('DOMContentLoaded', async () => {
             const params = new URLSearchParams(window.location.search);
             const hasShareToken = params.has('mit_view') || params.has('mit_edit');
             
-            if (!currentUser && !hasShareToken) {
-                openAuthModal('login', true);
-            } else {
-                isAuthModalPersistent = false;
-                closeAuthModal();
-                if (currentUser && !hasShareToken) {
-                    await loadUserDefaultParty(currentUser);
-                }
+            if (currentUser && !hasShareToken) {
+                await loadUserDefaultParty(currentUser);
             }
         });
+    } catch (authErr) {
+        console.warn('Supabase auth session check failed:', authErr);
+    }
 
-        // Check if there are sharing tokens in the URL
+    // 4. Handle URL sharing tokens if present
+    try {
         const params = new URLSearchParams(window.location.search);
         const hasShareToken = params.has('mit_view') || params.has('mit_edit');
         if (hasShareToken) {
             await handleUrlSharingTokens();
         }
-
-        // Render timeline initially
-        renderMitTimeline();
-    } catch (err) {
-        console.error('Initialization error in mit_timeline.js:', err);
+    } catch (shareErr) {
+        console.warn('Sharing token handler error:', shareErr);
     }
+
+    // 5. Render timeline
+    renderMitTimeline();
 });
 
 // ── 5. Auth UI Helpers ──
