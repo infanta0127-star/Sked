@@ -143,6 +143,7 @@
               <option value="vertical" selected>豎版 (直向)</option>
               <option value="horizontal">橫版 (橫向)</option>
             </select>
+            <button id="mit-btn-add-custom-time" class="btn btn-secondary" style="font-size: 12px; padding: 4px 10px; margin-left: 6px; white-space: nowrap;" title="新增自訂時間點"><i class="fa-solid fa-plus"></i> 新增自訂時間點</button>
           </div>
           
           <div class="divider"></div>
@@ -596,6 +597,22 @@
     <div id="mit-skill-context-menu" class="custom-context-menu" style="display: none;">
       <div id="mit-ctx-add" class="ctx-item"><i class="fa-solid fa-plus" style="color: #22c55e;"></i> 加入面板</div>
       <div id="mit-ctx-remove" class="ctx-item"><i class="fa-solid fa-trash-can" style="color: #ef4444;"></i> 剔除面板</div>
+    </div>
+
+    <!-- Modal for Custom Choice Dialog (Confirmation with multiple options) -->
+    <div class="modal" id="mit-choice-dialog-modal">
+      <div class="modal-content" style="width: 440px; max-width: 95vw; display: flex; flex-direction: column; padding: 0; overflow: hidden; border-radius: 12px; border: 1px solid var(--border-color); box-shadow: 0 12px 32px rgba(0,0,0,0.6);">
+        <div class="modal-header" style="padding: 14px 18px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between;">
+          <h3 id="mit-choice-title" style="margin: 0; font-size: 15px; display: flex; align-items: center; gap: 8px; color: #fff;"><i class="fa-solid fa-circle-question" style="color: #f59e0b;"></i> 確認操作</h3>
+          <span class="modal-close" id="mit-choice-close" style="font-size: 22px; cursor: pointer; color: var(--color-text-muted);">&times;</span>
+        </div>
+        <div class="modal-body" style="padding: 18px 20px; display: flex; flex-direction: column; gap: 16px;">
+          <div id="mit-choice-message" style="font-size: 14px; color: #e2e8f0; line-height: 1.5; white-space: pre-wrap;"></div>
+          <div id="mit-choice-buttons" style="display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap;">
+            <!-- Buttons dynamically generated -->
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Hidden Input for Import JSON File -->

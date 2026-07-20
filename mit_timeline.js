@@ -592,13 +592,180 @@ function getPlayerMitSkills(jobKey, slotIndex) {
     return visible;
 }
 
-function toggleMitGridSkill(slotIndex, jobKey, skillId, startTime, isChecked) {
+function showCustomChoiceDialog(title, message, options) {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('mit-choice-dialog-modal');
+        const titleEl = document.getElementById('mit-choice-title');
+        const msgEl = document.getElementById('mit-choice-message');
+        const btnsEl = document.getElementById('mit-choice-buttons');
+        const closeBtn = document.getElementById('mit-choice-close');
+
+        if (!modal || !titleEl || !msgEl || !btnsEl) {
+            resolve(null);
+            return;
+        }
+
+        titleEl.innerHTML = `<i class="fa-solid fa-circle-question" style="color: #f59e0b;"></i> ${title || '確認操作'}`;
+        msgEl.innerHTML = message || '';
+        btnsEl.innerHTML = '';
+
+        const cleanup = (val) => {
+            modal.classList.remove('active');
+            resolve(val);
+        };
+
+        if (closeBtn) {
+            closeBtn.onclick = () => cleanup(null);
+        }
+
+        options.forEach(opt => {
+            const btn = document.createElement('button');
+            btn.className = `btn ${opt.btnClass || 'btn-secondary'}`;
+            btn.style.padding = '8px 14px';
+            btn.style.fontSize = '13px';
+            btn.style.fontWeight = '600';
+            btn.innerHTML = opt.label;
+            btn.onclick = () => cleanup(opt.value);
+            btnsEl.appendChild(btn);
+        });
+
+        modal.classList.add('active');
+    });
+}
+
+async function addNewCustomTimePoint() {
+    const timeStr = prompt('請輸入自訂時間點秒數 (例如 15.5):');
+    if (timeStr === null) return;
+    const time = parseFloat(timeStr);
+    if (isNaN(time) || time < 0) {
+        alert('無效的時間格式！');
+        return;
+    }
+    
+    const nameStr = prompt('請輸入備註名稱（非必填，可直接留空）:') || '';
+    
+    mitBossMechanics.push({
+        id: `custom-mech-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+        time: time,
+        name: nameStr.trim(),
+        isCustom: true,
+        dmgType: ''
+    });
+    
+    mitBossMechanics.sort((a, b) => a.time - b.time);
+    renderMitTimeline();
+}
+
+async function deleteMechanicRow(mechId) {
+    const mech = mitBossMechanics.find(m => m.id === mechId);
+    if (!mech) return;
+
+    // Find all scheduled casts at this exact mech.time
+    const scheduledCasts = mitTimelineSkills.filter(c => Math.abs(c.startTime - mech.time) <= 1.0);
+
+    if (scheduledCasts.length > 0) {
+        const JOB_NAMES = {
+            'PLD': '騎士', 'WAR': '戰士', 'DRK': '暗黑騎士', 'GNB': '絕槍戰士',
+            'WHM': '白魔導士', 'SCH': '學者', 'AST': '占星術師', 'SGE': '賢者',
+            'MNK': '武僧', 'DRG': '龍騎士', 'NIN': '忍者', 'SAM': '武士', 'RPR': '釤鐮客', 'VPR': '毒蛇劍士',
+            'BRD': '吟遊詩人', 'MCH': '機工士', 'DNC': '舞者',
+            'BLM': '黑魔導士', 'SMN': '召喚師', 'RDM': '赤魔導士', 'PCT': '繪靈法師'
+        };
+
+        const jobNamesSet = new Set();
+        scheduledCasts.forEach(c => {
+            const jName = JOB_NAMES[c.jobKey || c.jobAbbrev] || c.jobKey || c.jobAbbrev;
+            if (jName) jobNamesSet.add(jName);
+        });
+
+        const jobNamesStr = Array.from(jobNamesSet).join('、');
+
+        const choice = await showCustomChoiceDialog(
+            '刪除時間點與技能處理',
+            `此時間職業【${jobNamesStr}】有安排技能，要順延至下個時間點嗎？`,
+            [
+                { label: '<i class="fa-solid fa-angles-right"></i> 順延時間點', value: 'delay', btnClass: 'btn-primary' },
+                { label: '<i class="fa-solid fa-trash-can"></i> 刪除技能', value: 'delete', btnClass: 'btn-danger' },
+                { label: '取消', value: null, btnClass: 'btn-secondary' }
+            ]
+        );
+
+        if (choice === null) return;
+
+        if (choice === 'delay') {
+            const sortedMechs = [...mitBossMechanics].sort((a, b) => a.time - b.time);
+            const nextMech = sortedMechs.find(m => m.id !== mechId && m.time > mech.time);
+
+            if (nextMech) {
+                scheduledCasts.forEach(c => {
+                    c.startTime = nextMech.time;
+                });
+            } else {
+                scheduledCasts.forEach(c => {
+                    c.startTime = parseFloat((c.startTime + 5.0).toFixed(1));
+                });
+            }
+        } else if (choice === 'delete') {
+            const castIdsToRemove = new Set(scheduledCasts.map(c => c.id));
+            mitTimelineSkills = mitTimelineSkills.filter(c => !castIdsToRemove.has(c.id));
+        }
+    }
+
+    mitBossMechanics = mitBossMechanics.filter(m => m.id !== mechId);
+    renderMitTimeline();
+}
+
+async function toggleMitGridSkill(slotIndex, jobKey, skillId, startTime, isChecked) {
     if (isChecked) {
         const jobData = mitSkillsDatabase[jobKey];
         const skill = jobData?.skills.find(s => s.id === skillId);
-        const duration = skill ? skill.duration : 15;
-        
-        // Clear any existing cast for this skill near this timestamp to prevent duplicate overlaps
+        const cooldown = skill ? (skill.cooldown || 60) : 60;
+        const duration = skill ? (skill.duration || 15) : 15;
+
+        // Check if checking this skill conflicts with any subsequent casts of the same skill for this player
+        const conflictingCasts = mitTimelineSkills.filter(c => 
+            c.slotIndex === slotIndex && 
+            c.skillKey === skillId && 
+            c.startTime > startTime && 
+            c.startTime < startTime + cooldown
+        );
+
+        if (conflictingCasts.length > 0) {
+            const skillName = skill ? skill.name : '此技能';
+            const choice = await showCustomChoiceDialog(
+                '技能冷卻衝突提示',
+                `技能【${skillName}】與後續發生的安排卡時間了，要自動後推技能時間呢？還是刪除後續的安排時間？`,
+                [
+                    { label: '<i class="fa-solid fa-clock-rotate-left"></i> 順延技能時間', value: 'delay', btnClass: 'btn-primary' },
+                    { label: '<i class="fa-solid fa-trash-can"></i> 刪除後續技能', value: 'delete', btnClass: 'btn-danger' },
+                    { label: '取消', value: null, btnClass: 'btn-secondary' }
+                ]
+            );
+
+            if (choice === null) {
+                renderMitTimeline();
+                return;
+            }
+
+            if (choice === 'delay') {
+                const minAllowedTime = startTime + cooldown;
+                const sortedMechs = [...mitBossMechanics].sort((a, b) => a.time - b.time);
+
+                conflictingCasts.forEach(confCast => {
+                    const targetMech = sortedMechs.find(m => m.time >= minAllowedTime);
+                    if (targetMech) {
+                        confCast.startTime = targetMech.time;
+                    } else {
+                        confCast.startTime = parseFloat(minAllowedTime.toFixed(1));
+                    }
+                });
+            } else if (choice === 'delete') {
+                const conflictIds = new Set(conflictingCasts.map(c => c.id));
+                mitTimelineSkills = mitTimelineSkills.filter(c => !conflictIds.has(c.id));
+            }
+        }
+
+        // Clear any duplicate exact cast at startTime
         mitTimelineSkills = mitTimelineSkills.filter(c => 
             !(c.slotIndex === slotIndex && c.skillKey === skillId && Math.abs(c.startTime - startTime) <= 1.0)
         );
@@ -772,18 +939,43 @@ function renderMitVerticalGrid(container) {
     
     sortedMechs.forEach(mech => {
         const tr = document.createElement('tr');
+        if (mech.isCustom) tr.classList.add('is-custom-row');
         
         const timeStr = formatTime(mech.time);
         const dmgTypeLabel = mech.dmgType ? `<span class="damage-type-badge ${mech.dmgType}">${mech.dmgType === 'physical' ? '物理' : mech.dmgType === 'magic' ? '魔法' : '無屬'}</span>` : '';
-        
+        const customBadge = mech.isCustom ? `<span class="custom-row-badge">自訂</span>` : '';
+
         const tdTime = document.createElement('td');
         tdTime.className = 'sticky-time';
-        tdTime.textContent = timeStr;
+        tdTime.style.userSelect = 'none';
+        tdTime.innerHTML = `
+            <span>${timeStr}</span>
+            <button class="btn-delete-row" title="刪除此時間點"><i class="fa-solid fa-xmark"></i></button>
+        `;
+        const delBtn = tdTime.querySelector('.btn-delete-row');
+        if (delBtn) {
+            delBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                deleteMechanicRow(mech.id);
+            });
+        }
         tr.appendChild(tdTime);
         
         const tdName = document.createElement('td');
         tdName.className = 'sticky-name';
-        tdName.innerHTML = `${mech.name} ${dmgTypeLabel}`;
+        const displayName = mech.name ? mech.name : '<span style="color:var(--color-text-muted); font-style:italic; font-size:11px;">(點擊編輯備註)</span>';
+        tdName.innerHTML = `${displayName} ${customBadge} ${dmgTypeLabel}`;
+        tdName.title = '點擊修改備註';
+        tdName.style.cursor = 'pointer';
+
+        tdName.addEventListener('click', () => {
+            const newName = prompt('請輸入此時間點的備註（非必填，可留空）:', mech.name || '');
+            if (newName !== null) {
+                mech.name = newName.trim();
+                renderMitTimeline();
+            }
+        });
+
         tr.appendChild(tdName);
         
         for (let i = 0; i < 8; i++) {
@@ -1621,6 +1813,9 @@ function setupMitEventListeners() {
             hideSkillContextMenu();
         }
     });
+
+    const btnAddCustomTime = document.getElementById('mit-btn-add-custom-time');
+    if (btnAddCustomTime) btnAddCustomTime.addEventListener('click', addNewCustomTimePoint);
 
     // Layout select change event
     if (mitLayoutSelect) {
@@ -3132,16 +3327,34 @@ async function mitFflogsImport() {
             return;
         }
 
+        if (!Array.isArray(mitBossMechanics)) mitBossMechanics = [];
+
         const newMitSkills = uniqueEvents.map(pe => {
             let castTime = Math.round(pe.relSec * 10) / 10;
-            if (Array.isArray(mitBossMechanics) && mitBossMechanics.length > 0) {
+            let matchedExistingMech = false;
+
+            if (mitBossMechanics.length > 0) {
                 const closestMech = mitBossMechanics.reduce((closest, mech) => {
                     const diff = Math.abs(mech.time - pe.relSec);
                     return diff < closest.diff ? { mech, diff } : closest;
                 }, { mech: null, diff: Infinity });
 
-                if (closestMech.mech && closestMech.diff <= 3.0) {
+                if (closestMech.mech && closestMech.diff <= 0.5) {
                     castTime = closestMech.mech.time;
+                    matchedExistingMech = true;
+                }
+            }
+
+            if (!matchedExistingMech) {
+                const existsRow = mitBossMechanics.some(m => Math.abs(m.time - castTime) < 0.1);
+                if (!existsRow) {
+                    mitBossMechanics.push({
+                        id: `custom-mech-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+                        time: castTime,
+                        name: 'Log 施放點',
+                        isCustom: true,
+                        dmgType: ''
+                    });
                 }
             }
 
@@ -3155,6 +3368,8 @@ async function mitFflogsImport() {
                 duration: pe.skill.duration || 15
             };
         });
+
+        mitBossMechanics.sort((a, b) => a.time - b.time);
 
         if (clearFirst) {
             mitTimelineSkills = newMitSkills;
