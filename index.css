@@ -1641,6 +1641,10 @@ body {
 }
 
 /* Vertical Grid View Mode Layout Styles */
+#mit-timeline-editor.vertical-grid-mode ~ .timeline-bottom-bar {
+  display: none !important;
+}
+
 #mit-grid-container {
   width: 100%;
   height: 100%;

@@ -1114,14 +1114,22 @@ function populateMitDutyDropdown(dutiesData, selectedValue = '') {
 // ── 7. Render functions ──
 
 function renderPartySelector() {
+    if (!partyGrid) return;
     partyGrid.innerHTML = '';
+
+    const DEFAULT_PARTY = ['PLD', 'DRK', 'WHM', 'SGE', 'SAM', 'RPR', 'BRD', 'PCT'];
+    if (!Array.isArray(mitParty) || mitParty.length !== 8) {
+        mitParty = [...DEFAULT_PARTY];
+    }
+
     const availableJobs = Object.keys(mitSkillsDatabase);
+    if (availableJobs.length === 0) return;
+
     const filterCheckbox = document.getElementById('mit-filter-roles-checkbox');
     const isFiltered = filterCheckbox ? filterCheckbox.checked : false;
     
     const slotLabels = ['T1', 'T2', 'H1', 'H2', 'D1', 'D2', 'D3', 'D4'];
     
-    // Role mapping for FFXIV jobs
     const JOB_ROLES = {
         'PLD': 'tank', 'WAR': 'tank', 'DRK': 'tank', 'GNB': 'tank',
         'WHM': 'healer', 'SCH': 'healer', 'AST': 'healer', 'SGE': 'healer',
@@ -1131,6 +1139,12 @@ function renderPartySelector() {
     };
     
     for (let i = 0; i < 8; i++) {
+        let currentJob = mitParty[i];
+        if (!currentJob || typeof currentJob !== 'string') {
+            currentJob = DEFAULT_PARTY[i];
+            mitParty[i] = currentJob;
+        }
+
         const wrapper = document.createElement('div');
         wrapper.style.display = 'flex';
         wrapper.style.flexDirection = 'column';
@@ -1145,17 +1159,16 @@ function renderPartySelector() {
         const select = document.createElement('select');
         select.dataset.slot = i;
         
-        // Determine expected role for this slot
         let expectedRole = 'dps';
         if (i < 2) expectedRole = 'tank';
         else if (i < 4) expectedRole = 'healer';
         
-        // If filtering is active and currently selected job is mismatched, assign fallback and clear timeline skills on slot
-        let currentSelectedJob = mitParty[i];
-        if (isFiltered && JOB_ROLES[currentSelectedJob.toUpperCase()] !== expectedRole) {
+        const currentJobUpper = (currentJob || '').toUpperCase();
+        if (isFiltered && JOB_ROLES[currentJobUpper] !== expectedRole) {
             const fallbackJob = availableJobs.find(jobKey => (JOB_ROLES[jobKey.toUpperCase()] || 'dps') === expectedRole);
             if (fallbackJob) {
                 mitParty[i] = fallbackJob;
+                currentJob = fallbackJob;
                 mitTimelineSkills = mitTimelineSkills.filter(cast => cast.slotIndex !== i);
             }
         }
@@ -1168,7 +1181,7 @@ function renderPartySelector() {
             
             const option = document.createElement('option');
             option.value = jobKey;
-            option.text = mitSkillsDatabase[jobKey].name;
+            option.text = mitSkillsDatabase[jobKey]?.name || jobKey;
             if (mitParty[i] === jobKey) {
                 option.selected = true;
             }
@@ -1177,7 +1190,6 @@ function renderPartySelector() {
         
         select.addEventListener('change', (e) => {
             mitParty[i] = e.target.value;
-            // Shift skills scheduled on this track to match the new job's keys, or clear them if mismatch
             mitTimelineSkills = mitTimelineSkills.filter(cast => cast.slotIndex !== i);
             renderMitSkillsList();
             renderMitPlayerTracks();
