@@ -2185,16 +2185,40 @@ async function handleUrlSharingTokens() {
             let cachedPwd = localStorage.getItem(storageKey);
 
             // 1. Initial trial call (using cached password if available)
-            let { data, error } = await sb.rpc('get_team_plan_by_token', { p_token: token, p_password: cachedPwd || null }).maybeSingle();
+            let { data, error } = await sb.rpc('get_team_plan_by_token', {
+                p_token: token,
+                p_password: cachedPwd ? cachedPwd.trim().toUpperCase() : null
+            }).maybeSingle();
+
             if (error) throw error;
             if (!data) {
                 alert('分享連結無效或該減排計畫已遭刪除！');
                 return;
             }
 
+            // Fallback check by plan ID if token key missed
+            if (data.password_required && !data.password_correct && data.id) {
+                const planStorageKey = `sked_mit_pwd_${data.id}`;
+                const cachedPlanPwd = localStorage.getItem(planStorageKey);
+                if (cachedPlanPwd) {
+                    const ret = await sb.rpc('get_team_plan_by_token', {
+                        p_token: token,
+                        p_password: cachedPlanPwd.trim().toUpperCase()
+                    }).maybeSingle();
+                    if (ret.data && ret.data.password_correct) {
+                        data = ret.data;
+                        cachedPwd = cachedPlanPwd.trim().toUpperCase();
+                        try {
+                            localStorage.setItem(storageKey, cachedPwd);
+                        } catch (e) {}
+                    }
+                }
+            }
+
             // If cached password failed verification, clear cached entry
             if (cachedPwd && data.password_required && !data.password_correct) {
                 localStorage.removeItem(storageKey);
+                if (data.id) localStorage.removeItem(`sked_mit_pwd_${data.id}`);
                 cachedPwd = null;
             }
             
@@ -2208,7 +2232,8 @@ async function handleUrlSharingTokens() {
                     return;
                 }
                 
-                const ret = await sb.rpc('get_team_plan_by_token', { p_token: token, p_password: pwd.trim().toUpperCase() }).maybeSingle();
+                const formattedPwd = pwd.trim().toUpperCase();
+                const ret = await sb.rpc('get_team_plan_by_token', { p_token: token, p_password: formattedPwd }).maybeSingle();
                 if (ret.error) {
                     alert(`驗證密碼失敗: ${ret.error.message}`);
                     continue;
@@ -2217,7 +2242,8 @@ async function handleUrlSharingTokens() {
                 if (ret.data && ret.data.password_correct) {
                     data = ret.data;
                     try {
-                        localStorage.setItem(storageKey, pwd.trim().toUpperCase());
+                        localStorage.setItem(storageKey, formattedPwd);
+                        if (data.id) localStorage.setItem(`sked_mit_pwd_${data.id}`, formattedPwd);
                     } catch (e) {}
                 } else {
                     alert('密碼錯誤！請重新輸入。');

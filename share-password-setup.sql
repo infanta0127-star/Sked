@@ -51,8 +51,8 @@ begin
             case when v_plan.edit_token = p_token then 'edit'::text else 'read'::text end,
             false, true;
     else
-        -- If password matches
-        if p_password = v_plan.share_password then
+        -- If password matches (case-insensitive and trimmed)
+        if upper(trim(p_password)) = upper(trim(v_plan.share_password)) then
             return query
             select
                 v_plan.id, v_plan.owner_id, v_plan.duty_key, v_plan.name, v_plan.party, v_plan.mits,
