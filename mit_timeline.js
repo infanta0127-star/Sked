@@ -536,14 +536,20 @@ function getPlayerMitSkills(jobKey, slotIndex) {
         }
         allSkills = jobData.skills.filter(s => customIds.has(s.id));
     } else {
-        const healerAoEIds = new Set([
-            'whm_bell', 'whm_pli', 'whm_ass', 'whm_asy',
-            'sch_whi', 'sch_fey', 'sch_ser', 'sch_csl', 'sch_dt',
-            'ast_celop', 'ast_horos', 'ast_macromos',
-            'sge_phys2', 'sge_pneuma', 'sge_philo'
+        const teamMitSkillIds = new Set([
+            'pld_rep', 'pld_passage', 'pld_veil', 'pld_inter',
+            'war_rep', 'war_shake', 'war_nascent',
+            'drk_rep', 'drk_missionary', 'drk_tbn', 'drk_oblation',
+            'gnb_rep', 'gnb_hol', 'gnb_corundum',
+            'whm_temp', 'whm_asy', 'whm_aqua', 'whm_bell', 'whm_pli',
+            'sch_soil', 'sch_exp', 'sch_fey', 'sch_pro', 'sch_ser', 'sch_whi',
+            'ast_cu', 'ast_sunsign', 'ast_neutral', 'ast_exalt', 'ast_celop', 'ast_horos',
+            'sge_kera', 'sge_pan', 'sge_holos', 'sge_physis', 'sge_haima', 'sge_tauro', 'sge_phys2', 'sge_pneuma',
+            'mnk_feint', 'drg_feint', 'nin_feint', 'sam_feint', 'rpr_feint', 'vpr_feint',
+            'brd_troub', 'mch_tac', 'dnc_samba',
+            'blm_addle', 'smn_addle', 'rdm_addle', 'rdm_barrier', 'pct_addle', 'pct_tempera'
         ]);
 
-        const isTankOrHealer = ['PLD', 'WAR', 'DRK', 'GNB', 'WHM', 'SCH', 'AST', 'SGE'].includes(jobKey);
         const activeSkillKeys = new Set();
         if (Array.isArray(mitTimelineSkills)) {
             mitTimelineSkills.forEach(c => {
@@ -556,14 +562,21 @@ function getPlayerMitSkills(jobKey, slotIndex) {
         allSkills = jobData.skills.filter(s => {
             if (s.passive || s.id.includes('passive')) return false;
             if (activeSkillKeys.has(s.id)) return true;
-            
-            const isMitOrShield = s.tags && (s.tags.includes('減傷') || s.tags.includes('護盾') || s.tags.includes('無敵'));
-            const isAllowedPersonal = isTankOrHealer || !s.personal;
-            
-            if (isMitOrShield && isAllowedPersonal) return true;
-            if (healerAoEIds.has(s.id)) return true;
-            if (s.tags && s.tags.includes('團輔')) return true;
-            
+            if (teamMitSkillIds.has(s.id)) return true;
+
+            const nameLower = (s.name || '').toLowerCase();
+            if (nameLower.includes('雪仇') || nameLower.includes('reprisal')) return true;
+            if (nameLower.includes('牽制') || nameLower.includes('feint')) return true;
+            if (nameLower.includes('昏亂') || nameLower.includes('addle')) return true;
+            if (nameLower.includes('行進曲') || nameLower.includes('troubadour')) return true;
+            if (nameLower.includes('策勵') || nameLower.includes('tactician')) return true;
+            if (nameLower.includes('桑巴') || nameLower.includes('samba')) return true;
+
+            const isMitOrShield = s.tags && (s.tags.includes('減傷') || s.tags.includes('護盾'));
+            const isPartyOrTargeted = !s.personal || s.targetable || s.canTargetOther;
+
+            if (isMitOrShield && isPartyOrTargeted) return true;
+
             return false;
         });
     }
