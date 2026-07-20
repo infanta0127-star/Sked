@@ -1479,12 +1479,15 @@ function renderMitTimeline() {
     const playerTracksContainer = document.getElementById('mit-player-tracks-container');
     const playhead = document.getElementById('mit-playhead');
     
+    const bottomBar = document.getElementById('mit-timeline-bottom-bar');
+
     if (mitLayoutMode === 'vertical') {
         gridContainer.style.display = 'block';
         if (ruler) ruler.style.display = 'none';
         if (bossTrackWrapper) bossTrackWrapper.style.display = 'none';
         if (playerTracksContainer) playerTracksContainer.style.display = 'none';
         if (playhead) playhead.style.display = 'none';
+        if (bottomBar) bottomBar.style.display = 'none';
         
         mitTimelineEditor.classList.add('vertical-grid-mode');
         mitTimelineEditor.classList.remove('vertical');
@@ -1498,6 +1501,7 @@ function renderMitTimeline() {
         if (bossTrackWrapper) bossTrackWrapper.style.display = '';
         if (playerTracksContainer) playerTracksContainer.style.display = '';
         if (playhead) playhead.style.display = '';
+        if (bottomBar) bottomBar.style.display = '';
         
         mitTimelineEditor.classList.remove('vertical-grid-mode');
         mitTimelineEditor.classList.remove('vertical');
