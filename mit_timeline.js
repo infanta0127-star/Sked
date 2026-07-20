@@ -120,30 +120,39 @@ function updateAuthUI() {
     if (!profileArea) {
         profileArea = document.createElement('div');
         profileArea.id = 'user-profile-area';
-        profileArea.style.cssText = 'display:flex; align-items:center; gap:10px; margin-left:auto;';
-        document.querySelector('.logo-area').appendChild(profileArea);
+        profileArea.style.cssText = 'display:flex; align-items:center; gap:10px; margin-left:auto; z-index:10;';
+        const logoArea = document.querySelector('.logo-area');
+        if (logoArea) logoArea.appendChild(profileArea);
     }
+
+    if (!profileArea) return;
 
     if (currentUser) {
         const username = currentUser.email || '已登入';
         profileArea.innerHTML = `
-            <div style="display:flex; align-items:center; gap:8px; background:rgba(255,255,255,0.05); padding:4px 10px; border-radius:20px; border:1px solid var(--border-color);">
-                <i class="fa-solid fa-circle-user" style="color:#7c9ef8;"></i>
-                <span style="font-size:12px; color:#fff; font-weight:600;">${username}</span>
-                <button id="btn-logout" class="btn-mini" style="background:none; border:none; color:var(--color-danger); cursor:pointer;" title="登出"><i class="fa-solid fa-right-from-bracket"></i></button>
+            <div style="display:flex; align-items:center; gap:8px; background:rgba(255,255,255,0.08); padding:5px 12px; border-radius:20px; border:1px solid rgba(255,255,255,0.15);">
+                <i class="fa-solid fa-circle-user" style="color:#00f0ff; font-size:16px;"></i>
+                <span style="font-size:13px; color:#fff; font-weight:600;">${username}</span>
+                <button id="btn-logout" class="btn-mini" style="background:none; border:none; color:var(--color-danger); cursor:pointer; font-size:14px; margin-left:4px;" title="登出"><i class="fa-solid fa-right-from-bracket"></i></button>
             </div>
         `;
-        document.getElementById('btn-logout').addEventListener('click', () => {
-            window.trackEvent('auth', 'logout');
-            sb.auth.signOut();
-        });
+        const logoutBtn = document.getElementById('btn-logout');
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', () => {
+                if (window.trackEvent) window.trackEvent('auth', 'logout');
+                sb.auth.signOut();
+            });
+        }
     } else {
         profileArea.innerHTML = `
-            <button id="btn-login" class="btn btn-secondary" style="padding:5px 14px; font-size:12px; display:flex; align-items:center; gap:6px;">
+            <button id="btn-login" class="btn btn-secondary" style="padding:6px 16px; font-size:13px; display:flex; align-items:center; gap:6px; font-weight:600;">
                 <i class="fa-solid fa-right-to-bracket"></i> 登入 / 註冊
             </button>
         `;
-        document.getElementById('btn-login').addEventListener('click', () => openAuthModal('login'));
+        const loginBtn = document.getElementById('btn-login');
+        if (loginBtn) {
+            loginBtn.addEventListener('click', () => openAuthModal('login'));
+        }
     }
 }
 
