@@ -559,7 +559,7 @@
 
     <!-- Modal for Job Skill Panel Selection -->
     <div class="modal" id="mit-panel-skills-modal">
-      <div class="modal-content" style="width: 780px; max-width: 95vw; max-height: 85vh; display: flex; flex-direction: column; padding: 0; overflow: hidden;">
+      <div class="modal-content" style="width: 820px; max-width: 95vw; height: 80vh; max-height: 720px; display: flex; flex-direction: column; padding: 0; overflow: hidden;">
         <div class="modal-header" style="padding: 16px 20px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between;">
           <h3 style="margin: 0; font-size: 16px; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-sliders" style="color: #00f0ff;"></i> 職業技能面板設定</h3>
           <div style="display: flex; align-items: center; gap: 12px;">
@@ -567,7 +567,7 @@
             <span class="modal-close" id="mit-panel-skills-close" style="font-size: 24px; cursor: pointer; color: var(--color-text-muted);">&times;</span>
           </div>
         </div>
-        <div class="modal-body" style="display: flex; flex-direction: column; padding: 16px 20px; gap: 14px; overflow: hidden;">
+        <div class="modal-body" style="display: flex; flex-direction: column; padding: 16px 20px; gap: 14px; flex: 1; overflow: hidden;">
           <!-- Job Selector Bar -->
           <div>
             <div style="font-size: 12px; font-weight: 600; color: var(--color-text-muted); margin-bottom: 6px;">選擇職業：</div>
@@ -582,8 +582,8 @@
             <button class="panel-tab-btn" data-cat="heal"><i class="fa-solid fa-heart-pulse"></i> 抬血</button>
             <button class="panel-tab-btn" data-cat="panel"><i class="fa-solid fa-list-check"></i> 面板技能 (<span id="mit-panel-count">0</span>)</button>
           </div>
-          <!-- Skills Grid -->
-          <div style="max-height: 50vh; overflow-y: auto; padding-right: 4px;">
+          <!-- Skills Grid Container -->
+          <div style="flex: 1; min-height: 380px; overflow-y: auto; padding-right: 4px;">
             <div id="mit-panel-skills-grid" class="panel-skills-grid">
               <!-- Dynamically populated skill cards -->
             </div>
