@@ -2862,74 +2862,57 @@ async function mitFflogsImport() {
             }
         }
 
-        // Step 2: Compare party composition (Tanks/Healers exact match, DPS role match)
-        const TANK_JOBS = ['PLD', 'WAR', 'DRK', 'GNB'];
-        const HEALER_JOBS = ['WHM', 'SCH', 'AST', 'SGE'];
-        const MELEE_JOBS = ['MNK', 'DRG', 'NIN', 'SAM', 'RPR', 'VPR'];
-        const PHYS_RANGED_JOBS = ['BRD', 'MCH', 'DNC'];
-        const CASTER_JOBS = ['BLM', 'SMN', 'RDM', 'PCT'];
+        // Step 2 & 3: Dynamically match log players to mitParty slots 0..7
+        const JOB_ROLES = {
+            'PLD': 'tank', 'WAR': 'tank', 'DRK': 'tank', 'GNB': 'tank',
+            'WHM': 'healer', 'SCH': 'healer', 'AST': 'healer', 'SGE': 'healer',
+            'MNK': 'melee', 'DRG': 'melee', 'NIN': 'melee', 'SAM': 'melee', 'RPR': 'melee', 'VPR': 'melee',
+            'BRD': 'phys_ranged', 'MCH': 'phys_ranged', 'DNC': 'phys_ranged',
+            'BLM': 'caster', 'SMN': 'caster', 'RDM': 'caster', 'PCT': 'caster'
+        };
 
-        const logTanks = logPlayers.filter(p => TANK_JOBS.includes(p.jobAbbrev));
-        const logHealers = logPlayers.filter(p => HEALER_JOBS.includes(p.jobAbbrev));
-        const logMelees = logPlayers.filter(p => MELEE_JOBS.includes(p.jobAbbrev));
-        const logPhysRanged = logPlayers.filter(p => PHYS_RANGED_JOBS.includes(p.jobAbbrev));
-        const logCasters = logPlayers.filter(p => CASTER_JOBS.includes(p.jobAbbrev));
+        const playerSlotMap = {};
+        const usedLogPlayerIds = new Set();
+        let matchFailed = false;
 
-        // Check Tanks (must match mitParty[0] and mitParty[1])
-        const sortedLogTanks = logTanks.map(p => p.jobAbbrev).sort();
-        const sortedCurrentTanks = [mitParty[0], mitParty[1]].sort();
-        const tanksMatch = sortedLogTanks.length === 2 && sortedLogTanks.every((j, idx) => j === sortedCurrentTanks[idx]);
+        for (let slotIdx = 0; slotIdx < 8; slotIdx++) {
+            const targetJob = mitParty[slotIdx];
+            const targetRole = JOB_ROLES[targetJob] || 'dps';
 
-        // Check Healers (must match mitParty[2] and mitParty[3])
-        const sortedLogHealers = logHealers.map(p => p.jobAbbrev).sort();
-        const sortedCurrentHealers = [mitParty[2], mitParty[3]].sort();
-        const healersMatch = sortedLogHealers.length === 2 && sortedLogHealers.every((j, idx) => j === sortedCurrentHealers[idx]);
+            let matchedPlayer = null;
 
-        // Check DPS roles: 2 Melees (D1, D2), 1 Phys Ranged (D3), 1 Caster (D4)
-        const meleesMatch = logMelees.length === 2;
-        const physRangedMatch = logPhysRanged.length === 1;
-        const castersMatch = logCasters.length === 1;
+            if (slotIdx < 4) {
+                // Tanks (0, 1) and Healers (2, 3): exact job match required!
+                matchedPlayer = logPlayers.find(p => p.jobAbbrev === targetJob && !usedLogPlayerIds.has(p.id));
+            } else {
+                // DPS slots (4, 5, 6, 7): match by exact job first, or by DPS role
+                matchedPlayer = logPlayers.find(p => p.jobAbbrev === targetJob && !usedLogPlayerIds.has(p.id));
+                if (!matchedPlayer) {
+                    matchedPlayer = logPlayers.find(p => JOB_ROLES[p.jobAbbrev] === targetRole && !usedLogPlayerIds.has(p.id));
+                }
+            }
 
-        if (!tanksMatch || !healersMatch || !meleesMatch || !physRangedMatch || !castersMatch) {
-            const mismatchMsg = '此Log與你的隊伍組成不匹配，請確認隊伍組成後再重新匯入。';
+            if (!matchedPlayer) {
+                matchFailed = true;
+                break;
+            }
+
+            usedLogPlayerIds.add(matchedPlayer.id);
+            playerSlotMap[matchedPlayer.id] = {
+                slotIndex: slotIdx,
+                jobAbbrev: targetJob,
+                logJobAbbrev: matchedPlayer.jobAbbrev,
+                name: matchedPlayer.name
+            };
+        }
+
+        if (matchFailed) {
+            const mismatchMsg = '此Log的坦補職業與你的隊伍組成不匹配，請確認隊伍組成後再重新匯入。';
             mitFflogsSetStatus(`⚠️ ${mismatchMsg}`, true);
             alert(mismatchMsg);
             importBtn.disabled = false;
             return;
         }
-
-        // Step 3: Map log players to target 1-to-1 slot indices (0..7) and target jobAbbrev
-        const playerSlotMap = {};
-
-        // Tanks -> slots 0 and 1
-        const usedTankSlots = new Set();
-        for (const p of logTanks) {
-            const slotIdx = [0, 1].find(idx => mitParty[idx] === p.jobAbbrev && !usedTankSlots.has(idx));
-            if (slotIdx !== undefined) {
-                usedTankSlots.add(slotIdx);
-                playerSlotMap[p.id] = { slotIndex: slotIdx, jobAbbrev: mitParty[slotIdx], name: p.name };
-            }
-        }
-
-        // Healers -> slots 2 and 3
-        const usedHealerSlots = new Set();
-        for (const p of logHealers) {
-            const slotIdx = [2, 3].find(idx => mitParty[idx] === p.jobAbbrev && !usedHealerSlots.has(idx));
-            if (slotIdx !== undefined) {
-                usedHealerSlots.add(slotIdx);
-                playerSlotMap[p.id] = { slotIndex: slotIdx, jobAbbrev: mitParty[slotIdx], name: p.name };
-            }
-        }
-
-        // D1 & D2 (Melee DPS) -> slots 4 and 5
-        playerSlotMap[logMelees[0].id] = { slotIndex: 4, jobAbbrev: mitParty[4], name: logMelees[0].name };
-        playerSlotMap[logMelees[1].id] = { slotIndex: 5, jobAbbrev: mitParty[5], name: logMelees[1].name };
-
-        // D3 (Phys Ranged) -> slot 6
-        playerSlotMap[logPhysRanged[0].id] = { slotIndex: 6, jobAbbrev: mitParty[6], name: logPhysRanged[0].name };
-
-        // D4 (Caster) -> slot 7
-        playerSlotMap[logCasters[0].id] = { slotIndex: 7, jobAbbrev: mitParty[7], name: logCasters[0].name };
 
         mitFflogsSetStatus('<i class="fa-solid fa-spinner fa-spin"></i> 正在抓取團隊技能事件...');
 
