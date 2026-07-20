@@ -88,9 +88,13 @@
         <div class="sidebar-header">
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
             <h2 style="margin: 0;">隊伍組成 (Party)</h2>
-            <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; color: var(--color-text-normal); user-select: none; margin-right: 15px;">
-              <input type="checkbox" id="mit-filter-roles-checkbox" checked style="cursor: pointer; margin: 0; width: 14px; height: 14px;"> 依職能過濾
-            </label>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <button id="mit-btn-save-party" class="btn btn-secondary" style="padding: 2px 8px; font-size: 11px;" title="保存預設隊伍組成"><i class="fa-solid fa-floppy-disk"></i> 保存</button>
+              <button id="mit-btn-reset-party" class="btn btn-secondary" style="padding: 2px 8px; font-size: 11px;" title="重置隊伍組成"><i class="fa-solid fa-rotate-left"></i> 重置</button>
+              <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; color: var(--color-text-normal); user-select: none;">
+                <input type="checkbox" id="mit-filter-roles-checkbox" checked style="cursor: pointer; margin: 0; width: 14px; height: 14px;"> 依職能過濾
+              </label>
+            </div>
           </div>
           <div class="party-grid" id="party-select-grid">
             <!-- 8 Dropdowns will be dynamically populated in mit_timeline.js -->

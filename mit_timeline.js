@@ -74,7 +74,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderMitPlayerTracks();
 
         // Restore auth session & handle email auth / password recovery
-        sb.auth.onAuthStateChange((event, session) => {
+        sb.auth.onAuthStateChange(async (event, session) => {
             currentUser = session?.user || null;
             updateAuthUI();
             
@@ -91,6 +91,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else {
                 isAuthModalPersistent = false;
                 closeAuthModal();
+                if (currentUser && !hasShareToken) {
+                    await loadUserDefaultParty(currentUser);
+                }
             }
         });
 
@@ -105,6 +108,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             updateAuthUI();
             if (!currentUser) {
                 openAuthModal('login', true);
+            } else {
+                await loadUserDefaultParty(currentUser);
             }
         }
 
@@ -939,6 +944,101 @@ function renderPartySelector() {
     }
 }
 
+async function saveUserDefaultParty() {
+    if (!mitParty || mitParty.length !== 8) return;
+    
+    try {
+        localStorage.setItem('sked_default_mit_party', JSON.stringify(mitParty));
+        if (currentUser) {
+            localStorage.setItem(`sked_default_mit_party_${currentUser.id}`, JSON.stringify(mitParty));
+        }
+    } catch (e) {}
+
+    if (currentUser) {
+        try {
+            await sb.auth.updateUser({
+                data: { default_mit_party: mitParty }
+            });
+            await sb.from('profiles').update({
+                default_mit_party: mitParty
+            }).eq('id', currentUser.id);
+        } catch (e) {
+            console.warn('Failed to update default_mit_party in profile:', e);
+        }
+    }
+
+    alert('✅ 已成功保存此隊伍組成為您的個人預設組成！');
+}
+
+async function resetUserDefaultParty() {
+    const DEFAULT_PARTY = ['PLD', 'DRK', 'WHM', 'SGE', 'SAM', 'RPR', 'BRD', 'PCT'];
+    if (!confirm('確定要將隊伍組成重置為預設職業（PLD, DRK, WHM, SGE, SAM, RPR, BRD, PCT）嗎？')) {
+        return;
+    }
+
+    mitParty = [...DEFAULT_PARTY];
+
+    try {
+        localStorage.setItem('sked_default_mit_party', JSON.stringify(mitParty));
+        if (currentUser) {
+            localStorage.setItem(`sked_default_mit_party_${currentUser.id}`, JSON.stringify(mitParty));
+        }
+    } catch (e) {}
+
+    if (currentUser) {
+        try {
+            await sb.auth.updateUser({
+                data: { default_mit_party: mitParty }
+            });
+            await sb.from('profiles').update({
+                default_mit_party: mitParty
+            }).eq('id', currentUser.id);
+        } catch (e) {}
+    }
+
+    renderPartySelector();
+    renderMitSkillsList();
+    renderMitPlayerTracks();
+    renderMitTimeline();
+    
+    alert('🔄 已重置隊伍組成！');
+}
+
+async function loadUserDefaultParty(user) {
+    let savedParty = user?.user_metadata?.default_mit_party;
+    
+    if (!savedParty && user) {
+        try {
+            const { data } = await sb.from('profiles').select('default_mit_party').eq('id', user.id).maybeSingle();
+            if (data && Array.isArray(data.default_mit_party) && data.default_mit_party.length === 8) {
+                savedParty = data.default_mit_party;
+            }
+        } catch (e) {}
+    }
+
+    if (!savedParty && user) {
+        try {
+            const raw = localStorage.getItem(`sked_default_mit_party_${user.id}`);
+            if (raw) savedParty = JSON.parse(raw);
+        } catch (e) {}
+    }
+
+    if (!savedParty) {
+        try {
+            const raw = localStorage.getItem('sked_default_mit_party');
+            if (raw) savedParty = JSON.parse(raw);
+        } catch (e) {}
+    }
+
+    if (Array.isArray(savedParty) && savedParty.length === 8) {
+        mitParty = [...savedParty];
+        renderPartySelector();
+        renderMitSkillsList();
+        renderMitPlayerTracks();
+        renderMitTimeline();
+    }
+}
+
 function renderMitSkillsList() {
     mitSkillsList.innerHTML = '';
     const searchQuery = document.getElementById('mit-skill-search').value.toLowerCase();
@@ -1378,6 +1478,11 @@ function setupMitEventListeners() {
     mitBtnLoad.addEventListener('click', () => { savesModalMode = 'load'; loadTeamPlansModal(); });
     mitBtnShare.addEventListener('click', openShareModal);
     mitBtnAddMechanic.addEventListener('click', addNewBossMechanic);
+    
+    const btnSaveParty = document.getElementById('mit-btn-save-party');
+    const btnResetParty = document.getElementById('mit-btn-reset-party');
+    if (btnSaveParty) btnSaveParty.addEventListener('click', saveUserDefaultParty);
+    if (btnResetParty) btnResetParty.addEventListener('click', resetUserDefaultParty);
     
     if (mitBtnImport) {
         mitBtnImport.addEventListener('click', openMitImportOptionsModal);
