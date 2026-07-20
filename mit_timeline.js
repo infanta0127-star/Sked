@@ -847,11 +847,20 @@ function renderMitVerticalGrid(container) {
     
     const tr1 = document.createElement('tr');
     tr1.innerHTML = `
-        <th rowspan="2" class="sticky-time">判定時間</th>
-        <th rowspan="2" class="sticky-name">機制名稱</th>
+        <th colspan="2" style="background-color: #171b26; padding: 6px 10px; text-align: center; border-right: 2px solid rgba(255, 255, 255, 0.15) !important; z-index: 35;" class="sticky-time">
+            <button id="mit-btn-add-custom-time-table" class="btn btn-primary" style="font-size: 11px; padding: 4px 10px; font-weight: 600; width: 100%; justify-content: center; white-space: nowrap;"><i class="fa-solid fa-plus"></i> 新增自訂時間點</button>
+        </th>
     `;
+    const tableAddBtn = tr1.querySelector('#mit-btn-add-custom-time-table');
+    if (tableAddBtn) {
+        tableAddBtn.addEventListener('click', addNewCustomTimePoint);
+    }
     
     const tr2 = document.createElement('tr');
+    tr2.innerHTML = `
+        <th class="sticky-time">判定時間</th>
+        <th class="sticky-name">機制名稱</th>
+    `;
     
     // Save list of visible skills for each player to align tbody columns correctly
     const playerSkillsList = [];
@@ -3323,9 +3332,10 @@ async function mitFflogsImport() {
                 if (shouldSkip) continue;
             }
 
+            const cdWindow = Math.max(12, (pe.skill.cooldown || 15) - 3);
             if (lastPushedTime[key] !== undefined) {
-                const timeDiff = Math.abs(eventTime - lastPushedTime[key]);
-                if (timeDiff < 1.0) continue;
+                const timeDiff = eventTime - lastPushedTime[key];
+                if (timeDiff >= 0 && timeDiff < cdWindow) continue;
             }
 
             if (pe.type === 'begincast') {
