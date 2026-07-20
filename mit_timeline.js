@@ -1800,15 +1800,12 @@ function setupMitEventListeners() {
     if (mitFflogsUrlInput) mitFflogsUrlInput.addEventListener('keydown', e => { if (e.key === 'Enter') mitFflogsFetchReport(); });
     if (mitFflogsModal) mitFflogsModal.addEventListener('click', e => { if (e.target === mitFflogsModal) mitFflogsModal.classList.remove('active'); });
 
-    // Job Skill Panel modal listeners
-    const btnSelectPanel = document.getElementById('mit-btn-select-panel');
-    const panelModalClose = document.getElementById('mit-panel-skills-close');
-    const btnSaveCustomPanel = document.getElementById('mit-btn-save-custom-panel');
-    const panelSkillsModal = document.getElementById('mit-panel-skills-modal');
+    const btnRestoreDefaultPanel = document.getElementById('mit-btn-restore-default-panel');
 
     if (btnSelectPanel) btnSelectPanel.addEventListener('click', openMitPanelSkillsModal);
     if (panelModalClose) panelModalClose.addEventListener('click', closeMitPanelSkillsModal);
     if (btnSaveCustomPanel) btnSaveCustomPanel.addEventListener('click', handleSaveCustomPanels);
+    if (btnRestoreDefaultPanel) btnRestoreDefaultPanel.addEventListener('click', handleRestoreDefaultPanels);
     if (panelSkillsModal) {
         panelSkillsModal.addEventListener('click', (e) => {
             if (e.target === panelSkillsModal) closeMitPanelSkillsModal();
@@ -3684,5 +3681,38 @@ async function handleSaveCustomPanels() {
 
     closeMitPanelSkillsModal();
     alert('✅ 已成功保存您的職業技能面板設定！');
+}
+
+async function handleRestoreDefaultPanels() {
+    const jobName = mitSkillsDatabase[panelSelectedJob]?.name || panelSelectedJob;
+    const ok = await window.showCustomConfirm(
+        '恢復默認技能面板',
+        `確定要將【${jobName}】的面板技能恢復成系統默認嗎？`
+    );
+    if (!ok) return;
+
+    delete customJobPanels[panelSelectedJob];
+
+    try {
+        localStorage.setItem('sked_custom_job_panels', JSON.stringify(customJobPanels));
+    } catch (e) {}
+
+    if (currentTeamPlanId && currentUser) {
+        try {
+            await sb.from('team_plans')
+                .update({ custom_panels: customJobPanels })
+                .eq('id', currentTeamPlanId);
+        } catch (err) {
+            console.warn('Error saving custom panels to DB:', err);
+        }
+    }
+
+    renderPanelTabs();
+    renderPanelSkillsGrid();
+    renderMitSkillsList();
+    renderMitPlayerTracks();
+    renderMitTimeline();
+
+    alert(`✅ 已將【${jobName}】的技能面板恢復為系統默認設定`);
 }
 
