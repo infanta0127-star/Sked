@@ -504,35 +504,43 @@ function formatTime(sec) {
     return `${isNegative ? '-' : ''}${m}:${s}.${ms}`;
 }
 
+let customJobPanels = {};
+try {
+    const rawPanels = localStorage.getItem('sked_custom_job_panels');
+    if (rawPanels) customJobPanels = JSON.parse(rawPanels);
+} catch (e) {}
+
 function getPlayerMitSkills(jobKey, slotIndex) {
     const jobData = mitSkillsDatabase[jobKey];
     if (!jobData) return [];
     
-    const healerAoEIds = new Set([
-        'whm_bell', 'whm_pli', 'whm_ass', 'whm_asy',
-        'sch_whi', 'sch_fey', 'sch_ser', 'sch_csl', 'sch_dt',
-        'ast_celop', 'ast_horos', 'ast_macromos',
-        'sge_phys2', 'sge_pneuma', 'sge_philo'
-    ]);
+    let allSkills;
+    if (customJobPanels[jobKey] && Array.isArray(customJobPanels[jobKey]) && customJobPanels[jobKey].length > 0) {
+        const customIds = new Set(customJobPanels[jobKey]);
+        allSkills = jobData.skills.filter(s => customIds.has(s.id));
+    } else {
+        const healerAoEIds = new Set([
+            'whm_bell', 'whm_pli', 'whm_ass', 'whm_asy',
+            'sch_whi', 'sch_fey', 'sch_ser', 'sch_csl', 'sch_dt',
+            'ast_celop', 'ast_horos', 'ast_macromos',
+            'sge_phys2', 'sge_pneuma', 'sge_philo'
+        ]);
 
-    const isTankOrHealer = ['PLD', 'WAR', 'DRK', 'GNB', 'WHM', 'SCH', 'AST', 'SGE'].includes(jobKey);
+        const isTankOrHealer = ['PLD', 'WAR', 'DRK', 'GNB', 'WHM', 'SCH', 'AST', 'SGE'].includes(jobKey);
 
-    const allSkills = jobData.skills.filter(s => {
-        if (s.passive || s.id.includes('passive')) return false;
-        
-        const isMitOrShield = s.tags && (s.tags.includes('減傷') || s.tags.includes('護盾') || s.tags.includes('無敵'));
-        const isAllowedPersonal = isTankOrHealer || !s.personal;
-        
-        if (isMitOrShield && isAllowedPersonal) return true;
-        
-        // Or if it is in our healer AoE whitelist
-        if (healerAoEIds.has(s.id)) return true;
-        
-        // Or if it's one of the group damage buffs we added
-        if (s.tags && s.tags.includes('團輔')) return true;
-        
-        return false;
-    });
+        allSkills = jobData.skills.filter(s => {
+            if (s.passive || s.id.includes('passive')) return false;
+            
+            const isMitOrShield = s.tags && (s.tags.includes('減傷') || s.tags.includes('護盾') || s.tags.includes('無敵'));
+            const isAllowedPersonal = isTankOrHealer || !s.personal;
+            
+            if (isMitOrShield && isAllowedPersonal) return true;
+            if (healerAoEIds.has(s.id)) return true;
+            if (s.tags && s.tags.includes('團輔')) return true;
+            
+            return false;
+        });
+    }
     
     // Check if slot index is valid. If not, just return all utility skills
     if (slotIndex === undefined || slotIndex < 0 || slotIndex >= 8) {
@@ -1538,6 +1546,61 @@ function setupMitEventListeners() {
     if (mitFflogsUrlInput) mitFflogsUrlInput.addEventListener('keydown', e => { if (e.key === 'Enter') mitFflogsFetchReport(); });
     if (mitFflogsModal) mitFflogsModal.addEventListener('click', e => { if (e.target === mitFflogsModal) mitFflogsModal.classList.remove('active'); });
 
+    // Job Skill Panel modal listeners
+    const btnSelectPanel = document.getElementById('mit-btn-select-panel');
+    const panelModalClose = document.getElementById('mit-panel-skills-close');
+    const btnSaveCustomPanel = document.getElementById('mit-btn-save-custom-panel');
+    const panelSkillsModal = document.getElementById('mit-panel-skills-modal');
+
+    if (btnSelectPanel) btnSelectPanel.addEventListener('click', openMitPanelSkillsModal);
+    if (panelModalClose) panelModalClose.addEventListener('click', closeMitPanelSkillsModal);
+    if (btnSaveCustomPanel) btnSaveCustomPanel.addEventListener('click', handleSaveCustomPanels);
+    if (panelSkillsModal) {
+        panelSkillsModal.addEventListener('click', (e) => {
+            if (e.target === panelSkillsModal) closeMitPanelSkillsModal();
+        });
+    }
+
+    // Category Tabs switching
+    const panelTabsContainer = document.getElementById('mit-panel-tabs');
+    if (panelTabsContainer) {
+        panelTabsContainer.addEventListener('click', (e) => {
+            const btn = e.target.closest('.panel-tab-btn');
+            if (btn && btn.dataset.cat) {
+                panelSelectedCategory = btn.dataset.cat;
+                renderPanelTabs();
+                renderPanelSkillsGrid();
+            }
+        });
+    }
+
+    // Context Menu items
+    const ctxAdd = document.getElementById('mit-ctx-add');
+    const ctxRemove = document.getElementById('mit-ctx-remove');
+    if (ctxAdd) {
+        ctxAdd.addEventListener('click', () => {
+            if (contextMenuTargetSkillId) {
+                toggleSkillInPanel(panelSelectedJob, contextMenuTargetSkillId);
+            }
+            hideSkillContextMenu();
+        });
+    }
+    if (ctxRemove) {
+        ctxRemove.addEventListener('click', () => {
+            if (contextMenuTargetSkillId) {
+                toggleSkillInPanel(panelSelectedJob, contextMenuTargetSkillId);
+            }
+            hideSkillContextMenu();
+        });
+    }
+
+    // Hide context menu on click outside
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('#mit-skill-context-menu')) {
+            hideSkillContextMenu();
+        }
+    });
+
     // Layout select change event
     if (mitLayoutSelect) {
         mitLayoutSelect.addEventListener('change', (e) => {
@@ -1729,7 +1792,8 @@ async function saveTeamPlanToSupabase() {
                     name: currentTeamPlanName,
                     party: mitParty,
                     mits: mitTimelineSkills,
-                    custom_mechanics: mitBossMechanics
+                    custom_mechanics: mitBossMechanics,
+                    custom_panels: customJobPanels
                 })
                 .select()
                 .single();
@@ -1816,6 +1880,7 @@ async function loadTeamPlansModal() {
                                         party: mitParty,
                                         mits: mitTimelineSkills,
                                         custom_mechanics: mitBossMechanics,
+                                        custom_panels: customJobPanels,
                                         updated_at: new Date()
                                     })
                                     .eq('id', plan.id);
@@ -1901,6 +1966,9 @@ async function loadTeamPlanById(planId) {
         populateMitDutyDropdown(mitDutiesDatabase, plan.duty_key || '');
         mitParty = plan.party || [];
         mitTimelineSkills = plan.mits || [];
+        if (plan.custom_panels && typeof plan.custom_panels === 'object') {
+            customJobPanels = plan.custom_panels;
+        }
         
         if (plan.duty_key && plan.duty_key !== 'custom') {
             await loadDutyMechanicsForPlan(plan.duty_key, plan.custom_mechanics || []);
@@ -2366,6 +2434,9 @@ async function handleUrlSharingTokens() {
             populateMitDutyDropdown(mitDutiesDatabase, data.duty_key || '');
             mitParty = data.party || [];
             mitTimelineSkills = data.mits || [];
+            if (data.custom_panels && typeof data.custom_panels === 'object') {
+                customJobPanels = data.custom_panels;
+            }
             
             if (data.duty_key && data.duty_key !== 'custom') {
                 await loadDutyMechanicsForPlan(data.duty_key, data.custom_mechanics || []);
@@ -3076,5 +3147,233 @@ async function mitFflogsImport() {
         mitFflogsSetStatus(`❌ 匯入失敗：${err.message}`, true);
         importBtn.disabled = false;
     }
+}
+
+// ============================================================
+// Job Skill Panel Selection Modal & Context Menu Module
+// ============================================================
+
+let panelSelectedJob = 'PLD';
+let panelSelectedCategory = 'mit';
+let contextMenuTargetSkillId = null;
+
+function openMitPanelSkillsModal() {
+    const modal = document.getElementById('mit-panel-skills-modal');
+    if (!modal) return;
+    
+    panelSelectedJob = mitParty[0] || 'PLD';
+    panelSelectedCategory = 'mit';
+    
+    renderPanelJobSelector();
+    renderPanelTabs();
+    renderPanelSkillsGrid();
+    
+    modal.classList.add('active');
+}
+
+function closeMitPanelSkillsModal() {
+    const modal = document.getElementById('mit-panel-skills-modal');
+    if (modal) modal.classList.remove('active');
+    hideSkillContextMenu();
+}
+
+function renderPanelJobSelector() {
+    const container = document.getElementById('mit-panel-job-selector');
+    if (!container) return;
+    container.innerHTML = '';
+    
+    const availableJobs = Object.keys(mitSkillsDatabase);
+    availableJobs.forEach(jobKey => {
+        const jobData = mitSkillsDatabase[jobKey];
+        if (!jobData) return;
+        
+        const btn = document.createElement('button');
+        btn.className = `job-btn ${jobKey === panelSelectedJob ? 'active' : ''}`;
+        btn.innerHTML = `
+            <img src="${jobData.icon}" alt="${jobData.name}" />
+            <span>${jobData.name}</span>
+        `;
+        btn.addEventListener('click', () => {
+            panelSelectedJob = jobKey;
+            renderPanelJobSelector();
+            renderPanelTabs();
+            renderPanelSkillsGrid();
+        });
+        container.appendChild(btn);
+    });
+}
+
+function renderPanelTabs() {
+    const tabsContainer = document.getElementById('mit-panel-tabs');
+    if (!tabsContainer) return;
+    
+    const tabBtns = tabsContainer.querySelectorAll('.panel-tab-btn');
+    tabBtns.forEach(btn => {
+        const cat = btn.dataset.cat;
+        if (cat === panelSelectedCategory) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+
+    const countSpan = document.getElementById('mit-panel-count');
+    if (countSpan) {
+        const activeSkills = getPlayerMitSkills(panelSelectedJob);
+        countSpan.textContent = activeSkills.length;
+    }
+}
+
+function getJobSkillsByCategory(jobKey, category) {
+    const jobData = mitSkillsDatabase[jobKey];
+    if (!jobData) return [];
+
+    const isTankOrHealer = ['PLD', 'WAR', 'DRK', 'GNB', 'WHM', 'SCH', 'AST', 'SGE'].includes(jobKey);
+    const activeSkillIds = new Set(getPlayerMitSkills(jobKey).map(s => s.id));
+
+    if (category === 'panel') {
+        return jobData.skills.filter(s => activeSkillIds.has(s.id));
+    }
+
+    const healerAoEIds = new Set([
+        'whm_bell', 'whm_pli', 'whm_ass', 'whm_asy',
+        'sch_whi', 'sch_fey', 'sch_ser', 'sch_csl', 'sch_dt',
+        'ast_celop', 'ast_horos', 'ast_macromos',
+        'sge_phys2', 'sge_pneuma', 'sge_philo'
+    ]);
+
+    return jobData.skills.filter(s => {
+        if (s.passive || s.id.includes('passive')) return false;
+
+        const isMitOrShield = s.tags && (s.tags.includes('減傷') || s.tags.includes('護盾') || s.tags.includes('無敵'));
+        const isBuff = s.tags && s.tags.includes('團輔');
+        const isHealOrHot = s.tags && (s.tags.includes('HOT') || s.tags.includes('恢復') || s.tags.includes('治療'));
+
+        if (category === 'mit') {
+            return isMitOrShield || (isTankOrHealer && !s.personal && !isBuff);
+        } else if (category === 'buff') {
+            return isBuff || (s.title && (s.title.includes('傷害') || s.title.includes('暴擊')));
+        } else if (category === 'heal') {
+            return isHealOrHot || healerAoEIds.has(s.id) || (isTankOrHealer && !isMitOrShield && !isBuff);
+        }
+        return true;
+    });
+}
+
+function renderPanelSkillsGrid() {
+    const grid = document.getElementById('mit-panel-skills-grid');
+    if (!grid) return;
+    grid.innerHTML = '';
+
+    const skills = getJobSkillsByCategory(panelSelectedJob, panelSelectedCategory);
+    const activeSkillIds = new Set(getPlayerMitSkills(panelSelectedJob).map(s => s.id));
+
+    if (skills.length === 0) {
+        grid.innerHTML = `
+            <div style="grid-column: 1/-1; text-align: center; padding: 40px 20px; color: var(--color-text-muted);">
+                <i class="fa-solid fa-folder-open" style="font-size: 24px; margin-bottom: 8px; opacity: 0.5;"></i>
+                <p style="margin: 0; font-size: 13px;">此分類下尚無技能</p>
+            </div>
+        `;
+        return;
+    }
+
+    skills.forEach(skill => {
+        const isInPanel = activeSkillIds.has(skill.id);
+        const card = document.createElement('div');
+        card.className = `panel-skill-card ${isInPanel ? 'in-panel' : ''}`;
+        
+        const isGcd = skill.cooldown <= 2.5 && skill.cooldown > 0;
+        const metaText = `${isGcd ? '魔法' : '能力'}${skill.duration ? ' · ' + skill.duration + '秒' : ''}`;
+
+        card.innerHTML = `
+            <img src="${skill.icon}" alt="${skill.name}" />
+            <div class="panel-skill-info">
+                <div class="panel-skill-name">${skill.name}</div>
+                <div class="panel-skill-meta">
+                    <span>${metaText}</span>
+                    <span class="panel-badge ${isInPanel ? 'active' : 'inactive'}">${isInPanel ? '已在面板' : '未在面板'}</span>
+                </div>
+            </div>
+        `;
+
+        card.addEventListener('click', (e) => {
+            e.preventDefault();
+            toggleSkillInPanel(panelSelectedJob, skill.id);
+        });
+
+        card.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            showSkillContextMenu(e, skill.id, isInPanel);
+        });
+
+        grid.appendChild(card);
+    });
+}
+
+function toggleSkillInPanel(jobKey, skillId) {
+    if (!customJobPanels[jobKey] || !Array.isArray(customJobPanels[jobKey])) {
+        customJobPanels[jobKey] = getPlayerMitSkills(jobKey).map(s => s.id);
+    }
+
+    const idx = customJobPanels[jobKey].indexOf(skillId);
+    if (idx !== -1) {
+        customJobPanels[jobKey].splice(idx, 1);
+    } else {
+        customJobPanels[jobKey].push(skillId);
+    }
+
+    renderPanelTabs();
+    renderPanelSkillsGrid();
+}
+
+function showSkillContextMenu(e, skillId, isInPanel) {
+    contextMenuTargetSkillId = skillId;
+    const menu = document.getElementById('mit-skill-context-menu');
+    if (!menu) return;
+
+    const addBtn = document.getElementById('mit-ctx-add');
+    const removeBtn = document.getElementById('mit-ctx-remove');
+
+    if (addBtn) addBtn.style.display = isInPanel ? 'none' : 'flex';
+    if (removeBtn) removeBtn.style.display = isInPanel ? 'flex' : 'none';
+
+    menu.style.display = 'block';
+    menu.style.left = `${e.clientX}px`;
+    menu.style.top = `${e.clientY}px`;
+
+    const rect = menu.getBoundingClientRect();
+    if (rect.right > window.innerWidth) menu.style.left = `${e.clientX - rect.width}px`;
+    if (rect.bottom > window.innerHeight) menu.style.top = `${e.clientY - rect.height}px`;
+}
+
+function hideSkillContextMenu() {
+    const menu = document.getElementById('mit-skill-context-menu');
+    if (menu) menu.style.display = 'none';
+    contextMenuTargetSkillId = null;
+}
+
+async function handleSaveCustomPanels() {
+    try {
+        localStorage.setItem('sked_custom_job_panels', JSON.stringify(customJobPanels));
+    } catch (e) {}
+
+    if (currentTeamPlanId && currentUser) {
+        try {
+            await sb.from('team_plans')
+                .update({ custom_panels: customJobPanels })
+                .eq('id', currentTeamPlanId);
+        } catch (err) {
+            console.warn('Error saving custom panels to DB:', err);
+        }
+    }
+
+    renderMitSkillsList();
+    renderMitPlayerTracks();
+    renderMitTimeline();
+
+    closeMitPanelSkillsModal();
+    alert('✅ 已成功保存您的職業技能面板設定！');
 }
 

@@ -102,6 +102,9 @@
             <!-- 8 Dropdowns will be dynamically populated in mit_timeline.js -->
           </div>
           <h2 style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 15px;">團隊技能</h2>
+          <button id="mit-btn-select-panel" class="btn btn-secondary" style="width: 100%; margin-top: 8px; margin-bottom: 8px; justify-content: center; font-size: 13px; font-weight: 600;">
+            <i class="fa-solid fa-sliders"></i> 選擇面板技能
+          </button>
           <div class="search-box">
             <i class="fa-solid fa-magnifying-glass"></i>
             <input type="text" id="mit-skill-search" placeholder="搜尋技能...">
@@ -552,6 +555,47 @@
           <button id="export-opt-img" class="btn btn-accent" style="width: 100%; justify-content: flex-start; padding: 12px 16px; font-size: 14px; text-align: left; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-image"></i> 匯出長圖</button>
         </div>
       </div>
+    </div>
+
+    <!-- Modal for Job Skill Panel Selection -->
+    <div class="modal" id="mit-panel-skills-modal">
+      <div class="modal-content" style="width: 780px; max-width: 95vw; height: 85vh; max-height: 700px; display: flex; flex-direction: column; padding: 0; overflow: hidden;">
+        <div class="modal-header" style="padding: 16px 20px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between;">
+          <h3 style="margin: 0; font-size: 16px; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-sliders" style="color: #00f0ff;"></i> 職業技能面板設定</h3>
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <button id="mit-btn-save-custom-panel" class="btn btn-primary" style="padding: 6px 14px; font-size: 12px; font-weight: 600;"><i class="fa-solid fa-floppy-disk"></i> 保存我的面板</button>
+            <span class="modal-close" id="mit-panel-skills-close" style="font-size: 24px; cursor: pointer; color: var(--color-text-muted);">&times;</span>
+          </div>
+        </div>
+        <div class="modal-body" style="flex: 1; display: flex; flex-direction: column; padding: 16px 20px; overflow: hidden; gap: 14px;">
+          <!-- Job Selector Bar -->
+          <div>
+            <div style="font-size: 12px; font-weight: 600; color: var(--color-text-muted); margin-bottom: 6px;">選擇職業：</div>
+            <div id="mit-panel-job-selector" class="job-selector-bar">
+              <!-- Dynamically populated job buttons -->
+            </div>
+          </div>
+          <!-- Category Tabs -->
+          <div id="mit-panel-tabs" class="panel-tabs-bar">
+            <button class="panel-tab-btn active" data-cat="mit"><i class="fa-solid fa-shield-halved"></i> 減傷</button>
+            <button class="panel-tab-btn" data-cat="buff"><i class="fa-solid fa-wand-magic-sparkles"></i> 團輔</button>
+            <button class="panel-tab-btn" data-cat="heal"><i class="fa-solid fa-heart-pulse"></i> 抬血</button>
+            <button class="panel-tab-btn" data-cat="panel"><i class="fa-solid fa-list-check"></i> 面板技能 (<span id="mit-panel-count">0</span>)</button>
+          </div>
+          <!-- Skills Grid -->
+          <div style="flex: 1; overflow-y: auto; padding-right: 4px;">
+            <div id="mit-panel-skills-grid" class="panel-skills-grid">
+              <!-- Dynamically populated skill cards -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right-click Context Menu for Skills -->
+    <div id="mit-skill-context-menu" class="custom-context-menu" style="display: none;">
+      <div id="mit-ctx-add" class="ctx-item"><i class="fa-solid fa-plus" style="color: #22c55e;"></i> 加入面板</div>
+      <div id="mit-ctx-remove" class="ctx-item"><i class="fa-solid fa-trash-can" style="color: #ef4444;"></i> 剔除面板</div>
     </div>
 
     <!-- Hidden Input for Import JSON File -->
