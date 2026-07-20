@@ -1817,6 +1817,18 @@ function setupMitEventListeners() {
     const btnAddCustomTime = document.getElementById('mit-btn-add-custom-time');
     if (btnAddCustomTime) btnAddCustomTime.addEventListener('click', addNewCustomTimePoint);
 
+    const mitBtnClear = document.getElementById('mit-btn-clear');
+    if (mitBtnClear) {
+        mitBtnClear.addEventListener('click', async () => {
+            const ok = await window.showCustomConfirm('清空團隊技能排軸', '確定要清空團隊技能排軸的所有技能安排嗎？');
+            if (ok) {
+                mitTimelineSkills = [];
+                window.mitTimelineSkills = [];
+                renderMitTimeline();
+            }
+        });
+    }
+
     // Layout select change event
     if (mitLayoutSelect) {
         mitLayoutSelect.addEventListener('change', (e) => {
