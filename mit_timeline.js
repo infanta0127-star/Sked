@@ -510,6 +510,16 @@ try {
     if (rawPanels) customJobPanels = JSON.parse(rawPanels);
 } catch (e) {}
 
+function getActivePanelSkillIds(jobKey) {
+    const jobData = mitSkillsDatabase[jobKey];
+    if (!jobData) return new Set();
+    if (customJobPanels[jobKey] && Array.isArray(customJobPanels[jobKey]) && customJobPanels[jobKey].length > 0) {
+        return new Set(customJobPanels[jobKey]);
+    }
+    const jobSkills = getPlayerMitSkills(jobKey);
+    return new Set(jobSkills.map(s => s.id));
+}
+
 function getPlayerMitSkills(jobKey, slotIndex) {
     const jobData = mitSkillsDatabase[jobKey];
     if (!jobData) return [];
@@ -3297,6 +3307,9 @@ async function mitFflogsImport() {
 
             const matched = matchAndAdaptMitSkill(playerInfo.jobAbbrev, abilityName);
             if (!matched) continue;
+
+            const activePanelIds = getActivePanelSkillIds(playerInfo.jobAbbrev);
+            if (!activePanelIds.has(matched.id)) continue;
 
             const relSec = (ev.timestamp - alignmentStart) / 1000;
             if (relSec < 0) continue;
