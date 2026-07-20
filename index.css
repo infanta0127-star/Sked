@@ -1694,6 +1694,10 @@ body {
 }
 
 
+.mit-grid-table .job-separator-left {
+  border-left: 2px solid rgba(255, 255, 255, 0.25) !important;
+}
+
 /* Headers styling */
 .mit-grid-table .player-header-cell {
   background-color: rgba(26, 30, 43, 0.95);

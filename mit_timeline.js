@@ -673,7 +673,7 @@ function renderMitVerticalGrid(container) {
         
         const th1 = document.createElement('th');
         th1.colSpan = colspan;
-        th1.className = 'player-header-cell';
+        th1.className = 'player-header-cell job-separator-left';
         th1.innerHTML = `
             <div class="player-header-content">
                 <div class="player-header-top">
@@ -698,13 +698,13 @@ function renderMitVerticalGrid(container) {
         
         if (skills.length === 0) {
             const th2 = document.createElement('th');
-            th2.className = 'skill-header-cell';
+            th2.className = 'skill-header-cell job-separator-left';
             th2.innerHTML = '<span style="color: var(--color-text-muted); font-size: 11px;">無</span>';
             tr2.appendChild(th2);
         } else {
-            skills.forEach(skill => {
+            skills.forEach((skill, sIdx) => {
                 const th2 = document.createElement('th');
-                th2.className = 'skill-header-cell';
+                th2.className = sIdx === 0 ? 'skill-header-cell job-separator-left' : 'skill-header-cell';
                 th2.innerHTML = `
                     <div class="skill-header-content">
                         <img src="${skill.icon}" />
@@ -758,12 +758,13 @@ function renderMitVerticalGrid(container) {
             
             if (skills.length === 0) {
                 const td = document.createElement('td');
-                td.className = 'empty-skill-cell';
+                td.className = 'empty-skill-cell job-separator-left';
                 td.textContent = '—';
                 tr.appendChild(td);
             } else {
-                skills.forEach(skill => {
+                skills.forEach((skill, sIdx) => {
                     const td = document.createElement('td');
+                    if (sIdx === 0) td.classList.add('job-separator-left');
                     
                     const casts = mitTimelineSkills.filter(c => c.slotIndex === i && c.skillKey === skill.id);
                     const isCast = casts.some(c => c.startTime === mech.time);
@@ -1378,13 +1379,59 @@ function setupMitEventListeners() {
     mitBtnShare.addEventListener('click', openShareModal);
     mitBtnAddMechanic.addEventListener('click', addNewBossMechanic);
     
-    if (mitBtnImport && mitFileImport) {
-        mitBtnImport.addEventListener('click', () => mitFileImport.click());
+    if (mitBtnImport) {
+        mitBtnImport.addEventListener('click', openMitImportOptionsModal);
+    }
+    if (mitFileImport) {
         mitFileImport.addEventListener('change', importTeamPlanJSON);
     }
     if (mitBtnExport) {
         mitBtnExport.addEventListener('click', exportTeamPlanJSON);
     }
+
+    // Modal listeners for Team Timeline import
+    const mitImportOptJson = document.getElementById('mit-import-opt-json');
+    const mitImportOptFflogs = document.getElementById('mit-import-opt-fflogs');
+    const mitImportOptionsClose = document.getElementById('mit-import-options-close');
+    const mitImportOptionsModal = document.getElementById('mit-import-options-modal');
+
+    if (mitImportOptJson && mitFileImport) {
+        mitImportOptJson.addEventListener('click', () => {
+            if (mitImportOptionsModal) mitImportOptionsModal.classList.remove('active');
+            mitFileImport.click();
+        });
+    }
+    if (mitImportOptFflogs) {
+        mitImportOptFflogs.addEventListener('click', () => {
+            if (mitImportOptionsModal) mitImportOptionsModal.classList.remove('active');
+            openMitFFLogsModal();
+        });
+    }
+    if (mitImportOptionsClose && mitImportOptionsModal) {
+        mitImportOptionsClose.addEventListener('click', () => {
+            mitImportOptionsModal.classList.remove('active');
+        });
+    }
+    if (mitImportOptionsModal) {
+        mitImportOptionsModal.addEventListener('click', e => {
+            if (e.target === mitImportOptionsModal) mitImportOptionsModal.classList.remove('active');
+        });
+    }
+
+    // FFLogs modal events for Team Timeline
+    const mitFflogsModal = document.getElementById('mit-fflogs-api-modal');
+    const mitFflogsCloseBtn = document.getElementById('mit-fflogs-api-modal-close');
+    const mitFflogsCancelBtn = document.getElementById('mit-fflogs-api-cancel');
+    const mitFflogsFetchBtn = document.getElementById('mit-fflogs-api-fetch-report');
+    const mitFflogsImportBtn = document.getElementById('mit-fflogs-api-import');
+    const mitFflogsUrlInput = document.getElementById('mit-fflogs-api-url');
+
+    if (mitFflogsCloseBtn && mitFflogsModal) mitFflogsCloseBtn.addEventListener('click', () => mitFflogsModal.classList.remove('active'));
+    if (mitFflogsCancelBtn && mitFflogsModal) mitFflogsCancelBtn.addEventListener('click', () => mitFflogsModal.classList.remove('active'));
+    if (mitFflogsFetchBtn) mitFflogsFetchBtn.addEventListener('click', mitFflogsFetchReport);
+    if (mitFflogsImportBtn) mitFflogsImportBtn.addEventListener('click', mitFflogsImport);
+    if (mitFflogsUrlInput) mitFflogsUrlInput.addEventListener('keydown', e => { if (e.key === 'Enter') mitFflogsFetchReport(); });
+    if (mitFflogsModal) mitFflogsModal.addEventListener('click', e => { if (e.target === mitFflogsModal) mitFflogsModal.classList.remove('active'); });
 
     // Layout select change event
     if (mitLayoutSelect) {
@@ -2367,3 +2414,445 @@ function importTeamPlanJSON(e) {
     reader.readAsText(file);
     e.target.value = '';
 }
+
+// ============================================================
+// FFLogs Import Module for Team Timeline (團隊技能排軸)
+// ============================================================
+let mitFflogsReportCode = null;
+let mitFflogsFights = [];
+
+function normalizeJobToAbbrev(jobStr) {
+    if (!jobStr) return null;
+    const s = jobStr.toLowerCase().replace(/[\s_]/g, '');
+    const map = {
+        'paladin': 'PLD', 'pld': 'PLD',
+        'warrior': 'WAR', 'war': 'WAR',
+        'darkknight': 'DRK', 'drk': 'DRK',
+        'gunbreaker': 'GNB', 'gnb': 'GNB',
+        'whitemage': 'WHM', 'whm': 'WHM',
+        'scholar': 'SCH', 'sch': 'SCH',
+        'astrologian': 'AST', 'ast': 'AST',
+        'sage': 'SGE', 'sge': 'SGE',
+        'monk': 'MNK', 'mnk': 'MNK',
+        'dragoon': 'DRG', 'drg': 'DRG',
+        'ninja': 'NIN', 'nin': 'NIN',
+        'samurai': 'SAM', 'sam': 'SAM',
+        'reaper': 'RPR', 'rpr': 'RPR',
+        'viper': 'VPR', 'vpr': 'VPR',
+        'bard': 'BRD', 'brd': 'BRD',
+        'machinist': 'MCH', 'mch': 'MCH',
+        'dancer': 'DNC', 'dnc': 'DNC',
+        'blackmage': 'BLM', 'blm': 'BLM',
+        'summoner': 'SMN', 'smn': 'SMN',
+        'redmage': 'RDM', 'rdm': 'RDM',
+        'pictomancer': 'PCT', 'pct': 'PCT'
+    };
+    return map[s] || null;
+}
+
+function openMitImportOptionsModal() {
+    const modal = document.getElementById('mit-import-options-modal');
+    if (modal) modal.classList.add('active');
+}
+
+function openMitFFLogsModal() {
+    const modal = document.getElementById('mit-fflogs-api-modal');
+    if (!modal) return;
+    document.getElementById('mit-fflogs-api-url').value = '';
+    document.getElementById('mit-fflogs-api-fight-section').style.display = 'none';
+    document.getElementById('mit-fflogs-api-options-section').style.display = 'none';
+    document.getElementById('mit-fflogs-api-import').style.display = 'none';
+    mitFflogsSetStatus('');
+    mitFflogsReportCode = null;
+    modal.classList.add('active');
+}
+
+function mitFflogsSetStatus(msg, isError = false) {
+    const el = document.getElementById('mit-fflogs-api-status');
+    if (!el) return;
+    el.style.display = msg ? 'block' : 'none';
+    el.style.color = isError ? '#ff6b6b' : 'var(--color-text-muted)';
+    el.innerHTML = msg;
+}
+
+function extractUrlParamsHelper(url) {
+    try {
+        const urlObj = new URL(url);
+        const fight = urlObj.searchParams.get('fight');
+        const phase = urlObj.searchParams.get('phase');
+        return {
+            fight: fight ? parseInt(fight) : null,
+            phase: phase ? parseInt(phase) : null
+        };
+    } catch {
+        const fightMatch = url.match(/[?&]fight=(\d+)/);
+        const phaseMatch = url.match(/[?&]phase=(\d+)/);
+        return {
+            fight: fightMatch ? parseInt(fightMatch[1]) : null,
+            phase: phaseMatch ? parseInt(phaseMatch[1]) : null
+        };
+    }
+}
+
+async function mitFflogsFetchReport() {
+    const urlInput = document.getElementById('mit-fflogs-api-url').value.trim();
+    const extractFn = window.extractReportCode || function(url) {
+        const m = url.match(/reports\/([A-Za-z0-9]+)/);
+        return m ? m[1] : null;
+    };
+    const code = extractFn(urlInput);
+    if (!code) {
+        mitFflogsSetStatus('⚠️ 請輸入有效的 FFLogs 報告連結（例如 https://www.fflogs.com/reports/ABC123）', true);
+        return;
+    }
+    mitFflogsReportCode = code;
+    mitFflogsSetStatus('<i class="fa-solid fa-spinner fa-spin"></i> 正在查詢報告...');
+
+    const queryFn = window.fflogsQuery;
+    if (!queryFn) {
+        mitFflogsSetStatus('❌ FFLogs API 模組尚未載入', true);
+        return;
+    }
+
+    try {
+        const data = await queryFn(`
+            query($code: String!) {
+                reportData {
+                    report(code: $code) {
+                        fights(killType: All) {
+                            id name kill startTime endTime
+                        }
+                    }
+                }
+            }
+        `, { code });
+
+        const report = data.reportData.report;
+        mitFflogsFights = report.fights || [];
+
+        if (mitFflogsFights.length === 0) {
+            mitFflogsSetStatus('⚠️ 找不到戰鬥段落', true);
+            return;
+        }
+
+        const fightSel = document.getElementById('mit-fflogs-api-fight-select');
+        fightSel.innerHTML = '';
+        mitFflogsFights.forEach(f => {
+            const dur = ((f.endTime - f.startTime) / 1000).toFixed(0);
+            const label = `${f.name}${f.kill ? ' ✅' : ''} (${Math.floor(dur/60)}:${String(dur%60).padStart(2,'0')})`;
+            fightSel.innerHTML += `<option value="${f.id}">${label}</option>`;
+        });
+
+        document.getElementById('mit-fflogs-api-fight-section').style.display = 'flex';
+        document.getElementById('mit-fflogs-api-options-section').style.display = 'flex';
+        document.getElementById('mit-fflogs-api-import').style.display = 'inline-flex';
+
+        const urlParams = extractUrlParamsHelper(urlInput);
+        if (urlParams.fight !== null) {
+            const matchedFight = mitFflogsFights.find(f => f.id === urlParams.fight);
+            if (matchedFight) {
+                fightSel.value = matchedFight.id;
+            }
+        }
+
+        mitFflogsSetStatus('');
+    } catch (err) {
+        mitFflogsSetStatus(`❌ 查詢失敗：${err.message}`, true);
+    }
+}
+
+function matchMitSkill(jobAbbrev, abilityName) {
+    if (!abilityName || !mitSkillsDatabase[jobAbbrev]) return null;
+    const jobData = mitSkillsDatabase[jobAbbrev];
+    const evNameLower = abilityName.toLowerCase().trim();
+
+    // 1. Direct match in mitSkillsDatabase
+    for (const s of jobData.skills) {
+        if (s.name.toLowerCase() === evNameLower) return s;
+        if (s.aliases && s.aliases.some(a => a.toLowerCase() === evNameLower)) return s;
+        if (s.levelRestrictions) {
+            for (const key in s.levelRestrictions) {
+                if (s.levelRestrictions[key].name && s.levelRestrictions[key].name.toLowerCase() === evNameLower) {
+                    return s;
+                }
+            }
+        }
+    }
+
+    // 2. Cross-match via window.skillsDatabase if available
+    const JOB_MAP_LOCAL = {
+        "PLD": "paladin", "WAR": "warrior", "DRK": "darkknight", "GNB": "gunbreaker",
+        "WHM": "whitemage", "SCH": "scholar", "AST": "astrologian", "SGE": "sage",
+        "MNK": "monk", "DRG": "dragoon", "NIN": "ninja", "SAM": "samurai",
+        "RPR": "reaper", "VPR": "viper", "BRD": "bard", "MCH": "machinist",
+        "DNC": "dancer", "BLM": "blackmage", "SMN": "summoner", "RDM": "redmage",
+        "PCT": "pictomancer"
+    };
+
+    const jobId = JOB_MAP_LOCAL[jobAbbrev];
+    const fullJobData = window.skillsDatabase ? window.skillsDatabase[jobId] : null;
+
+    if (fullJobData && fullJobData.skills) {
+        const matchedFullSkill = fullJobData.skills.find(s => {
+            if (s.name.toLowerCase() === evNameLower) return true;
+            if (s.aliases && s.aliases.some(a => a.toLowerCase() === evNameLower)) return true;
+            return false;
+        });
+
+        if (matchedFullSkill) {
+            const ChineseName = matchedFullSkill.name.toLowerCase();
+            for (const s of jobData.skills) {
+                if (s.name.toLowerCase() === ChineseName) return s;
+                if (s.levelRestrictions) {
+                    for (const key in s.levelRestrictions) {
+                        if (s.levelRestrictions[key].name && s.levelRestrictions[key].name.toLowerCase() === ChineseName) {
+                            return s;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return null;
+}
+
+function parsePlayerDetailsFlat(pd) {
+    const players = [];
+    if (!pd) return players;
+    const details = pd?.data?.playerDetails || pd?.playerDetails || pd || {};
+    for (const role of Object.values(details)) {
+        if (Array.isArray(role)) {
+            for (const p of role) {
+                if (p.id && p.name) {
+                    players.push({ id: p.id, name: p.name, type: p.type || '' });
+                }
+            }
+        }
+    }
+    return players;
+}
+
+async function mitFflogsImport() {
+    const fightId = parseInt(document.getElementById('mit-fflogs-api-fight-select').value);
+    const clearFirst = document.getElementById('mit-fflogs-api-clear-timeline').checked;
+    const urlInput = document.getElementById('mit-fflogs-api-url').value.trim();
+
+    if (!mitFflogsReportCode || !fightId) return;
+
+    const importBtn = document.getElementById('mit-fflogs-api-import');
+    importBtn.disabled = true;
+    mitFflogsSetStatus('<i class="fa-solid fa-spinner fa-spin"></i> 正在驗證隊伍組成...');
+
+    const queryFn = window.fflogsQuery;
+    try {
+        // Step 1: Fetch playerDetails for fight
+        const pdData = await queryFn(`
+            query($code: String!, $fightId: [Int]!) {
+                reportData {
+                    report(code: $code) {
+                        playerDetails(fightIDs: $fightId)
+                    }
+                }
+            }
+        `, { code: mitFflogsReportCode, fightId: [fightId] });
+
+        const rawPlayers = parsePlayerDetailsFlat(pdData.reportData.report.playerDetails);
+        const logPlayers = [];
+        for (const p of rawPlayers) {
+            const jobAbbrev = normalizeJobToAbbrev(p.type);
+            if (jobAbbrev) {
+                logPlayers.push({ id: p.id, name: p.name, type: p.type, jobAbbrev });
+            }
+        }
+
+        // Step 2: Compare party composition (sorted arrays check)
+        const sortedLogJobs = logPlayers.map(p => p.jobAbbrev).sort();
+        const sortedMitParty = [...mitParty].sort();
+
+        const isMatch = sortedLogJobs.length === sortedMitParty.length &&
+                        sortedLogJobs.every((job, i) => job === sortedMitParty[i]);
+
+        if (!isMatch) {
+            const mismatchMsg = '此Log與你的隊伍組成不匹配，請確認隊伍組成後再重新匯入。';
+            mitFflogsSetStatus(`⚠️ ${mismatchMsg}`, true);
+            alert(mismatchMsg);
+            importBtn.disabled = false;
+            return;
+        }
+
+        // Step 3: Map players to 1-to-1 slot indices (0..7)
+        const playerSlotMap = {};
+        const usedSlots = new Set();
+        for (const p of logPlayers) {
+            const slotIdx = mitParty.findIndex((job, idx) => job === p.jobAbbrev && !usedSlots.has(idx));
+            if (slotIdx !== -1) {
+                usedSlots.add(slotIdx);
+                playerSlotMap[p.id] = { slotIndex: slotIdx, jobAbbrev: p.jobAbbrev, name: p.name };
+            }
+        }
+
+        mitFflogsSetStatus('<i class="fa-solid fa-spinner fa-spin"></i> 正在抓取團隊技能事件...');
+
+        // Step 4: Fetch cast events
+        const fight = mitFflogsFights.find(f => f.id === fightId);
+        const fightStart = fight ? fight.startTime : 0;
+        const urlParams = extractUrlParamsHelper(urlInput);
+        let filterExpr = "";
+        if (urlParams.phase !== null) {
+            filterExpr = `encounterPhase = ${urlParams.phase}`;
+        }
+
+        const eventsData = await queryFn(`
+            query($code: String!, $fightId: Int!, $filterExpr: String) {
+                reportData {
+                    report(code: $code) {
+                        masterData {
+                            abilities {
+                                gameID
+                                name
+                            }
+                        }
+                        events(
+                            fightIDs: [$fightId]
+                            dataType: Casts
+                            filterExpression: $filterExpr
+                            limit: 10000
+                        ) { data }
+                    }
+                }
+            }
+        `, {
+            code: mitFflogsReportCode,
+            fightId,
+            filterExpr: filterExpr || null
+        });
+
+        const events = eventsData.reportData.report.events.data || [];
+        if (events.length === 0) {
+            mitFflogsSetStatus('⚠️ 沒有找到施放事件', true);
+            importBtn.disabled = false;
+            return;
+        }
+
+        const abilities = eventsData.reportData.report.masterData?.abilities || [];
+        const abilityMap = {};
+        abilities.forEach(a => { abilityMap[a.gameID] = a.name; });
+
+        let alignmentStart = fightStart;
+        if (urlParams.phase !== null) {
+            const castEvents = events.filter(ev => ev.type === 'cast' || ev.type === 'begincast');
+            if (castEvents.length > 0) {
+                alignmentStart = Math.min(...castEvents.map(ev => ev.timestamp));
+            }
+        }
+
+        const parsedEvents = [];
+        for (const ev of events) {
+            if (ev.type !== 'cast' && ev.type !== 'begincast') continue;
+            const playerInfo = playerSlotMap[ev.sourceID];
+            if (!playerInfo) continue;
+
+            const abilityName = abilityMap[ev.abilityGameID];
+            if (!abilityName) continue;
+
+            const matched = matchMitSkill(playerInfo.jobAbbrev, abilityName);
+            if (!matched) continue;
+
+            const relSec = (ev.timestamp - alignmentStart) / 1000;
+            if (relSec < 0) continue;
+
+            parsedEvents.push({
+                type: ev.type,
+                timestamp: ev.timestamp,
+                relSec,
+                slotIndex: playerInfo.slotIndex,
+                jobAbbrev: playerInfo.jobAbbrev,
+                skill: matched
+            });
+        }
+
+        parsedEvents.sort((a, b) => a.timestamp - b.timestamp);
+
+        // Deduplicate begincast vs cast & ghost events per player/skill
+        const uniqueEvents = [];
+        const castHistory = {};
+        const lastPushedTime = {};
+
+        for (const pe of parsedEvents) {
+            const key = `${pe.slotIndex}_${pe.skill.id}`;
+            const castDuration = 0;
+            let eventTime = pe.relSec;
+
+            if (pe.type === 'begincast') {
+                pe.completionTime = pe.relSec;
+            } else {
+                pe.completionTime = pe.relSec;
+                const lastBegin = castHistory[key];
+                let shouldSkip = false;
+                if (lastBegin !== undefined) {
+                    const diff = pe.relSec - lastBegin;
+                    if (diff >= 0 && diff <= castDuration + 0.5) {
+                        shouldSkip = true;
+                    }
+                    castHistory[key] = undefined;
+                }
+                if (shouldSkip) continue;
+            }
+
+            if (lastPushedTime[key] !== undefined) {
+                const timeDiff = Math.abs(eventTime - lastPushedTime[key]);
+                if (timeDiff < 1.0) continue;
+            }
+
+            if (pe.type === 'begincast') {
+                castHistory[key] = pe.relSec;
+            }
+            lastPushedTime[key] = eventTime;
+            uniqueEvents.push(pe);
+        }
+
+        if (uniqueEvents.length === 0) {
+            mitFflogsSetStatus('⚠️ 沒有找到匹配的團隊技能事件', true);
+            importBtn.disabled = false;
+            return;
+        }
+
+        const newMitSkills = uniqueEvents.map(pe => ({
+            id: `cast-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            slotIndex: pe.slotIndex,
+            jobKey: pe.jobAbbrev,
+            jobAbbrev: pe.jobAbbrev,
+            skillKey: pe.skill.id,
+            startTime: Math.round(pe.relSec * 1000) / 1000,
+            duration: pe.skill.duration || 15
+        }));
+
+        if (clearFirst) {
+            mitTimelineSkills = newMitSkills;
+        } else {
+            mitTimelineSkills = [...mitTimelineSkills, ...newMitSkills];
+        }
+
+        window.mitTimelineSkills = mitTimelineSkills;
+        renderMitTimeline();
+
+        const fightSel = document.getElementById('mit-fflogs-api-fight-select');
+        const selectedFightText = fightSel && fightSel.selectedIndex !== -1 ? fightSel.options[fightSel.selectedIndex].text : '';
+
+        if (window.trackEvent) {
+            window.trackEvent('team_planner', 'import_fflogs', { url: urlInput, fight: selectedFightText });
+        }
+
+        const modal = document.getElementById('mit-fflogs-api-modal');
+        if (modal) modal.classList.remove('active');
+
+        const toastMsg = `✅ 成功匯入 ${newMitSkills.length} 個團隊技能事件`;
+        alert(toastMsg);
+
+    } catch (err) {
+        mitFflogsSetStatus(`❌ 匯入失敗：${err.message}`, true);
+        importBtn.disabled = false;
+    }
+}
+

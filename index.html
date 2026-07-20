@@ -481,6 +481,58 @@
       </div>
     </div>
 
+    <!-- Modal for Team Timeline Import Options -->
+    <div class="modal" id="mit-import-options-modal">
+      <div class="modal-content" style="width: 400px; max-width: 95%;">
+        <div class="modal-header">
+          <h3><i class="fa-solid fa-file-import"></i> 匯入團隊排軸</h3>
+          <span class="modal-close" id="mit-import-options-close">&times;</span>
+        </div>
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 12px; padding: 20px;">
+          <button id="mit-import-opt-json" class="btn btn-secondary" style="width: 100%; justify-content: flex-start; padding: 12px 16px; font-size: 14px; text-align: left; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-file-import"></i> 匯入 JSON 檔案</button>
+          <button id="mit-import-opt-fflogs" class="btn btn-primary" style="width: 100%; justify-content: flex-start; padding: 12px 16px; font-size: 14px; text-align: left; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-cloud-arrow-down"></i> 從 FFLogs 匯入 <span style="font-size:11px; background:rgba(0,240,255,0.15); color:#00f0ff; padding:2px 6px; border-radius:4px; margin-left:auto;">NEW</span></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal for Team Timeline FFLogs API Import -->
+    <div class="modal" id="mit-fflogs-api-modal">
+      <div class="modal-content" style="width: 560px; max-width: 95%;">
+        <div class="modal-header">
+          <h3><i class="fa-solid fa-cloud-arrow-down"></i> 團隊排軸 - 從 FFLogs 匯入</h3>
+          <span class="modal-close" id="mit-fflogs-api-modal-close">&times;</span>
+        </div>
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 14px; padding: 20px;">
+          <!-- Step 1: URL input -->
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            <label style="font-weight:bold; font-size:13px;"><i class="fa-solid fa-link"></i> FFLogs 報告連結</label>
+            <div style="display:flex; gap:8px;">
+              <input type="text" id="mit-fflogs-api-url" class="custom-input" placeholder="https://www.fflogs.com/reports/ABC123..." style="flex:1; padding:8px 10px; border-radius:6px; border:1px solid var(--border-color); background:var(--bg-main); color:#fff; font-size:13px;">
+              <button id="mit-fflogs-api-fetch-report" class="btn btn-primary" style="white-space:nowrap;"><i class="fa-solid fa-magnifying-glass"></i> 查詢</button>
+            </div>
+          </div>
+          <!-- Step 2: Fight selector -->
+          <div id="mit-fflogs-api-fight-section" style="display:none; flex-direction:column; gap:6px;">
+            <label style="font-weight:bold; font-size:13px;"><i class="fa-solid fa-swords"></i> 選擇戰鬥段落</label>
+            <select id="mit-fflogs-api-fight-select" class="custom-select" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border-color); background:var(--bg-main); color:#fff; font-size:13px;"></select>
+          </div>
+          <!-- Options -->
+          <div id="mit-fflogs-api-options-section" style="display:none; gap:15px; font-size:13px; align-items:center;">
+            <label style="display:flex; align-items:center; gap:5px; cursor:pointer; color:#fff;">
+              <input type="checkbox" id="mit-fflogs-api-clear-timeline" style="cursor:pointer;" checked> 匯入前清空時間軸
+            </label>
+          </div>
+          <!-- Status message -->
+          <div id="mit-fflogs-api-status" style="font-size:13px; color:var(--color-text-muted); display:none;"></div>
+          <!-- Buttons -->
+          <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:4px;">
+            <button id="mit-fflogs-api-cancel" class="btn btn-secondary">取消</button>
+            <button id="mit-fflogs-api-import" class="btn btn-primary" style="display:none;"><i class="fa-solid fa-cloud-arrow-down"></i> 開始匯入</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Modal for Export Options -->
     <div class="modal" id="export-options-modal">
       <div class="modal-content" style="width: 400px; max-width: 95%;">

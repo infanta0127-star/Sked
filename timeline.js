@@ -211,6 +211,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const response = await fetch('./data/jobs_skills.json');
     if (!response.ok) throw new Error('無法讀取技能資料庫！請先執行 scraper.js');
     skillsDatabase = await response.json();
+    window.skillsDatabase = skillsDatabase;
     
     // Inject general Potion skill to all jobs
     const potionSkill = {
@@ -3745,6 +3746,9 @@ function extractReportCode(url) {
   const m = url.match(/reports\/([A-Za-z0-9]+)/);
   return m ? m[1] : null;
 }
+
+window.fflogsQuery = fflogsQuery;
+window.extractReportCode = extractReportCode;
 
 // --- Modal state ---
 let fflogsApiReportCode = null;
