@@ -517,6 +517,13 @@ function getPlayerMitSkills(jobKey, slotIndex) {
     let allSkills;
     if (customJobPanels[jobKey] && Array.isArray(customJobPanels[jobKey]) && customJobPanels[jobKey].length > 0) {
         const customIds = new Set(customJobPanels[jobKey]);
+        if (Array.isArray(mitTimelineSkills)) {
+            mitTimelineSkills.forEach(c => {
+                if ((c.jobKey === jobKey || c.jobAbbrev === jobKey) && c.skillKey) {
+                    customIds.add(c.skillKey);
+                }
+            });
+        }
         allSkills = jobData.skills.filter(s => customIds.has(s.id));
     } else {
         const healerAoEIds = new Set([
@@ -527,9 +534,18 @@ function getPlayerMitSkills(jobKey, slotIndex) {
         ]);
 
         const isTankOrHealer = ['PLD', 'WAR', 'DRK', 'GNB', 'WHM', 'SCH', 'AST', 'SGE'].includes(jobKey);
+        const activeSkillKeys = new Set();
+        if (Array.isArray(mitTimelineSkills)) {
+            mitTimelineSkills.forEach(c => {
+                if ((c.jobKey === jobKey || c.jobAbbrev === jobKey) && c.skillKey) {
+                    activeSkillKeys.add(c.skillKey);
+                }
+            });
+        }
 
         allSkills = jobData.skills.filter(s => {
             if (s.passive || s.id.includes('passive')) return false;
+            if (activeSkillKeys.has(s.id)) return true;
             
             const isMitOrShield = s.tags && (s.tags.includes('減傷') || s.tags.includes('護盾') || s.tags.includes('無敵'));
             const isAllowedPersonal = isTankOrHealer || !s.personal;
@@ -582,6 +598,11 @@ function toggleMitGridSkill(slotIndex, jobKey, skillId, startTime, isChecked) {
         const skill = jobData?.skills.find(s => s.id === skillId);
         const duration = skill ? skill.duration : 15;
         
+        // Clear any existing cast for this skill near this timestamp to prevent duplicate overlaps
+        mitTimelineSkills = mitTimelineSkills.filter(c => 
+            !(c.slotIndex === slotIndex && c.skillKey === skillId && Math.abs(c.startTime - startTime) <= 1.0)
+        );
+
         mitTimelineSkills.push({
             id: `cast-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             slotIndex: slotIndex,
@@ -593,7 +614,7 @@ function toggleMitGridSkill(slotIndex, jobKey, skillId, startTime, isChecked) {
         });
     } else {
         mitTimelineSkills = mitTimelineSkills.filter(c => 
-            !(c.slotIndex === slotIndex && c.skillKey === skillId && c.startTime === startTime)
+            !(c.slotIndex === slotIndex && c.skillKey === skillId && Math.abs(c.startTime - startTime) <= 1.0)
         );
     }
     renderMitTimeline();
@@ -780,7 +801,7 @@ function renderMitVerticalGrid(container) {
                     if (sIdx === 0) td.classList.add('job-separator-left');
                     
                     const casts = mitTimelineSkills.filter(c => c.slotIndex === i && c.skillKey === skill.id);
-                    const isCast = casts.some(c => c.startTime === mech.time);
+                    const isCast = casts.some(c => Math.abs(c.startTime - mech.time) <= 1.0);
                     const isActive = casts.some(c => mech.time > c.startTime && mech.time < c.startTime + c.duration);
                     const isCooldown = casts.some(c => mech.time > c.startTime && mech.time < c.startTime + (skill.cooldown || 60));
                     
@@ -3111,15 +3132,29 @@ async function mitFflogsImport() {
             return;
         }
 
-        const newMitSkills = uniqueEvents.map(pe => ({
-            id: `cast-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            slotIndex: pe.slotIndex,
-            jobKey: pe.jobAbbrev,
-            jobAbbrev: pe.jobAbbrev,
-            skillKey: pe.skill.id,
-            startTime: Math.round(pe.relSec * 1000) / 1000,
-            duration: pe.skill.duration || 15
-        }));
+        const newMitSkills = uniqueEvents.map(pe => {
+            let castTime = Math.round(pe.relSec * 10) / 10;
+            if (Array.isArray(mitBossMechanics) && mitBossMechanics.length > 0) {
+                const closestMech = mitBossMechanics.reduce((closest, mech) => {
+                    const diff = Math.abs(mech.time - pe.relSec);
+                    return diff < closest.diff ? { mech, diff } : closest;
+                }, { mech: null, diff: Infinity });
+
+                if (closestMech.mech && closestMech.diff <= 3.0) {
+                    castTime = closestMech.mech.time;
+                }
+            }
+
+            return {
+                id: `cast-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                slotIndex: pe.slotIndex,
+                jobKey: pe.jobAbbrev,
+                jobAbbrev: pe.jobAbbrev,
+                skillKey: pe.skill.id,
+                startTime: castTime,
+                duration: pe.skill.duration || 15
+            };
+        });
 
         if (clearFirst) {
             mitTimelineSkills = newMitSkills;
@@ -3129,6 +3164,8 @@ async function mitFflogsImport() {
 
         window.mitTimelineSkills = mitTimelineSkills;
         renderMitTimeline();
+
+        importBtn.disabled = false;
 
         const fightSel = document.getElementById('mit-fflogs-api-fight-select');
         const selectedFightText = fightSel && fightSel.selectedIndex !== -1 ? fightSel.options[fightSel.selectedIndex].text : '';
