@@ -1006,7 +1006,7 @@ function renderMitVerticalGrid(container) {
                         const firstMatch = sortedMechs.find(m => Math.abs(m.time - c.startTime) <= 0.25);
                         return firstMatch && firstMatch.id === mech.id;
                     });
-                    const isActive = !isCast && casts.some(c => mech.time > c.startTime + 0.25 && mech.time < c.startTime + c.duration);
+                    const isActive = !isCast && casts.some(c => mech.time >= c.startTime && mech.time < c.startTime + c.duration);
                     const isCooldown = !isCast && !isActive && casts.some(c => mech.time >= c.startTime + c.duration && mech.time < c.startTime + (skill.cooldown || 60));
                     
                     const wrapper = document.createElement('div');
