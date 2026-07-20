@@ -2058,6 +2058,10 @@ async function handleShareApply() {
             alert('無法獲取分享憑證！請重新儲存本計畫後再試。');
             return;
         }
+
+        try {
+            localStorage.setItem(`sked_mit_pwd_${token}`, password);
+        } catch (e) {}
         
         const shareUrl = `${window.location.origin}${window.location.pathname}?${paramName}=${token}`;
         window.trackEvent('team_planner', 'share_link', { type: permission });
@@ -2112,6 +2116,11 @@ async function handleShareDelete() {
             
         if (error) throw error;
         
+        try {
+            if (currentTeamReadToken) localStorage.removeItem(`sked_mit_pwd_${currentTeamReadToken}`);
+            if (currentTeamEditToken) localStorage.removeItem(`sked_mit_pwd_${currentTeamEditToken}`);
+        } catch (e) {}
+
         currentTeamSharePassword = null;
         alert('已成功刪除分享紀錄！您可以重新設定密碼並生成新的分享網址。');
         
@@ -2171,12 +2180,22 @@ async function handleUrlSharingTokens() {
         if (btnExport) btnExport.style.display = 'none';
 
         try {
-            // 1. Initial trial call without password
-            let { data, error } = await sb.rpc('get_team_plan_by_token', { p_token: token, p_password: null }).maybeSingle();
+            // Check local browser cache for previously verified password
+            const storageKey = `sked_mit_pwd_${token}`;
+            let cachedPwd = localStorage.getItem(storageKey);
+
+            // 1. Initial trial call (using cached password if available)
+            let { data, error } = await sb.rpc('get_team_plan_by_token', { p_token: token, p_password: cachedPwd || null }).maybeSingle();
             if (error) throw error;
             if (!data) {
                 alert('分享連結無效或該減排計畫已遭刪除！');
                 return;
+            }
+
+            // If cached password failed verification, clear cached entry
+            if (cachedPwd && data.password_required && !data.password_correct) {
+                localStorage.removeItem(storageKey);
+                cachedPwd = null;
             }
             
             // 2. Loop password prompt if required and incorrect
@@ -2197,6 +2216,9 @@ async function handleUrlSharingTokens() {
                 
                 if (ret.data && ret.data.password_correct) {
                     data = ret.data;
+                    try {
+                        localStorage.setItem(storageKey, pwd.trim().toUpperCase());
+                    } catch (e) {}
                 } else {
                     alert('密碼錯誤！請重新輸入。');
                 }
