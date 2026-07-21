@@ -1201,12 +1201,16 @@ function renderFilteredAnalytics() {
                 case 'tab_switch':
                     const targetName = data.target || (data.code === 'team' ? '團隊技能排軸' : data.code === 'compare' ? '多人施法比較' : '個人技能排軸');
                     return `切換至 <strong>${targetName}</strong> 頁籤`;
-                case 'import_fflogs':
-                    const url = data['FFLogs 報告連結'] || data.reportCode || '';
+                case 'import_fflogs': {
+                    const url = data['FFLogs 報告連結'] || data.url || data.reportCode || '';
+                    const urlLink = url ? `<a href="${url}" target="_blank" style="color:var(--accent2); text-decoration:underline;">[報告連結]</a>` : '(無連結)';
+                    if (ev.event_category === 'team_planner') {
+                        return `從 FFLogs 匯入: ${urlLink}`;
+                    }
                     const fight = data['選擇戰鬥段落'] || data.fightId || '未知段落';
                     const player = data['選擇玩家'] || data.player || '未知玩家';
-                    const urlLink = url ? `<a href="${url}" target="_blank" style="color:var(--accent2); text-decoration:underline;">[報告連結]</a>` : '';
                     return `從 FFLogs 匯入: <strong>${player}</strong> (${fight}) ${urlLink}`;
+                }
                 case 'click_import_fflogs_btn':
                     const mode = (ev.event_category === '多人比較' || ev.event_category === 'compare_planner' || data.target === 'compare') ? '多人施法比較' : '個人技能排軸';
                     return `點擊【從 FFLogs 匯入】按鈕 (${mode})`;
