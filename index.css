@@ -2560,6 +2560,74 @@ body {
   background: rgba(255, 255, 255, 0.1);
 }
 
+/* 未選副本時的副本快速選擇卡片格 */
+.mit-duty-picker {
+  padding: 32px 24px 48px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.mit-duty-picker-hint {
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  margin-bottom: 24px;
+}
+
+.mit-duty-picker-hint i {
+  color: var(--color-gcd);
+  margin-right: 6px;
+}
+
+.mit-duty-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.mit-duty-picker-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mit-duty-picker-card-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-gcd);
+  padding: 2px 4px 8px;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 4px;
+}
+
+.mit-duty-picker-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: var(--bg-main);
+  color: var(--color-text-main);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mit-duty-picker-item:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--color-gcd);
+  transform: translateX(2px);
+}
+
 
 
 

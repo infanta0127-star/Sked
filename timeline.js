@@ -3668,7 +3668,7 @@ window.syncCustomDropdown = syncCustomDropdown;
 //   次版本 +1：新增功能（右側歸零）                1.0.1 → 1.1.0
 //   主版本 +1：破壞性大改版（右側歸零）            1.9.0 → 2.0.0
 // 註：header 的「(Patch 7.1)」是遊戲版本，與此無關，需在 index.html 手動維護。
-const APP_VERSION = '1.1.1';
+const APP_VERSION = '1.2.0';
 let updatePopupShown = false;
 
 function initVersionCheck() {
@@ -3857,6 +3857,40 @@ function extractUrlParams(url) {
   }
 }
 
+// 依 FFLogs 戰鬥英文名稱比對出對應的本站副本檔（使用 index.json 的 fflogsAliases 別名表）。
+// 若傳入 phaseParam 且同分類存在對應相位副本，優先回傳該相位；否則回傳別名表指定的副本。
+// 找不到時回傳 null。
+function matchDutyByFflogsName(fightName, phaseParam, dutiesDb) {
+  const db = dutiesDb || (typeof dutiesDatabase !== 'undefined' ? dutiesDatabase : (window.dutiesDatabase || {}));
+  if (!fightName || !db || !db.fflogsAliases) return null;
+
+  const norm = String(fightName).toLowerCase().trim();
+  let matchedFile = null;
+  for (const [keyword, file] of Object.entries(db.fflogsAliases)) {
+    if (keyword && norm.includes(String(keyword).toLowerCase())) {
+      matchedFile = file;
+      break;
+    }
+  }
+  if (!matchedFile) return null;
+
+  const duties = db.duties || [];
+  const matchedDuty = duties.find(d => d.file === matchedFile);
+
+  // 相位偏好：URL 帶 phase 且同分類有對應相位副本時優先選用
+  if (matchedDuty && phaseParam != null) {
+    const phaseDuty = duties.find(d =>
+      d.category === matchedDuty.category &&
+      !/&/.test(d.key) && !/all/i.test(d.key) &&
+      new RegExp(`_P${phaseParam}\\b`, 'i').test(d.key)
+    );
+    if (phaseDuty) return phaseDuty.file;
+  }
+
+  return matchedFile;
+}
+window.matchDutyByFflogsName = matchDutyByFflogsName;
+
 async function fflogsApiFetchReport() {
   const urlInput = document.getElementById('fflogs-api-url').value.trim();
   const code = extractReportCode(urlInput);
@@ -3915,11 +3949,32 @@ async function fflogsApiFetchReport() {
     // Load players for the target fight
     await fflogsApiUpdatePlayers(targetFightId);
 
+    // 自動匹配已知副本並載入其時間軸
+    fflogsApiAutoMatchDuty(targetFightId, urlInput);
+
     fflogsApiSetStatus('');
 
   } catch (err) {
     fflogsApiSetStatus(`❌ 查詢失敗：${err.message}`, true);
+    if (window.trackEvent) {
+      window.trackEvent(activeTab === 'compare' ? '多人比較' : '個人排軸', 'fetch_fflogs_error', {
+        'FFLogs 報告連結': urlInput,
+        '錯誤訊息': err.message
+      });
+    }
   }
+}
+
+// 依選定戰鬥自動匹配並選取對應副本（個人 / 多人比較模式共用 duty-select）
+function fflogsApiAutoMatchDuty(fightId, urlInput) {
+  const fight = fflogsApiFights.find(f => f.id === fightId);
+  if (!fight || !dutySelect) return;
+  const phaseParam = extractUrlParams(urlInput || '').phase;
+  const dutyFile = matchDutyByFflogsName(fight.name, phaseParam, dutiesDatabase);
+  if (!dutyFile || dutySelect.value === dutyFile) return;
+  dutySelect.value = dutyFile;
+  if (typeof syncCustomDropdown === 'function') syncCustomDropdown(dutySelect, dutiesDatabase);
+  dutySelect.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
 function deriveEncounterPhaseFromDuty() {
@@ -4293,6 +4348,13 @@ async function fflogsApiImport() {
   } catch (err) {
     fflogsApiSetStatus(`❌ 匯入失敗：${err.message}`, true);
     document.getElementById('fflogs-api-import').disabled = false;
+    if (window.trackEvent) {
+      const urlForErr = (document.getElementById('fflogs-api-url') || {}).value || '';
+      window.trackEvent(activeTab === 'compare' ? '多人比較' : '個人排軸', 'import_fflogs_error', {
+        'FFLogs 報告連結': urlForErr.trim(),
+        '錯誤訊息': err.message
+      });
+    }
   }
 }
 
@@ -4317,6 +4379,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const fightId = parseInt(fightSelect.value);
       if (fightId) {
         fflogsApiUpdatePlayers(fightId);
+        fflogsApiAutoMatchDuty(fightId, urlInput ? urlInput.value.trim() : '');
       }
     });
   }

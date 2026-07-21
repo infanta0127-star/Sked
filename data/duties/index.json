@@ -93,6 +93,24 @@
     { "key": "savage", "label": "零式", "categories": ["aac_light", "aac_cruiser", "aac_heavy"] },
     { "key": "ultimate", "label": "絕本", "categories": ["ultimate_dancingmad", "ultimate_eden", "ultimate_omega", "ultimate_dragonsongs", "ultimate_alexander", "ultimate_ultima", "ultimate_bahamult"] }
   ],
+  "_fflogsAliasesNote": "匯入 Log 自動匹配用：鍵為 FFLogs 英文戰鬥名稱的關鍵字（小寫、可為子字串），值為對應副本檔。M9S~M12S(7.4) 的正式英文名尚未填入，取得後可自行補上。",
+  "fflogsAliases": {
+    "black cat": "aac/m1s.json",
+    "honey b": "aac/m2s.json",
+    "brute bomber": "aac/m3s.json",
+    "wicked thunder": "aac/m4s.json",
+    "dancing green": "aac/m5s.json",
+    "sugar riot": "aac/m6s.json",
+    "abombinator": "aac/m7s.json",
+    "howling blade": "aac/m8s.json",
+    "dancing mad": "u_mad/mad_all.json",
+    "futures rewritten": "u_eden/eden_all.json",
+    "omega protocol": "u_omega/omega_P1.json",
+    "dragonsong's reprise": "u_dragonsongs/dragonsongs_P1.json",
+    "epic of alexander": "u_alexander/alexander_P1.json",
+    "weapon's refrain": "u_ultima/ultima_P1.json",
+    "unending coil": "u_bahamult/bahamult_all.json"
+  },
   "duties": [
     { "key": "m1s", "file": "aac/m1s.json", "name": "阿卡迪亞零式 M1S", "category": "aac_light" },
     { "key": "m2s", "file": "aac/m2s.json", "name": "阿卡迪亞零式 M2S", "category": "aac_light" },

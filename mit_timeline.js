@@ -877,17 +877,80 @@ function calculateRemainingDamage(mech) {
     return `<span class="${multiplier < 1.0 ? (multiplier <= 0.8 ? 'damage-reduced-heavy' : 'damage-reduced') : 'damage-original'}">${finalDmg.toLocaleString()}</span>`;
 }
 
+// 未選副本時：把整個副本清單依分類以卡片格顯示，點擊即載入該副本時間軸
+function renderMitDutyPicker(container) {
+    container.innerHTML = '';
+
+    const db = mitDutiesDatabase || {};
+    const categories = db.categories || {};
+    const duties = db.duties || [];
+    const groups = db.groups || [];
+
+    // 依 groups 決定分類顯示順序，剩餘未列入 groups 的分類補在最後
+    const orderedCatKeys = [];
+    groups.forEach(g => (g.categories || []).forEach(c => {
+        if (!orderedCatKeys.includes(c)) orderedCatKeys.push(c);
+    }));
+    duties.forEach(d => {
+        if (d.category && !orderedCatKeys.includes(d.category)) orderedCatKeys.push(d.category);
+    });
+
+    const wrap = document.createElement('div');
+    wrap.className = 'mit-duty-picker';
+
+    const hint = document.createElement('p');
+    hint.className = 'mit-duty-picker-hint';
+    hint.innerHTML = '<i class="fa-solid fa-hand-pointer"></i> 請選擇副本以載入機制，開啟豎版表格減傷規劃';
+    wrap.appendChild(hint);
+
+    const grid = document.createElement('div');
+    grid.className = 'mit-duty-picker-grid';
+
+    orderedCatKeys.forEach(catKey => {
+        const catDuties = duties.filter(d => d.category === catKey);
+        if (catDuties.length === 0) return;
+
+        const card = document.createElement('div');
+        card.className = 'mit-duty-picker-card';
+
+        const title = document.createElement('div');
+        title.className = 'mit-duty-picker-card-title';
+        title.textContent = categories[catKey]?.label || catKey;
+        card.appendChild(title);
+
+        catDuties.forEach(duty => {
+            const item = document.createElement('button');
+            item.type = 'button';
+            item.className = 'mit-duty-picker-item';
+            item.textContent = duty.name;
+            item.title = duty.name;
+            item.addEventListener('click', () => selectMitDuty(duty.file));
+            card.appendChild(item);
+        });
+
+        grid.appendChild(card);
+    });
+
+    wrap.appendChild(grid);
+    container.appendChild(wrap);
+}
+
+// 以程式方式選取團隊副本並觸發載入（供卡片格與自動匹配共用）
+function selectMitDuty(dutyFile) {
+    const sel = document.getElementById('mit-duty-select');
+    if (!sel || !dutyFile) return;
+    sel.value = dutyFile;
+    if (typeof window.syncCustomDropdown === 'function') {
+        window.syncCustomDropdown(sel, mitDutiesDatabase);
+    }
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
 function renderMitVerticalGrid(container) {
     container.innerHTML = '';
     
     if (mitBossMechanics.length === 0) {
-        container.innerHTML = `
-            <div class="empty-state" style="padding: 100px 20px; text-align: center; color: var(--color-text-muted);">
-                <i class="fa-solid fa-table-list" style="font-size: 48px; margin-bottom: 16px; color: var(--color-gcd);"></i>
-                <h3>無副本數據</h3>
-                <p style="margin-top: 8px; font-size: 14px;">請在左上角選擇副本（例如：絕伊甸 P1）以載入機制，開啟豎版表格減傷規劃！</p>
-            </div>
-        `;
+        renderMitDutyPicker(container);
         return;
     }
     
@@ -1835,6 +1898,13 @@ function setupMitEventListeners() {
     if (mitFflogsImportBtn) mitFflogsImportBtn.addEventListener('click', mitFflogsImport);
     if (mitFflogsUrlInput) mitFflogsUrlInput.addEventListener('keydown', e => { if (e.key === 'Enter') mitFflogsFetchReport(); });
     if (mitFflogsModal) mitFflogsModal.addEventListener('click', e => { if (e.target === mitFflogsModal) mitFflogsModal.classList.remove('active'); });
+    const mitFflogsFightSelect = document.getElementById('mit-fflogs-api-fight-select');
+    if (mitFflogsFightSelect) {
+        mitFflogsFightSelect.addEventListener('change', () => {
+            const fightId = parseInt(mitFflogsFightSelect.value);
+            if (fightId) mitFflogsAutoMatchDuty(fightId, mitFflogsUrlInput ? mitFflogsUrlInput.value.trim() : '');
+        });
+    }
 
     // Job Skill Panel modal listeners
     const btnSelectPanel = document.getElementById('mit-btn-select-panel');
@@ -1890,9 +1960,6 @@ function setupMitEventListeners() {
             hideSkillContextMenu();
         }
     });
-
-    const btnAddCustomTime = document.getElementById('mit-btn-add-custom-time');
-    if (btnAddCustomTime) btnAddCustomTime.addEventListener('click', addNewCustomTimePoint);
 
     const mitBtnClear = document.getElementById('mit-btn-clear');
     if (mitBtnClear) {
@@ -3095,10 +3162,29 @@ async function mitFflogsFetchReport() {
             }
         }
 
+        // 自動匹配已知副本並選取載入
+        mitFflogsAutoMatchDuty(parseInt(fightSel.value), urlInput);
+
         mitFflogsSetStatus('');
     } catch (err) {
         mitFflogsSetStatus(`❌ 查詢失敗：${err.message}`, true);
+        if (window.trackEvent) {
+            window.trackEvent('team_planner', 'fetch_fflogs_error', { url: urlInput, error: err.message });
+        }
     }
+}
+
+// 依選定戰鬥自動匹配並選取對應副本（團隊模式）
+function mitFflogsAutoMatchDuty(fightId, urlInput) {
+    const fight = mitFflogsFights.find(f => f.id === fightId);
+    if (!fight) return;
+    const phaseParam = (window.extractUrlParams ? window.extractUrlParams(urlInput || '') : extractUrlParamsHelper(urlInput || '')).phase;
+    const matcher = window.matchDutyByFflogsName;
+    if (typeof matcher !== 'function') return;
+    const dutyFile = matcher(fight.name, phaseParam, mitDutiesDatabase);
+    const sel = document.getElementById('mit-duty-select');
+    if (!dutyFile || !sel || sel.value === dutyFile) return;
+    selectMitDuty(dutyFile);
 }
 
 function matchMitSkill(jobAbbrev, abilityName) {
@@ -3500,6 +3586,9 @@ async function mitFflogsImport() {
     } catch (err) {
         mitFflogsSetStatus(`❌ 匯入失敗：${err.message}`, true);
         importBtn.disabled = false;
+        if (window.trackEvent) {
+            window.trackEvent('team_planner', 'import_fflogs_error', { url: urlInput, error: err.message });
+        }
     }
 }
 
