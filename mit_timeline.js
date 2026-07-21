@@ -3023,6 +3023,17 @@ function extractUrlParamsHelper(url) {
     }
 }
 
+// 從目前選擇的副本推導 FFLogs 相位編號（例如 eden_P2 → 2），
+// 只匯入該相位的事件。多相位（如 P4&P5）或整場（all）回傳 null，不做相位過濾。
+function deriveEncounterPhaseFromDuty() {
+    const sel = document.getElementById('mit-duty-select');
+    const v = sel ? sel.value : '';
+    if (!v) return null;
+    if (/&/.test(v) || /all/i.test(v)) return null;
+    const m = v.match(/_P(\d+)/i) || v.match(/\bP(\d+)\b/i);
+    return m ? parseInt(m[1], 10) : null;
+}
+
 async function mitFflogsFetchReport() {
     const urlInput = document.getElementById('mit-fflogs-api-url').value.trim();
     const extractFn = window.extractReportCode || function(url) {
@@ -3296,9 +3307,13 @@ async function mitFflogsImport() {
         const fight = mitFflogsFights.find(f => f.id === fightId);
         const fightStart = fight ? fight.startTime : 0;
         const urlParams = extractUrlParamsHelper(urlInput);
+        let targetPhase = urlParams.phase;
+        if (targetPhase === null) {
+            targetPhase = deriveEncounterPhaseFromDuty();
+        }
         let filterExpr = "";
-        if (urlParams.phase !== null) {
-            filterExpr = `encounterPhase = ${urlParams.phase}`;
+        if (targetPhase !== null) {
+            filterExpr = `encounterPhase = ${targetPhase}`;
         }
 
         const eventsData = await queryFn(`
@@ -3338,16 +3353,10 @@ async function mitFflogsImport() {
         abilities.forEach(a => { abilityMap[a.gameID] = a.name; });
 
         let alignmentStart = fightStart;
-        if (urlParams.phase !== null) {
-            const castEvents = events.filter(ev => ev.type === 'cast' || ev.type === 'begincast');
-            if (castEvents.length > 0) {
-                alignmentStart = Math.min(...castEvents.map(ev => ev.timestamp));
-            }
-        }
 
         const parsedEvents = [];
         for (const ev of events) {
-            if (ev.type !== 'cast' && ev.type !== 'begincast') continue;
+            if (ev.type !== 'cast') continue;
             const playerInfo = playerSlotMap[ev.sourceID];
             if (!playerInfo) continue;
 

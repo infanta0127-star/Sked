@@ -3668,7 +3668,7 @@ window.syncCustomDropdown = syncCustomDropdown;
 //   次版本 +1：新增功能（右側歸零）                1.0.1 → 1.1.0
 //   主版本 +1：破壞性大改版（右側歸零）            1.9.0 → 2.0.0
 // 註：header 的「(Patch 7.1)」是遊戲版本，與此無關，需在 index.html 手動維護。
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.1.1';
 let updatePopupShown = false;
 
 function initVersionCheck() {
@@ -3922,6 +3922,15 @@ async function fflogsApiFetchReport() {
   }
 }
 
+function deriveEncounterPhaseFromDuty() {
+  const sel = document.getElementById('duty-select') || document.getElementById('mit-duty-select');
+  const v = sel ? sel.value : '';
+  if (!v) return null;
+  if (/&/.test(v) || /all/i.test(v)) return null;
+  const m = v.match(/_P(\d+)/i) || v.match(/\bP(\d+)\b/i);
+  return m ? parseInt(m[1], 10) : null;
+}
+
 // --- Fetch casts and import ---
 async function fflogsApiImport() {
   const fightId = parseInt(document.getElementById('fflogs-api-fight-select').value);
@@ -3995,9 +4004,13 @@ async function fflogsApiImport() {
 
   // Build filterExpression if phase parameter is present
   const urlParams = extractUrlParams(urlInput);
+  let targetPhase = urlParams.phase;
+  if (targetPhase === null) {
+    targetPhase = deriveEncounterPhaseFromDuty();
+  }
   let filterExpr = "";
-  if (urlParams.phase !== null) {
-    filterExpr = `encounterPhase = ${urlParams.phase}`;
+  if (targetPhase !== null) {
+    filterExpr = `encounterPhase = ${targetPhase}`;
   }
 
   try {
@@ -4044,12 +4057,6 @@ async function fflogsApiImport() {
 
     // Determine the base timestamp for alignment
     let alignmentStart = fightStart;
-    if (urlParams.phase !== null) {
-      const castEvents = events.filter(ev => ev.type === 'cast' || ev.type === 'begincast');
-      if (castEvents.length > 0) {
-        alignmentStart = Math.min(...castEvents.map(ev => ev.timestamp));
-      }
-    }
 
     // Match skills to database
     const targetJobData = activeTab === 'compare' ? skillsDatabase[selectedPlayer.type.toLowerCase()] : skillsDatabase[currentJobId];
@@ -4057,7 +4064,7 @@ async function fflogsApiImport() {
 
     const parsedEvents = [];
     for (const ev of events) {
-      if (ev.type !== 'cast' && ev.type !== 'begincast') continue;
+      if (ev.type !== 'cast') continue;
       
       const abilityName = abilityMap[ev.abilityGameID];
       if (!abilityName) continue;
