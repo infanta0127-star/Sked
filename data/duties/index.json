@@ -93,7 +93,7 @@
     { "key": "savage", "label": "零式", "categories": ["aac_light", "aac_cruiser", "aac_heavy"] },
     { "key": "ultimate", "label": "絕本", "categories": ["ultimate_dancingmad", "ultimate_eden", "ultimate_omega", "ultimate_dragonsongs", "ultimate_alexander", "ultimate_ultima", "ultimate_bahamult"] }
   ],
-  "_fflogsAliasesNote": "匯入 Log 自動匹配用：鍵為 FFLogs 英文戰鬥名稱的關鍵字（小寫、可為子字串），值為對應副本檔。M9S~M12S(7.4) 的正式英文名尚未填入，取得後可自行補上。",
+  "_fflogsAliasesNote": "匯入 Log 自動匹配用：鍵為 FFLogs 英文戰鬥名稱的關鍵字（小寫、可為子字串），值為對應副本檔。新增副本時在此補上對應英文名即可。M12S 預設對到前半 (m12s_1)。",
   "fflogsAliases": {
     "black cat": "aac/m1s.json",
     "honey b": "aac/m2s.json",
@@ -103,6 +103,10 @@
     "sugar riot": "aac/m6s.json",
     "abombinator": "aac/m7s.json",
     "howling blade": "aac/m8s.json",
+    "vamp fatale": "aac/m9s.json",
+    "red hot and deep blue": "aac/m10s.json",
+    "the tyrant": "aac/m11s.json",
+    "lindwurm": "aac/m12s_1.json",
     "dancing mad": "u_mad/mad_all.json",
     "futures rewritten": "u_eden/eden_all.json",
     "omega protocol": "u_omega/omega_P1.json",
