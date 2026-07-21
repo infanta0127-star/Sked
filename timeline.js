@@ -3660,32 +3660,36 @@ function updateCustomDropdownSelection(selectEl, container) {
 window.syncCustomDropdown = syncCustomDropdown;
 
 // ── 18. Auto-Update Version Check ──
-let currentVersionTag = null;
+// 目前執行版本（烘焙進部署的檔案裡）。每次要發布新版時，
+// 同步更新此常數與 version.json 內的 version 欄位即可觸發更新通知。
+//
+// 版本號規則（主.次.修 / SemVer）：
+//   修訂號 +1：修 bug、改文字、調樣式等小改動      1.0.0 → 1.0.1
+//   次版本 +1：新增功能（右側歸零）                1.0.1 → 1.1.0
+//   主版本 +1：破壞性大改版（右側歸零）            1.9.0 → 2.0.0
+// 註：header 的「(Patch 7.1)」是遊戲版本，與此無關，需在 index.html 手動維護。
+const APP_VERSION = '1.0.0';
 let updatePopupShown = false;
 
-async function initVersionCheck() {
-  try {
-    const response = await fetch('./index.html?t=' + Date.now(), { method: 'HEAD', cache: 'no-cache' });
-    if (response.ok) {
-      currentVersionTag = response.headers.get('etag') || response.headers.get('last-modified');
-      console.log('[Version Check] Initialized with version tag:', currentVersionTag);
-    }
-  } catch (e) {
-    console.error('[Version Check] Failed to initialize:', e);
-  }
-  
-  // Check for updates every 60 seconds
+function initVersionCheck() {
+  console.log('[Version Check] Current app version:', APP_VERSION);
+  // 將 header 版本標籤同步為目前版本（Patch 標註仍由 HTML 手動維護）
+  const versionEl = document.getElementById('app-version');
+  if (versionEl) versionEl.textContent = APP_VERSION;
+  // 立即檢查一次，之後每 60 秒檢查一次
+  checkForUpdates();
   setInterval(checkForUpdates, 60000);
 }
 
 async function checkForUpdates() {
   if (updatePopupShown) return;
   try {
-    const response = await fetch('./index.html?t=' + Date.now(), { method: 'HEAD', cache: 'no-cache' });
+    const response = await fetch('./version.json?t=' + Date.now(), { cache: 'no-cache' });
     if (response.ok) {
-      const newVersionTag = response.headers.get('etag') || response.headers.get('last-modified');
-      if (newVersionTag && currentVersionTag && newVersionTag !== currentVersionTag) {
-        showUpdateNotification();
+      const data = await response.json();
+      if (data.version && data.version !== APP_VERSION) {
+        console.log('[Version Check] New version available:', data.version, '(current:', APP_VERSION + ')');
+        showUpdateNotification(data.version);
       }
     }
   } catch (e) {
@@ -3693,16 +3697,16 @@ async function checkForUpdates() {
   }
 }
 
-function showUpdateNotification() {
+function showUpdateNotification(newVersion) {
   if (updatePopupShown) return;
   updatePopupShown = true;
-  
+
   const toast = document.createElement('div');
   toast.className = 'update-toast';
   toast.innerHTML = `
     <div class="update-toast-header">
       <i class="fa-solid fa-cloud-arrow-down"></i>
-      <span>系統有新版本發布！</span>
+      <span>系統有新版本發布！${newVersion ? ` (v${newVersion})` : ''}</span>
     </div>
     <div class="update-toast-body">
       請重新整理頁面以啟用最新功能與樣式。
@@ -3713,11 +3717,11 @@ function showUpdateNotification() {
       </button>
     </div>
   `;
-  
+
   toast.querySelector('#btn-toast-reload').addEventListener('click', () => {
     window.location.reload();
   });
-  
+
   document.body.appendChild(toast);
 }
 
