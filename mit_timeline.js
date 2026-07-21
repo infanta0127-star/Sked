@@ -505,10 +505,29 @@ function formatTime(sec) {
 }
 
 let customJobPanels = {};
+// 每個職業「收合時」要顯示哪些技能（技能 ID 陣列）。空/未設 → 沿用自動邏輯。
+let customJobCollapsedPanels = {};
 try {
     const rawPanels = localStorage.getItem('sked_custom_job_panels');
     if (rawPanels) customJobPanels = JSON.parse(rawPanels);
 } catch (e) {}
+try {
+    const rawCollapsed = localStorage.getItem('sked_custom_job_collapsed_panels');
+    if (rawCollapsed) customJobCollapsedPanels = JSON.parse(rawCollapsed);
+} catch (e) {}
+
+// custom_panels 是 jsonb 欄位、且分享 RPC 只回傳它，因此把收合標記巢狀塞進
+// 保留鍵 _collapsed（職業縮寫不可能叫這名字），即可沿用既有欄位與 RPC，無需 migration。
+function serializeCustomPanels() {
+    return { ...customJobPanels, _collapsed: customJobCollapsedPanels };
+}
+
+function applyLoadedCustomPanels(raw) {
+    if (!raw || typeof raw !== 'object') return;
+    const { _collapsed, ...panels } = raw;
+    customJobPanels = panels || {};
+    customJobCollapsedPanels = (_collapsed && typeof _collapsed === 'object') ? _collapsed : {};
+}
 
 function getActivePanelSkillIds(jobKey) {
     const jobData = mitSkillsDatabase[jobKey];
@@ -595,8 +614,15 @@ function getPlayerMitSkills(jobKey, slotIndex) {
     if (isExpanded) {
         return allSkills;
     }
-    
-    // Collapsed: show at most 3 skills.
+
+    // 收合：若該職業有手動標記收合技能，就只顯示標記的（維持面板順序，不設上限）
+    const collapsedMarks = customJobCollapsedPanels[jobKey];
+    if (Array.isArray(collapsedMarks) && collapsedMarks.length > 0) {
+        const marked = new Set(collapsedMarks);
+        return allSkills.filter(s => marked.has(s.id));
+    }
+
+    // 未標記 → 沿用自動邏輯：優先顯示軸上已用到的，再補滿到最多 3 個
     // 1. Get skills currently used by this slot
     const usedSkillIds = new Set(
         mitTimelineSkills.filter(c => c.slotIndex === slotIndex).map(c => c.skillKey)
@@ -907,7 +933,12 @@ function renderMitVerticalGrid(container) {
         
         const colspan = Math.max(1, skills.length);
         const isExpanded = mitGridExpanded[i] === true;
-        const hasExpandOption = allSkills.length > 3;
+        // 有手動收合標記時，只要有技能被藏起來就提供展開鈕；否則沿用「總數 > 3」
+        const collapsedMarks = customJobCollapsedPanels[jobKey];
+        const hasManualCollapsed = Array.isArray(collapsedMarks) && collapsedMarks.length > 0;
+        const hasExpandOption = hasManualCollapsed
+            ? allSkills.some(s => !collapsedMarks.includes(s.id))
+            : allSkills.length > 3;
         
         const th1 = document.createElement('th');
         th1.colSpan = colspan;
@@ -2067,7 +2098,7 @@ async function saveTeamPlanToSupabase() {
                     party: mitParty,
                     mits: mitTimelineSkills,
                     custom_mechanics: mitBossMechanics,
-                    custom_panels: customJobPanels
+                    custom_panels: serializeCustomPanels()
                 })
                 .select()
                 .single();
@@ -2154,7 +2185,7 @@ async function loadTeamPlansModal() {
                                         party: mitParty,
                                         mits: mitTimelineSkills,
                                         custom_mechanics: mitBossMechanics,
-                                        custom_panels: customJobPanels,
+                                        custom_panels: serializeCustomPanels(),
                                         updated_at: new Date()
                                     })
                                     .eq('id', plan.id);
@@ -2241,7 +2272,7 @@ async function loadTeamPlanById(planId) {
         mitParty = plan.party || [];
         mitTimelineSkills = plan.mits || [];
         if (plan.custom_panels && typeof plan.custom_panels === 'object') {
-            customJobPanels = plan.custom_panels;
+            applyLoadedCustomPanels(plan.custom_panels);
         }
         
         if (plan.duty_key && plan.duty_key !== 'custom') {
@@ -2709,7 +2740,7 @@ async function handleUrlSharingTokens() {
             mitParty = data.party || [];
             mitTimelineSkills = data.mits || [];
             if (data.custom_panels && typeof data.custom_panels === 'object') {
-                customJobPanels = data.custom_panels;
+                applyLoadedCustomPanels(data.custom_panels);
             }
             
             if (data.duty_key && data.duty_key !== 'custom') {
@@ -3592,13 +3623,23 @@ function renderPanelSkillsGrid() {
         return;
     }
 
+    const collapsedMarks = new Set(
+        Array.isArray(customJobCollapsedPanels[panelSelectedJob]) ? customJobCollapsedPanels[panelSelectedJob] : []
+    );
+
     skills.forEach(skill => {
         const isInPanel = activeSkillIds.has(skill.id);
+        const isCollapsed = isInPanel && collapsedMarks.has(skill.id);
         const card = document.createElement('div');
         card.className = `panel-skill-card ${isInPanel ? 'in-panel' : ''}`;
-        
+
         const isGcd = skill.cooldown <= 2.5 && skill.cooldown > 0;
         const metaText = `${isGcd ? '魔法' : '能力'}${skill.duration ? ' · ' + skill.duration + '秒' : ''}`;
+
+        // 只有「已在面板」的技能才顯示「收合時顯示」圖釘開關
+        const pinBtn = isInPanel
+            ? `<button class="panel-pin-btn ${isCollapsed ? 'pinned' : ''}" title="${isCollapsed ? '收合時會顯示（點擊取消）' : '設為收合時顯示'}"><i class="fa-solid fa-thumbtack"></i></button>`
+            : '';
 
         card.innerHTML = `
             <img src="${skill.icon}" alt="${skill.name}" />
@@ -3607,14 +3648,25 @@ function renderPanelSkillsGrid() {
                 <div class="panel-skill-meta">
                     <span>${metaText}</span>
                     <span class="panel-badge ${isInPanel ? 'active' : 'inactive'}">${isInPanel ? '已在面板' : '未在面板'}</span>
+                    ${isCollapsed ? '<span class="panel-badge collapsed">收合顯示</span>' : ''}
                 </div>
             </div>
+            ${pinBtn}
         `;
 
         card.addEventListener('click', (e) => {
             e.preventDefault();
             toggleSkillInPanel(panelSelectedJob, skill.id);
         });
+
+        const pinEl = card.querySelector('.panel-pin-btn');
+        if (pinEl) {
+            pinEl.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleCollapsedInPanel(panelSelectedJob, skill.id);
+            });
+        }
 
         card.addEventListener('contextmenu', (e) => {
             e.preventDefault();
@@ -3634,11 +3686,35 @@ function toggleSkillInPanel(jobKey, skillId) {
     const idx = customJobPanels[jobKey].indexOf(skillId);
     if (idx !== -1) {
         customJobPanels[jobKey].splice(idx, 1);
+        // 移出面板的技能不能再是「收合時顯示」，一併清掉標記
+        if (Array.isArray(customJobCollapsedPanels[jobKey])) {
+            const ci = customJobCollapsedPanels[jobKey].indexOf(skillId);
+            if (ci !== -1) customJobCollapsedPanels[jobKey].splice(ci, 1);
+        }
     } else {
         customJobPanels[jobKey].push(skillId);
     }
 
     renderPanelTabs();
+    renderPanelSkillsGrid();
+}
+
+// 切換某技能是否「收合時顯示」。僅對已在面板內的技能有效。
+function toggleCollapsedInPanel(jobKey, skillId) {
+    const inPanel = getActivePanelSkillIds(jobKey);
+    if (!inPanel.has(skillId)) return;
+
+    if (!Array.isArray(customJobCollapsedPanels[jobKey])) {
+        customJobCollapsedPanels[jobKey] = [];
+    }
+
+    const idx = customJobCollapsedPanels[jobKey].indexOf(skillId);
+    if (idx !== -1) {
+        customJobCollapsedPanels[jobKey].splice(idx, 1);
+    } else {
+        customJobCollapsedPanels[jobKey].push(skillId);
+    }
+
     renderPanelSkillsGrid();
 }
 
@@ -3671,12 +3747,13 @@ function hideSkillContextMenu() {
 async function handleSaveCustomPanels() {
     try {
         localStorage.setItem('sked_custom_job_panels', JSON.stringify(customJobPanels));
+        localStorage.setItem('sked_custom_job_collapsed_panels', JSON.stringify(customJobCollapsedPanels));
     } catch (e) {}
 
     if (currentTeamPlanId && currentUser) {
         try {
             await sb.from('team_plans')
-                .update({ custom_panels: customJobPanels })
+                .update({ custom_panels: serializeCustomPanels() })
                 .eq('id', currentTeamPlanId);
         } catch (err) {
             console.warn('Error saving custom panels to DB:', err);
