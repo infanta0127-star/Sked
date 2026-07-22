@@ -3668,7 +3668,7 @@ window.syncCustomDropdown = syncCustomDropdown;
 //   次版本 +1：新增功能（右側歸零）                1.0.1 → 1.1.0
 //   主版本 +1：破壞性大改版（右側歸零）            1.9.0 → 2.0.0
 // 註：header 的「(Patch 7.1)」是遊戲版本，與此無關，需在 index.html 手動維護。
-const APP_VERSION = '1.3.0';
+const APP_VERSION = '1.4.0';
 let updatePopupShown = false;
 
 function initVersionCheck() {
@@ -3727,6 +3727,93 @@ function showUpdateNotification(newVersion) {
 
 // Start checking
 initVersionCheck();
+
+// ── Changelog (更新日誌) ──
+function initChangelog() {
+  const btn = document.getElementById('version-tag-btn');
+  const modal = document.getElementById('changelog-modal');
+  const closeBtn = document.getElementById('changelog-close');
+  if (!btn || !modal) return;
+
+  btn.addEventListener('click', openChangelogModal);
+  btn.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openChangelogModal(); }
+  });
+  if (closeBtn) closeBtn.addEventListener('click', () => modal.classList.remove('active'));
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('active'); });
+}
+
+async function openChangelogModal() {
+  const modal = document.getElementById('changelog-modal');
+  const body = document.getElementById('changelog-body');
+  if (!modal || !body) return;
+
+  modal.classList.add('active');
+  body.innerHTML = '<div class="changelog-loading" style="text-align:center; color: var(--color-text-muted); padding: 24px 0;"><i class="fa-solid fa-spinner fa-spin"></i> 載入中...</div>';
+
+  const sb = window.supabaseClient;
+  if (!sb) {
+    body.innerHTML = '<div class="changelog-empty">目前無法載入更新日誌，請稍後再試。</div>';
+    return;
+  }
+
+  try {
+    const { data, error } = await sb
+      .from('changelog')
+      .select('version, released_at, content')
+      .order('released_at', { ascending: false })
+      .limit(10);
+
+    if (error) throw error;
+    renderChangelog(data || []);
+  } catch (e) {
+    console.warn('[Changelog] load failed:', e);
+    body.innerHTML = '<div class="changelog-empty">目前無法載入更新日誌，請稍後再試。</div>';
+  }
+}
+
+function renderChangelog(entries) {
+  const body = document.getElementById('changelog-body');
+  if (!body) return;
+
+  if (!entries.length) {
+    body.innerHTML = '<div class="changelog-empty">目前尚無更新日誌。</div>';
+    return;
+  }
+
+  const esc = (s) => String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  const fmtDate = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d)) return '';
+    return d.toLocaleString('zh-TW', {
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hour12: false,
+      timeZone: 'Asia/Taipei'
+    });
+  };
+
+  body.innerHTML = entries.map(en => {
+    const items = String(en.content || '')
+      .split('\n')
+      .map(l => l.trim())
+      .filter(Boolean)
+      .map(l => `<li>${esc(l)}</li>`)
+      .join('');
+    return `
+      <div class="changelog-entry">
+        <div class="changelog-entry-head">
+          <span class="changelog-date">${fmtDate(en.released_at)}</span>
+          <span class="changelog-version">v${esc(en.version)}</span>
+        </div>
+        <ul class="changelog-list">${items || '<li>—</li>'}</ul>
+      </div>`;
+  }).join('');
+}
+
+initChangelog();
 
 
 // ============================================================

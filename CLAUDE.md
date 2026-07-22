@@ -29,6 +29,13 @@
 - header 的版本號部分（`#app-version`）會由 `APP_VERSION` 自動填入，不用手改。
 - 改完 commit + push 到 `main`（GitHub Pages 由 `main` 部署）。
 
+## 更新日誌（Changelog）
+
+點擊 header 版本號會開啟「更新日誌」彈窗，內容讀自 Supabase `changelog` 表（最近 10 筆，`add-changelog-table.sql`）。**發新版時，請在 `changelog` 表新增一筆對應版本號的資料**（或作者自行進 DB 編修）。
+
+- 內容只寫「一般使用者看得懂的功能更新」，**不要**列上報/除錯/bug 修復等。
+- `content` 每一行 = 一條項目（換行分隔）。前端唯讀，寫入僅透過 Supabase Dashboard / service_role。
+
 ## 開發前務必先同步
 
 作者以多台電腦、多個 AI 代理交替開發。**每次開工前先 `git pull`**，避免落後遠端造成衝突。

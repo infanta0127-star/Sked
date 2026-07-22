@@ -36,7 +36,7 @@
     <header class="app-header">
       <div class="logo-area">
         <i class="fa-solid fa-timeline logo-icon"></i>
-        <h1>FFXIV 戰鬥排軸助手 <span class="version-tag">v<span id="app-version">1.0</span> (Patch 7.1)</span></h1>
+        <h1>FFXIV 戰鬥排軸助手 <span class="version-tag" id="version-tag-btn" role="button" tabindex="0" title="查看更新日誌">v<span id="app-version">1.0</span> (Patch 7.1)</span></h1>
         
         <!-- Tab Switcher -->
         <div class="header-tabs">
@@ -623,6 +623,19 @@
           <div id="mit-choice-buttons" style="display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap;">
             <!-- Buttons dynamically generated -->
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: 更新日誌 (Changelog) -->
+    <div class="modal" id="changelog-modal">
+      <div class="modal-content" style="width: 520px; max-width: 95vw; max-height: 82vh; display: flex; flex-direction: column; padding: 0; overflow: hidden; border-radius: 12px; border: 1px solid var(--border-color); box-shadow: 0 12px 32px rgba(0,0,0,0.6);">
+        <div class="modal-header" style="padding: 14px 18px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between;">
+          <h3 style="margin: 0; font-size: 15px; display: flex; align-items: center; gap: 8px; color: #fff;"><i class="fa-solid fa-bullhorn" style="color: #00f0ff;"></i> 更新日誌</h3>
+          <span class="modal-close" id="changelog-close" style="font-size: 22px; cursor: pointer; color: var(--color-text-muted);">&times;</span>
+        </div>
+        <div class="modal-body" id="changelog-body" style="padding: 16px 20px; overflow-y: auto;">
+          <div class="changelog-loading" style="text-align:center; color: var(--color-text-muted); padding: 24px 0;"><i class="fa-solid fa-spinner fa-spin"></i> 載入中...</div>
         </div>
       </div>
     </div>
