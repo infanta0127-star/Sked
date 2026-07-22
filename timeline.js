@@ -138,7 +138,8 @@ const BUFF_MAP = {
   // Caster
   '無間地獄': { duration: 20, color: 'rgba(75, 0, 130, 0.45)', label: '無間地獄 (傷害+3%)' },
   '鼓勵': { duration: 20, color: 'rgba(220, 20, 60, 0.45)', label: '鼓勵 (魔法傷害+5%)' },
-  '灼熱之光': { duration: 30, color: 'rgba(255, 69, 0, 0.45)', label: '灼熱之光 (傷害+3%)' }
+  '灼熱之光': { duration: 30, color: 'rgba(255, 69, 0, 0.45)', label: '灼熱之光 (傷害+3%)' },
+  '星空構想': { duration: 20, color: 'rgba(199, 125, 255, 0.45)', label: '星空構想 (+5%)' }
 };
 
 // DOM Query Selectors
@@ -3668,7 +3669,7 @@ window.syncCustomDropdown = syncCustomDropdown;
 //   次版本 +1：新增功能（右側歸零）                1.0.1 → 1.1.0
 //   主版本 +1：破壞性大改版（右側歸零）            1.9.0 → 2.0.0
 // 註：header 的「(Patch 7.1)」是遊戲版本，與此無關，需在 index.html 手動維護。
-const APP_VERSION = '1.4.0';
+const APP_VERSION = '1.4.1';
 let updatePopupShown = false;
 
 function initVersionCheck() {
