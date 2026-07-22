@@ -1280,13 +1280,52 @@ function renderPartySelector() {
             select.appendChild(option);
         });
         
-        select.addEventListener('change', (e) => {
-            mitParty[i] = e.target.value;
+        select.addEventListener('change', async (e) => {
+            const newJob = e.target.value;
+            const oldJob = mitParty[i];
+            if (newJob === oldJob) return;
+
+            const slotLabel = slotLabels[i];
+            const hasSkills = mitTimelineSkills.some(cast => cast.slotIndex === i);
+
+            // 該位置已有排技能 → 提醒會清空
+            if (hasSkills) {
+                const choice = await showCustomChoiceDialog(
+                    '調整隊伍組成',
+                    `請注意修改 <strong>${slotLabel}</strong> 職業會清空 ${slotLabel} 的排軸。`,
+                    [
+                        { label: '取消', value: 'cancel', btnClass: 'btn-secondary' },
+                        { label: '確定', value: 'confirm', btnClass: 'btn-danger' }
+                    ]
+                );
+                if (choice !== 'confirm') {
+                    // 還原下拉選項並同步自訂下拉的顯示文字
+                    e.target.value = oldJob;
+                    if (typeof window.syncCustomDropdown === 'function') {
+                        window.syncCustomDropdown(e.target);
+                    }
+                    return;
+                }
+            }
+
+            const oldJobName = (mitSkillsDatabase[oldJob] && mitSkillsDatabase[oldJob].name) || oldJob;
+            const newJobName = (mitSkillsDatabase[newJob] && mitSkillsDatabase[newJob].name) || newJob;
+
+            mitParty[i] = newJob;
             // Shift skills scheduled on this track to match the new job's keys, or clear them if mismatch
             mitTimelineSkills = mitTimelineSkills.filter(cast => cast.slotIndex !== i);
             renderMitSkillsList();
             renderMitPlayerTracks();
             renderMitTimeline();
+
+            // 確定調整（且原本有排軸）才上報
+            if (hasSkills && window.trackEvent) {
+                window.trackEvent('team_planner', 'change_party_slot', {
+                    slot: slotLabel,
+                    from: oldJobName,
+                    to: newJobName
+                });
+            }
         });
         
         wrapper.appendChild(label);
@@ -1903,6 +1942,20 @@ function setupMitEventListeners() {
         mitFflogsFightSelect.addEventListener('change', () => {
             const fightId = parseInt(mitFflogsFightSelect.value);
             if (fightId) mitFflogsAutoMatchDuty(fightId, mitFflogsUrlInput ? mitFflogsUrlInput.value.trim() : '');
+        });
+    }
+
+    // 匯入範圍：全部 / 指定職業
+    const mitFflogsScopeSel = document.getElementById('mit-fflogs-api-scope');
+    if (mitFflogsScopeSel) {
+        mitFflogsScopeSel.addEventListener('change', () => {
+            const isSpecific = mitFflogsScopeSel.value === 'specific';
+            const jobSel = document.getElementById('mit-fflogs-api-scope-job');
+            const clearWrap = document.getElementById('mit-fflogs-api-clear-wrap');
+            if (jobSel) jobSel.style.display = isSpecific ? '' : 'none';
+            // 指定職業時逐格清空由確認框處理，隱藏整體清空選項
+            if (clearWrap) clearWrap.style.display = isSpecific ? 'none' : 'flex';
+            if (isSpecific) populateFflogsScopeJobs();
         });
     }
 
@@ -3058,9 +3111,34 @@ function openMitFFLogsModal() {
     document.getElementById('mit-fflogs-api-fight-section').style.display = 'none';
     document.getElementById('mit-fflogs-api-options-section').style.display = 'none';
     document.getElementById('mit-fflogs-api-import').style.display = 'none';
+    // 重置匯入範圍為「全部匯入」
+    const scopeSel = document.getElementById('mit-fflogs-api-scope');
+    if (scopeSel) scopeSel.value = 'all';
+    const scopeJobSel = document.getElementById('mit-fflogs-api-scope-job');
+    if (scopeJobSel) scopeJobSel.style.display = 'none';
+    const clearWrap = document.getElementById('mit-fflogs-api-clear-wrap');
+    if (clearWrap) clearWrap.style.display = 'flex';
     mitFflogsSetStatus('');
     mitFflogsReportCode = null;
     modal.classList.add('active');
+}
+
+// 用目前隊伍組成填充「指定職業」下拉（依 8 個位置，例如 "H2 賢者"）
+function populateFflogsScopeJobs() {
+    const sel = document.getElementById('mit-fflogs-api-scope-job');
+    if (!sel) return;
+    const slotLabels = ['T1', 'T2', 'H1', 'H2', 'D1', 'D2', 'D3', 'D4'];
+    const prev = sel.value;
+    sel.innerHTML = '';
+    for (let i = 0; i < 8; i++) {
+        const jobKey = mitParty[i];
+        const jobName = (mitSkillsDatabase[jobKey] && mitSkillsDatabase[jobKey].name) || jobKey || '';
+        const opt = document.createElement('option');
+        opt.value = String(i);
+        opt.textContent = `${slotLabels[i]} ${jobName}`;
+        sel.appendChild(opt);
+    }
+    if (prev && sel.querySelector(`option[value="${prev}"]`)) sel.value = prev;
 }
 
 function mitFflogsSetStatus(msg, isError = false) {
@@ -3153,6 +3231,7 @@ async function mitFflogsFetchReport() {
         document.getElementById('mit-fflogs-api-fight-section').style.display = 'flex';
         document.getElementById('mit-fflogs-api-options-section').style.display = 'flex';
         document.getElementById('mit-fflogs-api-import').style.display = 'inline-flex';
+        populateFflogsScopeJobs();
 
         const urlParams = extractUrlParamsHelper(urlInput);
         if (urlParams.fight !== null) {
@@ -3308,6 +3387,32 @@ async function mitFflogsImport() {
     const urlInput = document.getElementById('mit-fflogs-api-url').value.trim();
 
     if (!mitFflogsReportCode || !fightId) return;
+
+    // 匯入範圍：全部 / 指定職業（單一位置）
+    const importScope = document.getElementById('mit-fflogs-api-scope')?.value || 'all';
+    const scopeJobSel = document.getElementById('mit-fflogs-api-scope-job');
+    const targetSlot = importScope === 'specific' && scopeJobSel ? parseInt(scopeJobSel.value) : null;
+    const SLOT_LABELS = ['T1', 'T2', 'H1', 'H2', 'D1', 'D2', 'D3', 'D4'];
+
+    if (importScope === 'specific') {
+        if (targetSlot === null || isNaN(targetSlot) || targetSlot < 0 || targetSlot > 7) {
+            mitFflogsSetStatus('⚠️ 請選擇要匯入的職業', true);
+            return;
+        }
+        // 該位置已有排技能 → 先確認是否清空該職業並匯入
+        if (mitTimelineSkills.some(c => c.slotIndex === targetSlot)) {
+            const jobName = (mitSkillsDatabase[mitParty[targetSlot]] && mitSkillsDatabase[mitParty[targetSlot]].name) || mitParty[targetSlot];
+            const choice = await showCustomChoiceDialog(
+                '指定職業匯入',
+                `<strong>${SLOT_LABELS[targetSlot]} ${jobName}</strong> 已經有排技能，是否清空該職業並匯入？`,
+                [
+                    { label: '取消', value: 'cancel', btnClass: 'btn-secondary' },
+                    { label: '確定', value: 'confirm', btnClass: 'btn-danger' }
+                ]
+            );
+            if (choice !== 'confirm') return;
+        }
+    }
 
     const importBtn = document.getElementById('mit-fflogs-api-import');
     importBtn.disabled = true;
@@ -3515,9 +3620,20 @@ async function mitFflogsImport() {
             return;
         }
 
+        // 指定職業：只保留該位置的事件（避免其他位置的施放產生 Log 施放點）
+        let effectiveEvents = uniqueEvents;
+        if (importScope === 'specific') {
+            effectiveEvents = uniqueEvents.filter(pe => pe.slotIndex === targetSlot);
+            if (effectiveEvents.length === 0) {
+                mitFflogsSetStatus('⚠️ 該職業在此 Log 中沒有可匯入的團隊技能', true);
+                importBtn.disabled = false;
+                return;
+            }
+        }
+
         if (!Array.isArray(mitBossMechanics)) mitBossMechanics = [];
 
-        const newMitSkills = uniqueEvents.map(pe => {
+        const newMitSkills = effectiveEvents.map(pe => {
             let castTime = Math.round(pe.relSec * 10) / 10;
             let matchedExistingMech = false;
 
@@ -3559,7 +3675,10 @@ async function mitFflogsImport() {
 
         mitBossMechanics.sort((a, b) => a.time - b.time);
 
-        if (clearFirst) {
+        if (importScope === 'specific') {
+            // 只清空並替換指定位置，其餘位置保留
+            mitTimelineSkills = [...mitTimelineSkills.filter(c => c.slotIndex !== targetSlot), ...newMitSkills];
+        } else if (clearFirst) {
             mitTimelineSkills = newMitSkills;
         } else {
             mitTimelineSkills = [...mitTimelineSkills, ...newMitSkills];
@@ -3573,8 +3692,14 @@ async function mitFflogsImport() {
         const fightSel = document.getElementById('mit-fflogs-api-fight-select');
         const selectedFightText = fightSel && fightSel.selectedIndex !== -1 ? fightSel.options[fightSel.selectedIndex].text : '';
 
+        let scopeLabel = '全部匯入';
+        if (importScope === 'specific') {
+            const jobName = (mitSkillsDatabase[mitParty[targetSlot]] && mitSkillsDatabase[mitParty[targetSlot]].name) || mitParty[targetSlot];
+            scopeLabel = `指定職業：${SLOT_LABELS[targetSlot]} ${jobName}`;
+        }
+
         if (window.trackEvent) {
-            window.trackEvent('team_planner', 'import_fflogs', { url: urlInput, fight: selectedFightText });
+            window.trackEvent('team_planner', 'import_fflogs', { url: urlInput, fight: selectedFightText, scope: scopeLabel });
         }
 
         const modal = document.getElementById('mit-fflogs-api-modal');

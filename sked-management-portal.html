@@ -1122,6 +1122,7 @@ function renderFilteredAnalytics() {
             'click_import_from_team_btn': '點擊【從團隊排軸匯入】按鈕',
             'import_fflogs': '從 FFLogs 匯入技能事件',
             'click_import_fflogs_btn': '點擊【從 FFLogs 匯入】按鈕',
+            'change_party_slot': '調整隊伍組成職業',
             'login': '使用者登入',
             'register': '註冊新帳號',
             'logout': '登出帳號'
@@ -1205,7 +1206,8 @@ function renderFilteredAnalytics() {
                     const url = data['FFLogs 報告連結'] || data.url || data.reportCode || '';
                     const urlLink = url ? `<a href="${url}" target="_blank" style="color:var(--accent2); text-decoration:underline;">[報告連結]</a>` : '(無連結)';
                     if (ev.event_category === 'team_planner') {
-                        return `從 FFLogs 匯入: ${urlLink}`;
+                        const scope = data.scope ? ` <span style="color:var(--accent2); font-weight:600;">[${data.scope}]</span>` : '';
+                        return `從 FFLogs 匯入${scope}: ${urlLink}`;
                     }
                     const fight = data['選擇戰鬥段落'] || data.fightId || '未知段落';
                     const player = data['選擇玩家'] || data.player || '未知玩家';
@@ -1214,6 +1216,8 @@ function renderFilteredAnalytics() {
                 case 'click_import_fflogs_btn':
                     const mode = (ev.event_category === '多人比較' || ev.event_category === 'compare_planner' || data.target === 'compare') ? '多人施法比較' : '個人技能排軸';
                     return `點擊【從 FFLogs 匯入】按鈕 (${mode})`;
+                case 'change_party_slot':
+                    return `調整 <strong>${data.slot || ''}</strong> 職業 從 <strong>${data.from || '?'}</strong> 到 <strong>${data.to || '?'}</strong>`;
                 case 'save_cloud':
                     return `保存雲端存檔: <strong>${data.name || '未命名'}</strong> (${data.type === 'new' ? '新存檔' : '覆蓋'})`;
                 case 'load_cloud':

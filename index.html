@@ -530,8 +530,16 @@
             <select id="mit-fflogs-api-fight-select" class="custom-select" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border-color); background:var(--bg-main); color:#fff; font-size:13px;"></select>
           </div>
           <!-- Options -->
-          <div id="mit-fflogs-api-options-section" style="display:none; gap:15px; font-size:13px; align-items:center;">
-            <label style="display:flex; align-items:center; gap:5px; cursor:pointer; color:#fff;">
+          <div id="mit-fflogs-api-options-section" style="display:none; flex-direction:column; gap:10px; font-size:13px;">
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <label style="font-weight:bold; white-space:nowrap;"><i class="fa-solid fa-filter"></i> 匯入範圍</label>
+              <select id="mit-fflogs-api-scope" class="custom-select" style="padding:6px 10px; border-radius:6px; border:1px solid var(--border-color); background:var(--bg-main); color:#fff; font-size:13px;">
+                <option value="all" selected>全部匯入</option>
+                <option value="specific">指定職業</option>
+              </select>
+              <select id="mit-fflogs-api-scope-job" class="custom-select" style="display:none; padding:6px 10px; border-radius:6px; border:1px solid var(--border-color); background:var(--bg-main); color:#fff; font-size:13px;"></select>
+            </div>
+            <label id="mit-fflogs-api-clear-wrap" style="display:flex; align-items:center; gap:5px; cursor:pointer; color:#fff;">
               <input type="checkbox" id="mit-fflogs-api-clear-timeline" style="cursor:pointer;" checked> 匯入前清空時間軸
             </label>
           </div>
