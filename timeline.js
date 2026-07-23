@@ -1279,12 +1279,69 @@ function appendSkillToTimeline(skill) {
   scrollToTime(startTime);
 }
 
+// Calculate effective cast times considering Lightspeed (光速), Swiftcast (迅速詠唱), Triplecast (三重詠唱)
+function calculateGcdEffectiveCastTimes(gcds, ogcds) {
+  // 1. Gather Lightspeed (光速) active intervals: [{ start, end }]
+  const lightspeedIntervals = ogcds
+    .filter(o => (o.skillId && (o.skillId.includes('lightspeed') || o.skillId === 'lightspeed')) || (o.name && o.name.includes('光速')))
+    .map(o => ({ start: o.startTime, end: o.startTime + 15.0 }));
+
+  // 2. Gather Swiftcast (迅速詠唱) instances: [{ start, end, used: false }]
+  const swiftcasts = ogcds
+    .filter(o => (o.skillId && o.skillId.includes('swiftcast')) || (o.name && o.name.includes('迅速詠唱')))
+    .map(o => ({ start: o.startTime, end: o.startTime + 10.0, used: false }));
+
+  // 3. Gather Triplecast (三重詠唱) instances: [{ start, end, charges: 3 }]
+  const triplecasts = ogcds
+    .filter(o => (o.skillId && o.skillId.includes('triplecast')) || (o.name && o.name.includes('三重詠唱')))
+    .map(o => ({ start: o.startTime, end: o.startTime + 15.0, charges: 3 }));
+
+  for (const gcd of gcds) {
+    const rawCast = parseTimeToSeconds(gcd.cast);
+    if (rawCast <= 0) {
+      gcd.effectiveCast = 0;
+      continue;
+    }
+
+    let cast = rawCast;
+
+    // Check Lightspeed (光速): reduces cast time by 2.5s
+    const isLightspeed = lightspeedIntervals.some(ls => gcd.startTime >= (ls.start - 0.05) && gcd.startTime < ls.end);
+    if (isLightspeed) {
+      cast = Math.max(0, cast - 2.5);
+    }
+
+    // If still has cast time, check Triplecast
+    if (cast > 0) {
+      const tc = triplecasts.find(t => t.charges > 0 && gcd.startTime >= (t.start - 0.05) && gcd.startTime < t.end);
+      if (tc) {
+        cast = 0;
+        tc.charges--;
+      }
+    }
+
+    // If still has cast time, check Swiftcast
+    if (cast > 0) {
+      const sc = swiftcasts.find(s => !s.used && gcd.startTime >= (s.start - 0.05) && gcd.startTime < s.end);
+      if (sc) {
+        cast = 0;
+        sc.used = true;
+      }
+    }
+
+    gcd.effectiveCast = cast;
+  }
+}
+
 // 6. Snapping & Weaving Calculation Engine
 function recalculateTimeline() {
   for (let tId = 1; tId <= activeTimelinesCount; tId++) {
     const gcds = timelineSkills.filter(s => s.track === 'gcd' && (s.timelineId || 1) === tId).sort((a, b) => a.startTime - b.startTime);
     const ogcds = timelineSkills.filter(s => s.track === 'ogcd' && (s.timelineId || 1) === tId);
     
+    // Calculate effective cast times considering Lightspeed / Swiftcast / Triplecast
+    calculateGcdEffectiveCastTimes(gcds, ogcds);
+
     let nextAvailableGcdTime = -PREPULL_TIME;
     
     for (let i = 0; i < gcds.length; i++) {
@@ -1299,7 +1356,7 @@ function recalculateTimeline() {
       gcd.startTime = Math.round(gcd.startTime * 1000) / 1000;
       
       const parsedRecast = parseTimeToSeconds(gcd.recast);
-      const parsedCast = parseTimeToSeconds(gcd.cast);
+      const parsedCast = (gcd.effectiveCast !== undefined) ? gcd.effectiveCast : parseTimeToSeconds(gcd.cast);
       const recastVal = resolveGcdRecast(parsedRecast, timelineGCDDuration);
       gcd.duration = Math.max(parsedCast, recastVal);
       
@@ -1681,7 +1738,7 @@ function renderTimeline() {
       el.appendChild(badge);
     }
 
-    const castTime = parseTimeToSeconds(skill.cast);
+    const castTime = (skill.effectiveCast !== undefined) ? skill.effectiveCast : parseTimeToSeconds(skill.cast);
     
     // Recast locking mesh
     if (skill.duration > castTime) {
@@ -3308,7 +3365,7 @@ async function downloadTimelineImage() {
     ctx.fillRect(x, 163, 3, 54);
     
     // Cast and Recast locking indicators
-    const castTime = parseTimeToSeconds(skill.cast);
+    const castTime = (skill.effectiveCast !== undefined) ? skill.effectiveCast : parseTimeToSeconds(skill.cast);
     if (castTime > 0) {
       ctx.fillStyle = 'rgba(0, 240, 255, 0.15)';
       ctx.fillRect(x + 3, 163, castTime * pixelsPerSecond - 3, 54);
@@ -3925,7 +3982,7 @@ window.syncCustomDropdown = syncCustomDropdown;
 //   次版本 +1：新增功能（右側歸零）                1.0.1 → 1.1.0
 //   主版本 +1：破壞性大改版（右側歸零）            1.9.0 → 2.0.0
 // 註：header 的「(Patch 7.1)」是遊戲版本，與此無關，需在 index.html 手動維護。
-const APP_VERSION = '1.7.0';
+const APP_VERSION = '1.7.1';
 let updatePopupShown = false;
 
 // Global Toast Notification Helper
@@ -4866,6 +4923,8 @@ function recalculatePlayerTimeline(player) {
   const gcds = player.skills.filter(s => s.track === 'gcd').sort((a, b) => a.startTime - b.startTime);
   const ogcds = player.skills.filter(s => s.track === 'ogcd');
   
+  calculateGcdEffectiveCastTimes(gcds, ogcds);
+  
   let nextAvailableGcdTime = -PREPULL_TIME;
   const playerGcdDuration = player.gcd || 2.50;
   
@@ -4879,7 +4938,7 @@ function recalculatePlayerTimeline(player) {
     gcd.startTime = Math.round(gcd.startTime * 1000) / 1000;
     
     const parsedRecast = parseTimeToSeconds(gcd.recast);
-    const parsedCast = parseTimeToSeconds(gcd.cast);
+    const parsedCast = (gcd.effectiveCast !== undefined) ? gcd.effectiveCast : parseTimeToSeconds(gcd.cast);
     const recastVal = resolveGcdRecast(parsedRecast, playerGcdDuration);
     gcd.duration = Math.max(parsedCast, recastVal);
     
@@ -5227,7 +5286,7 @@ function renderCompareTimeline() {
         el.appendChild(badge);
       }
       
-      const castTime = parseTimeToSeconds(skill.cast);
+      const castTime = (skill.effectiveCast !== undefined) ? skill.effectiveCast : parseTimeToSeconds(skill.cast);
       if (skill.duration > castTime) {
         const recastMesh = document.createElement('div');
         recastMesh.className = 'recast-lock-indicator';
