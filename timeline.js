@@ -1563,13 +1563,16 @@ function renderTimeline() {
       if (targetGcdTrack) targetGcdTrack.appendChild(clipWarning);
     }
 
-    // Amber idle warning placed in the empty gap before the next GCD block
-    if (skill.idle >= 2.0) {
+    // Delay or Idle warning placed in the gap before the next GCD block
+    if (skill.idle > 0.05) {
+      const isIdle = skill.idle > timelineGCDDuration;
+      const label = isIdle ? '空轉' : '延遲';
+      const warningClass = isIdle ? 'gcd-clip-warning gcd-idle-warning' : 'gcd-clip-warning gcd-delay-warning';
       const idleWarning = document.createElement('div');
-      idleWarning.className = 'gcd-clip-warning gcd-idle-warning';
+      idleWarning.className = warningClass;
       idleWarning.style.left = `${(skill.startTime + skill.duration + skill.clip + PREPULL_TIME) * pixelsPerSecond}px`;
       idleWarning.style.width = `${skill.idle * pixelsPerSecond}px`;
-      idleWarning.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> 空轉 ${skill.idle.toFixed(1)}s`;
+      idleWarning.innerHTML = `<i class="fa-solid fa-clock"></i> ${label} ${skill.idle.toFixed(2)}s`;
       if (targetGcdTrack) targetGcdTrack.appendChild(idleWarning);
     }
     
@@ -1842,18 +1845,25 @@ function updateStatusPanel() {
   displayLength.innerHTML = `<i class="fa-regular fa-clock"></i> 軸總長: ${maxTime.toFixed(1)} 秒`;
   
   const clippedGcds = timelineSkills.filter(s => s.track === 'gcd' && s.clip > 0);
-  const idleGcds = timelineSkills.filter(s => s.track === 'gcd' && s.idle >= 2.0);
+  const delayGcds = timelineSkills.filter(s => s.track === 'gcd' && s.idle > 0.05 && s.idle <= timelineGCDDuration);
+  const idleGcds = timelineSkills.filter(s => s.track === 'gcd' && s.idle > timelineGCDDuration);
   
   let clipText = '';
   if (clippedGcds.length > 0) {
     const totalClip = clippedGcds.reduce((acc, curr) => acc + curr.clip, 0);
-    clipText += `卡 GCD (共 ${clippedGcds.length} 處 / ${totalClip.toFixed(1)}秒)`;
+    clipText += `卡 GCD (${clippedGcds.length} 處 / ${totalClip.toFixed(2)}s)`;
   }
   
+  if (delayGcds.length > 0) {
+    const totalDelay = delayGcds.reduce((acc, curr) => acc + curr.idle, 0);
+    if (clipText) clipText += ' | ';
+    clipText += `延遲 (${delayGcds.length} 處 / ${totalDelay.toFixed(2)}s)`;
+  }
+
   if (idleGcds.length > 0) {
     const totalIdle = idleGcds.reduce((acc, curr) => acc + curr.idle, 0);
     if (clipText) clipText += ' | ';
-    clipText += `GCD 空轉 (共 ${idleGcds.length} 處 / ${totalIdle.toFixed(1)}秒)`;
+    clipText += `空轉 (${idleGcds.length} 處 / ${totalIdle.toFixed(2)}s)`;
   }
   
   if (clipText) {
@@ -3183,15 +3193,17 @@ async function downloadTimelineImage() {
       ctx.fillText(`卡 ${skill.clip.toFixed(1)}s`, clipX + 5, 185);
     }
 
-    // Amber idle overlay
-    if (skill.idle >= 2.0) {
-      ctx.fillStyle = 'rgba(255, 165, 0, 0.15)';
+    // Delay / Idle warning overlay
+    if (skill.idle > 0.05) {
+      const isIdle = skill.idle > timelineGCDDuration;
+      const label = isIdle ? '空轉' : '延遲';
       const idleX = x + (skill.duration + skill.clip) * pixelsPerSecond;
+      ctx.fillStyle = isIdle ? 'rgba(239, 68, 68, 0.18)' : 'rgba(245, 158, 11, 0.15)';
       ctx.fillRect(idleX, 163, skill.idle * pixelsPerSecond, 54);
       
-      ctx.fillStyle = '#ffa500';
+      ctx.fillStyle = isIdle ? '#f87171' : '#fbbf24';
       ctx.font = 'bold 9px sans-serif';
-      ctx.fillText(`空轉 ${skill.idle.toFixed(1)}s`, idleX + 5, 185);
+      ctx.fillText(`${label} ${skill.idle.toFixed(2)}s`, idleX + 5, 185);
     }
   }
   
@@ -3770,7 +3782,7 @@ window.syncCustomDropdown = syncCustomDropdown;
 //   次版本 +1：新增功能（右側歸零）                1.0.1 → 1.1.0
 //   主版本 +1：破壞性大改版（右側歸零）            1.9.0 → 2.0.0
 // 註：header 的「(Patch 7.1)」是遊戲版本，與此無關，需在 index.html 手動維護。
-const APP_VERSION = '1.5.3';
+const APP_VERSION = '1.5.4';
 let updatePopupShown = false;
 
 function initVersionCheck() {
