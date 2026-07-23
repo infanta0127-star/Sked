@@ -97,12 +97,75 @@ window.showCustomSaveChoices = function() {
 // Globals and State
 const PREPULL_TIME = 10; // Pre-pull time in seconds (allows pre-casting skills before combat starts)
 const TRACK_INFO_WIDTH = 180; // Width of the sticky left track info panel in pixels
+
+// 解析 GCD 佔用時間（recast）。繪靈法師等職業有非標準 GCD：
+//  - 特殊長 GCD（>= 3 秒，如色彩魔法 3.3、動物彩繪 4、彩虹點滴 6）照技能自身 recast
+//  - 一般 GCD（約 2.5 秒）對齊玩家設定的 GCD（可能因技速而異）
+//  - 短 GCD（< 1.8 秒，如各種彩繪 1.5 秒）照技能自身 recast
+function resolveGcdRecast(parsedRecast, standardGcd) {
+  if (parsedRecast >= 3.0) return parsedRecast;
+  if (parsedRecast >= 1.8) return standardGcd;
+  return parsedRecast;
+}
+
+// 從匯入的技能推測玩家實際 GCD：取連續「一般 GCD」(recast 約 2.5) 之間的間隔中位數。
+// 排除彩繪(1.5)、長 GCD(3.3+)，以及卡 GCD / 空窗造成的異常間隔。回傳 null 表示資料不足。
+function estimateGcdFromSkills(skills) {
+  const gcds = (skills || []).filter(s => s.track === 'gcd').sort((a, b) => a.startTime - b.startTime);
+  const gaps = [];
+  for (let i = 1; i < gcds.length; i++) {
+    const prevRecast = parseTimeToSeconds(gcds[i - 1].recast);
+    if (prevRecast >= 1.8 && prevRecast < 3.0) {
+      const gap = gcds[i].startTime - gcds[i - 1].startTime;
+      if (gap > 1.3 && gap < 2.9) gaps.push(gap);
+    }
+  }
+  if (gaps.length < 2) return null;
+  gaps.sort((a, b) => a - b);
+  const mid = Math.floor(gaps.length / 2);
+  const median = gaps.length % 2 ? gaps[mid] : (gaps[mid - 1] + gaps[mid]) / 2;
+  return Math.round(median * 100) / 100;
+}
+
+// 判斷推測 GCD 與目前設定是否明顯不同（視為異常）。
+function isGcdAnomaly(estimatedGcd, currentGcd) {
+  return estimatedGcd != null && Math.abs(estimatedGcd - currentGcd) > 0.05;
+}
+
+// 輕量樣式化確認框（timeline.js 自用，回傳 Promise<boolean>）。
+function showTimelineConfirm(message, confirmLabel = '確定', cancelLabel = '取消') {
+  return new Promise((resolve) => {
+    const modal = document.createElement('div');
+    modal.className = 'modal active';
+    modal.style.zIndex = '9999';
+    modal.innerHTML = `
+      <div class="modal-content" style="width:440px; max-width:92vw; padding:0; overflow:hidden; border-radius:12px; border:1px solid var(--border-color); box-shadow:0 12px 32px rgba(0,0,0,0.6);">
+        <div class="modal-header" style="padding:14px 18px; border-bottom:1px solid var(--border-color); display:flex; align-items:center; gap:8px;">
+          <h3 style="margin:0; font-size:15px; color:#fff; display:flex; align-items:center; gap:8px;"><i class="fa-solid fa-circle-question" style="color:#f59e0b;"></i> 同步 GCD</h3>
+        </div>
+        <div class="modal-body" style="padding:18px 20px; display:flex; flex-direction:column; gap:16px;">
+          <div style="font-size:14px; color:#e2e8f0; line-height:1.6;">${message}</div>
+          <div style="display:flex; gap:10px; justify-content:flex-end;">
+            <button class="btn btn-secondary" data-act="cancel" style="padding:8px 14px; font-size:13px; font-weight:600;">${cancelLabel}</button>
+            <button class="btn btn-primary" data-act="confirm" style="padding:8px 14px; font-size:13px; font-weight:600;">${confirmLabel}</button>
+          </div>
+        </div>
+      </div>`;
+    const done = (val) => { modal.remove(); resolve(val); };
+    modal.querySelector('[data-act="cancel"]').onclick = () => done(false);
+    modal.querySelector('[data-act="confirm"]').onclick = () => done(true);
+    modal.addEventListener('click', (e) => { if (e.target === modal) done(false); });
+    document.body.appendChild(modal);
+  });
+}
 let skillsDatabase = {};
 let dutiesDatabase = {};
 let currentJobId = '';
 let currentDutyFile = '';
 let timelineGCDDuration = 2.50;
 let pixelsPerSecond = 60;
+// 個人排軸各時間軸的 FFLogs 匯入資訊（推測 GCD、是否為原始匯入），供「!」提示使用
+let timelineImportInfo = {};
 let timelineSkills = []; // { instanceId, skillId, name, icon, classification, cast, recast, startTime, duration, track, parentGcdId, relativeOffset, clip, timelineId }
 let bossMechanics = [];  // { id, time, name }
 let importedPlayerName = null; // Name of the imported player from log API / paste
@@ -1116,7 +1179,7 @@ function recalculateTimeline() {
       
       const parsedRecast = parseTimeToSeconds(gcd.recast);
       const parsedCast = parseTimeToSeconds(gcd.cast);
-      const recastVal = (parsedRecast >= 1.8) ? timelineGCDDuration : parsedRecast;
+      const recastVal = resolveGcdRecast(parsedRecast, timelineGCDDuration);
       gcd.duration = Math.max(parsedCast, recastVal);
       
       // 2. Position all oGCDs parented to this GCD block
@@ -1206,7 +1269,14 @@ function renderTimeline() {
       const isImported = playerName !== null;
       const hoverTitle = isImported ? `匯入玩家: ${playerName}` : `自訂排軸 ${i}`;
       const userTag = isImported ? `<span style="font-size:10px; color:#00f0ff; margin-left:6px;" title="${hoverTitle}"><i class="fa-solid fa-user-tag"></i> ${playerName}</span>` : '';
-      
+
+      const impInfo = timelineImportInfo[i];
+      const showAnomaly = impInfo && impInfo.raw && isGcdAnomaly(impInfo.estimatedGcd, timelineGCDDuration);
+      const anomalyHint = showAnomaly ? `匯入的 GCD 與預設 ${timelineGCDDuration.toFixed(2)} 不同，推測為「${impInfo.estimatedGcd.toFixed(2)} 秒」` : '';
+      const anomalyTag = showAnomaly
+        ? `<button class="gcd-anomaly-hint" data-timeline-id="${i}" title="${anomalyHint}" style="background:none; border:none; color:#f59e0b; cursor:pointer; font-size:11px; margin-left:4px; flex-shrink:0;"><i class="fa-solid fa-circle-exclamation"></i></button>`
+        : '';
+
       const groupHtml = `
         <div class="timeline-group" data-timeline-id="${i}" style="border-bottom: 2px solid rgba(255,255,255,0.05); margin-bottom: 8px;">
           <div class="timeline-group-header" style="display:flex; height:24px; background:rgba(255,255,255,0.03); align-items:center;">
@@ -1214,6 +1284,7 @@ function renderTimeline() {
               <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; min-width:0;" title="${hoverTitle}">
                 排軸 ${i} ${userTag}
               </span>
+              ${anomalyTag}
               <button class="btn-delete-timeline-track" data-timeline-id="${i}" title="刪除排軸 ${i}" style="background:none; border:none; color:var(--color-text-muted); cursor:pointer; font-size:11px; padding:2px 6px; border-radius:4px; transition:all 0.2s; flex-shrink:0; margin-left:4px;">
                 <i class="fa-solid fa-trash-can"></i>
               </button>
@@ -1250,6 +1321,18 @@ function renderTimeline() {
       `;
       tracksContainer.innerHTML += groupHtml;
     }
+
+    // Bind GCD anomaly hint「!」(個人排軸僅提示，不做同步)
+    tracksContainer.querySelectorAll('.gcd-anomaly-hint').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const tid = parseInt(btn.dataset.timelineId, 10);
+        const info = timelineImportInfo[tid];
+        if (info && info.estimatedGcd != null) {
+          showToast(`匯入的 GCD 與預設 ${timelineGCDDuration.toFixed(2)} 不同，推測為「${info.estimatedGcd.toFixed(2)} 秒」`);
+        }
+      });
+    });
 
     // Bind delete timeline track listeners
     tracksContainer.querySelectorAll('.btn-delete-timeline-track').forEach(btn => {
@@ -3669,7 +3752,7 @@ window.syncCustomDropdown = syncCustomDropdown;
 //   次版本 +1：新增功能（右側歸零）                1.0.1 → 1.1.0
 //   主版本 +1：破壞性大改版（右側歸零）            1.9.0 → 2.0.0
 // 註：header 的「(Patch 7.1)」是遊戲版本，與此無關，需在 index.html 手動維護。
-const APP_VERSION = '1.4.1';
+const APP_VERSION = '1.5.0';
 let updatePopupShown = false;
 
 function initVersionCheck() {
@@ -4298,7 +4381,9 @@ async function fflogsApiImport() {
       const track = isGcd ? 'gcd' : 'ogcd';
       const castDur = parseTimeToSeconds(pe.skill.cast);
       const gcdDur = activeTab === 'compare' ? 2.50 : timelineGCDDuration;
-      const duration = Math.max(castDur, isGcd ? gcdDur : 0.6);
+      // 依原始資料匯入：GCD 佔用時間用技能自身 recast（含繪靈 1.5/3.3/4/6 秒特殊 GCD）
+      const gcdOccupancy = resolveGcdRecast(parseTimeToSeconds(pe.skill.recast), gcdDur);
+      const duration = Math.max(castDur, isGcd ? gcdOccupancy : 0.6);
 
       rawSkills.push({
         skillId: pe.skill.id,
@@ -4381,9 +4466,11 @@ async function fflogsApiImport() {
           idle: 0
         }))
       };
-      
-      recalculatePlayerTimeline(playerObj);
-      
+
+      // 依原始 log 時間匯入，不吸附到 GCD 格線；推測玩家實際 GCD 供「!」提示/同步用
+      playerObj.estimatedGcd = estimateGcdFromSkills(playerObj.skills);
+      playerObj.rawImport = true;
+
       // Check if player already exists in list, if so replace, else add
       const existingIdx = comparePlayers.findIndex(p => p.name === playerObj.name);
       if (existingIdx !== -1) {
@@ -4423,7 +4510,9 @@ async function fflogsApiImport() {
         });
       });
 
-      recalculateTimeline();
+      // 依原始 log 時間匯入，不呼叫 recalculateTimeline 吸附；記錄推測 GCD 供「!」提示
+      const estGcd = estimateGcdFromSkills(rawSkills);
+      timelineImportInfo[targetTimelineId] = { estimatedGcd: estGcd, raw: true };
       renderTimeline();
       autoSave();
       window.trackEvent('個人排軸', 'import_fflogs', fflogsReportPayload);
@@ -4555,7 +4644,7 @@ function recalculatePlayerTimeline(player) {
     
     const parsedRecast = parseTimeToSeconds(gcd.recast);
     const parsedCast = parseTimeToSeconds(gcd.cast);
-    const recastVal = (parsedRecast >= 1.8) ? playerGcdDuration : parsedRecast;
+    const recastVal = resolveGcdRecast(parsedRecast, playerGcdDuration);
     gcd.duration = Math.max(parsedCast, recastVal);
     
     const myOgcds = ogcds.filter(o => o.parentGcdId === gcd.instanceId).sort((a, b) => a.relativeOffset - b.relativeOffset);
@@ -4649,20 +4738,45 @@ function renderCompareTimeline() {
     const card = document.createElement('div');
     card.className = 'compare-player-card';
     card.style.cssText = 'background-color: rgba(255,255,255,0.03); padding: 12px; border-radius: 6px; border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px;';
+    const showAnomaly = p.rawImport && isGcdAnomaly(p.estimatedGcd, p.gcd);
+    const anomalyBtn = showAnomaly
+      ? `<button class="gcd-anomaly-btn" data-index="${idx}" title="匯入時間與設定的 GCD 不同，點擊同步" style="background:none; border:none; color:#f59e0b; cursor:pointer; font-size:14px; margin-right:2px; flex-shrink:0;"><i class="fa-solid fa-circle-exclamation"></i></button>`
+      : '';
+
     card.innerHTML = `
       <div style="display: flex; align-items: center; justify-content: space-between;">
         <div style="display: flex; align-items: center; gap: 8px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; max-width: 80%;">
           <img src="${p.jobIcon}" style="width: 20px; height: 20px; border-radius: 3px; flex-shrink: 0;">
           <span style="font-weight: 600; font-size: 13px; color: var(--color-text-normal); overflow: hidden; text-overflow: ellipsis;">${p.name} (${p.jobName})</span>
         </div>
-        <button class="btn-delete-player" data-index="${idx}" style="background: none; border: none; color: var(--color-danger); cursor: pointer; font-size: 13px;" title="刪除此成員"><i class="fa-solid fa-trash-can"></i></button>
+        <div style="display:flex; align-items:center; gap:4px; flex-shrink:0;">
+          ${anomalyBtn}
+          <button class="btn-delete-player" data-index="${idx}" style="background: none; border: none; color: var(--color-danger); cursor: pointer; font-size: 13px;" title="刪除此成員"><i class="fa-solid fa-trash-can"></i></button>
+        </div>
       </div>
       <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--color-text-muted);">
         <label style="white-space: nowrap;"><i class="fa-solid fa-clock"></i> GCD (秒):</label>
         <input type="number" class="compare-gcd-input custom-input" data-index="${idx}" value="${p.gcd.toFixed(2)}" step="0.01" min="1.50" max="3.00" style="width: 60px; height: 24px; padding: 2px 4px; font-size: 12px; text-align: center;">
       </div>
     `;
-    
+
+    // Bind anomaly「!」→ 詢問是否依此時間軸同步玩家 GCD
+    const anomalyEl = card.querySelector('.gcd-anomaly-btn');
+    if (anomalyEl) {
+      anomalyEl.addEventListener('click', async () => {
+        const est = p.estimatedGcd;
+        const ok = await showTimelineConfirm(
+          `推測該玩家的 GCD 為「<strong>${est.toFixed(2)} 秒</strong>」，是否要依此時間軸同步玩家設定的 GCD 值？<br><span style="color:var(--color-text-muted); font-size:13px;">確定的話將會更新時間軸，並將部分技能排軸往後推。</span>`,
+          '確定', '取消'
+        );
+        if (!ok) return;
+        p.gcd = est;
+        p.rawImport = false;
+        recalculatePlayerTimeline(p);
+        renderCompareTimeline();
+      });
+    }
+
     // Bind delete click
     card.querySelector('.btn-delete-player').addEventListener('click', () => {
       comparePlayers.splice(idx, 1);
@@ -4676,6 +4790,7 @@ function renderCompareTimeline() {
       if (val > 3.00) val = 3.00;
       e.target.value = val.toFixed(2);
       comparePlayers[idx].gcd = val;
+      comparePlayers[idx].rawImport = false;
       recalculatePlayerTimeline(comparePlayers[idx]);
       renderCompareTimeline();
     });

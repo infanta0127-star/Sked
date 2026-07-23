@@ -26,6 +26,9 @@ create policy "changelog public read" on public.changelog for select using (true
 
 -- ── 初始種子資料（僅一般使用者功能，可自行增修）──
 insert into public.changelog (version, released_at, content) values
+('1.5.0', '2026-07-22 17:00+08',
+'多人比較／個人排軸的 FFLogs 匯入改為保留原始施放時間，不再自動對齊 2.5 GCD
+匯入時間與設定的 GCD 不符時會出現「!」提示；多人比較可一鍵依推測的 GCD 同步整條時間軸'),
 ('1.4.1', '2026-07-22 16:00+08',
 '修正繪靈法師「星空構想」的團隊增傷未顯示在團輔覆蓋列的問題'),
 ('1.4.0', '2026-07-22 15:00+08',
