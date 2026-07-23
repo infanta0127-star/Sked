@@ -3833,7 +3833,7 @@ window.syncCustomDropdown = syncCustomDropdown;
 //   次版本 +1：新增功能（右側歸零）                1.0.1 → 1.1.0
 //   主版本 +1：破壞性大改版（右側歸零）            1.9.0 → 2.0.0
 // 註：header 的「(Patch 7.1)」是遊戲版本，與此無關，需在 index.html 手動維護。
-const APP_VERSION = '1.6.0';
+const APP_VERSION = '1.6.1';
 let updatePopupShown = false;
 
 function initVersionCheck() {
@@ -4456,21 +4456,21 @@ async function fflogsApiImport() {
 
     // Deduplicate begins casting vs casts & detect interrupted casts
     const uniqueEvents = [];
-    const events = parsedEvents;
-    const n = events.length;
+    const sortedEvList = parsedEvents;
+    const n = sortedEvList.length;
     const processed = new Array(n).fill(false);
 
     for (let i = 0; i < n; i++) {
       if (processed[i]) continue;
-      const ev = events[i];
+      const ev = sortedEvList[i];
       const key = ev.skill.id;
       const castDuration = parseTimeToSeconds(ev.skill.cast);
 
       if (ev.type === 'begincast') {
         let matchIdx = -1;
         for (let j = i + 1; j < n; j++) {
-          if (!processed[j] && events[j].skill.id === key && events[j].type === 'cast') {
-            const diff = events[j].relSec - ev.relSec;
+          if (!processed[j] && sortedEvList[j].skill.id === key && sortedEvList[j].type === 'cast') {
+            const diff = sortedEvList[j].relSec - ev.relSec;
             if (diff >= 0 && diff <= castDuration + 1.2) {
               matchIdx = j;
               break;
@@ -4480,7 +4480,7 @@ async function fflogsApiImport() {
 
         if (matchIdx !== -1) {
           processed[matchIdx] = true;
-          ev.completionTime = events[matchIdx].relSec;
+          ev.completionTime = sortedEvList[matchIdx].relSec;
           ev.isInterrupted = false;
           uniqueEvents.push(ev);
         } else {

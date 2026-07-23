@@ -3624,20 +3624,20 @@ async function mitFflogsImport() {
 
         // Deduplicate begincast vs cast & detect interrupted casts
         const uniqueEvents = [];
-        const events = parsedEvents;
-        const n = events.length;
+        const sortedEventsList = parsedEvents;
+        const n = sortedEventsList.length;
         const processed = new Array(n).fill(false);
 
         for (let i = 0; i < n; i++) {
             if (processed[i]) continue;
-            const ev = events[i];
+            const ev = sortedEventsList[i];
             const key = `${ev.slotIndex}_${ev.skill.id}`;
 
             if (ev.type === 'begincast') {
                 let matchIdx = -1;
                 for (let j = i + 1; j < n; j++) {
-                    if (!processed[j] && events[j].type === 'cast' && `${events[j].slotIndex}_${events[j].skill.id}` === key) {
-                        const diff = events[j].relSec - ev.relSec;
+                    if (!processed[j] && sortedEventsList[j].type === 'cast' && `${sortedEventsList[j].slotIndex}_${sortedEventsList[j].skill.id}` === key) {
+                        const diff = sortedEventsList[j].relSec - ev.relSec;
                         if (diff >= 0 && diff <= 3.0) {
                             matchIdx = j;
                             break;
@@ -3647,7 +3647,7 @@ async function mitFflogsImport() {
 
                 if (matchIdx !== -1) {
                     processed[matchIdx] = true;
-                    ev.completionTime = events[matchIdx].relSec;
+                    ev.completionTime = sortedEventsList[matchIdx].relSec;
                     ev.isInterrupted = false;
                     uniqueEvents.push(ev);
                 } else {
