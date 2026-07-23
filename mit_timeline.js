@@ -3931,11 +3931,16 @@ function getJobSkillsByCategory(jobKey, category) {
         const isMitOrShield = s.tags && (s.tags.includes('減傷') || s.tags.includes('護盾') || s.tags.includes('無敵'));
         const isBuff = s.tags && s.tags.includes('團輔');
         const isHealOrHot = s.tags && (s.tags.includes('HOT') || s.tags.includes('恢復') || s.tags.includes('治療'));
+        // 護盾若同時是 HOT/治療技（例如占星的吉星相位、陽星合相），本質是補血技，不列入減傷；
+        // 純護盾技（例如天星交錯、騎士聖光幕簾）才算減傷。
+        const isMitDisplay = s.tags && (s.tags.includes('減傷') || s.tags.includes('無敵') || (s.tags.includes('護盾') && !isHealOrHot));
 
         if (category === 'mit') {
-            return isMitOrShield || (isTankOrHealer && !s.personal && !isBuff);
+            return isMitDisplay || (isTankOrHealer && !s.personal && !isBuff);
         } else if (category === 'buff') {
-            return isBuff || (s.title && (s.title.includes('傷害') || s.title.includes('暴擊')));
+            // 團輔僅認明確標記的團隊增益技（占卜、連環計、鼓勵…）。
+            // 不再用標題含「傷害/暴擊」做模糊比對——減傷技的說明也含「傷害」會被誤判進來。
+            return isBuff;
         } else if (category === 'heal') {
             return isHealOrHot || healerAoEIds.has(s.id) || (isTankOrHealer && !isMitOrShield && !isBuff);
         }

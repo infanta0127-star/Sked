@@ -27,7 +27,7 @@
   <!-- FontAwesome for Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <!-- Vanilla CSS Stylesheet -->
-  <link rel="stylesheet" href="index.css">
+  <link rel="stylesheet" href="index.css?v=1.7.6">
 </head>
 <body>
   <div class="app-container">
@@ -573,16 +573,15 @@
 
     <!-- Modal for Job Skill Panel Selection -->
     <div class="modal" id="mit-panel-skills-modal">
-      <div class="modal-content" style="width: 820px; max-width: 95vw; max-height: 88vh; display: flex; flex-direction: column; padding: 0; overflow: hidden;">
+      <div class="modal-content" style="width: 820px; max-width: 95vw; height: 92vh; max-height: 92vh; display: flex; flex-direction: column; padding: 0; overflow: hidden;">
         <div class="modal-header" style="padding: 16px 20px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between;">
           <h3 style="margin: 0; font-size: 16px; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-sliders" style="color: #00f0ff;"></i> 職業技能面板設定</h3>
           <div style="display: flex; align-items: center; gap: 10px;">
-            <button id="mit-btn-restore-default-panel" class="btn btn-secondary" style="padding: 6px 14px; font-size: 12px; font-weight: 600;" title="恢復成系統默認顯示技能"><i class="fa-solid fa-rotate-left"></i> 恢復默認</button>
             <button id="mit-btn-save-custom-panel" class="btn btn-primary" style="padding: 6px 14px; font-size: 12px; font-weight: 600;"><i class="fa-solid fa-floppy-disk"></i> 保存我的面板</button>
             <span class="modal-close" id="mit-panel-skills-close" style="font-size: 24px; cursor: pointer; color: var(--color-text-muted);">&times;</span>
           </div>
         </div>
-        <div class="modal-body" style="display: flex; flex-direction: column; padding: 16px 20px; gap: 14px; overflow: hidden;">
+        <div class="modal-body" style="flex: 1; min-height: 0; max-height: none; display: flex; flex-direction: column; padding: 16px 20px; gap: 14px; overflow: hidden;">
           <!-- Job Selector Bar -->
           <div>
             <div style="font-size: 12px; font-weight: 600; color: var(--color-text-muted); margin-bottom: 6px;">選擇職業：</div>
@@ -598,7 +597,7 @@
             <button class="panel-tab-btn" data-cat="panel"><i class="fa-solid fa-list-check"></i> 面板技能 (<span id="mit-panel-count">0</span>)</button>
           </div>
           <!-- Skills Grid Container -->
-          <div style="max-height: 60vh; overflow-y: auto; padding-right: 4px; padding-bottom: 12px;">
+          <div style="flex: 1; min-height: 0; overflow-y: auto; padding-right: 4px; padding-bottom: 12px;">
             <div id="mit-panel-skills-grid" class="panel-skills-grid">
               <!-- Dynamically populated skill cards -->
             </div>
@@ -654,7 +653,7 @@
   <script src="analytics.js"></script>
 
   <!-- Main JavaScript File -->
-  <script src="timeline.js"></script>
-  <script type="module" src="mit_timeline.js"></script>
+  <script src="timeline.js?v=1.7.6"></script>
+  <script type="module" src="mit_timeline.js?v=1.7.6"></script>
 </body>
 </html>
