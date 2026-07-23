@@ -16,7 +16,52 @@ let mitTimelineSkills = []; // [{ id, slotIndex, jobAbbrev, skillKey, startTime,
 let mitBossMechanics = [];
 let currentMitDutyFile = '';
 let mitLayoutMode = 'vertical'; // 'vertical' or 'horizontal'
-let mitGridExpanded = [false, false, false, false, false, false, false, false]; // whether player grid columns are expanded
+// Undo State Stack (Max 10 steps)
+const MAX_MIT_UNDO_STACK = 10;
+let mitUndoStack = [];
+
+function pushMitUndoState() {
+  const state = {
+    mitTimelineSkills: JSON.parse(JSON.stringify(mitTimelineSkills)),
+    mitBossMechanics: JSON.parse(JSON.stringify(mitBossMechanics)),
+    mitParty: JSON.parse(JSON.stringify(mitParty))
+  };
+  mitUndoStack.push(state);
+  if (mitUndoStack.length > MAX_MIT_UNDO_STACK) {
+    mitUndoStack.shift();
+  }
+  updateMitUndoButton();
+}
+
+function executeMitUndo() {
+  if (mitUndoStack.length === 0) return;
+  const state = mitUndoStack.pop();
+  mitTimelineSkills = state.mitTimelineSkills || [];
+  window.mitTimelineSkills = mitTimelineSkills;
+  mitBossMechanics = state.mitBossMechanics || [];
+  if (state.mitParty && Array.isArray(state.mitParty)) {
+    mitParty = state.mitParty;
+    populatePartyDropdowns();
+  }
+  renderMitTimeline();
+  updateMitUndoButton();
+}
+
+function clearMitUndoStack() {
+  mitUndoStack = [];
+  updateMitUndoButton();
+}
+
+function updateMitUndoButton() {
+  const btn = document.getElementById('mit-btn-undo');
+  if (btn) {
+    btn.disabled = (mitUndoStack.length === 0);
+  }
+}
+
+window.pushMitUndoState = pushMitUndoState;
+window.executeMitUndo = executeMitUndo;
+window.clearMitUndoStack = clearMitUndoStack;
 
 // Cloud State Variables
 let currentTeamPlanId = null;
@@ -1870,9 +1915,11 @@ function setupMitEventListeners() {
         try {
             const dragData = JSON.parse(e.dataTransfer.getData('text/plain'));
             if (dragData.sourceType === 'timeline') {
+                pushMitUndoState();
                 mitTimelineSkills = mitTimelineSkills.filter(c => c.id !== dragData.castId);
                 renderMitTimeline();
             } else if (dragData.sourceType === 'mechanic') {
+                pushMitUndoState();
                 mitBossMechanics = mitBossMechanics.filter(m => m.id !== dragData.mechId);
                 renderMitTimeline();
             }
@@ -2020,11 +2067,19 @@ function setupMitEventListeners() {
         }
     });
 
+    const mitBtnUndo = document.getElementById('mit-btn-undo');
+    if (mitBtnUndo) {
+        mitBtnUndo.addEventListener('click', () => {
+            executeMitUndo();
+        });
+    }
+
     const mitBtnClear = document.getElementById('mit-btn-clear');
     if (mitBtnClear) {
         mitBtnClear.addEventListener('click', async () => {
             const ok = await window.showCustomConfirm('清空團隊技能排軸', '確定要清空團隊技能排軸的所有技能安排嗎？');
             if (ok) {
+                clearMitUndoStack();
                 mitTimelineSkills = [];
                 window.mitTimelineSkills = [];
                 renderMitTimeline();
@@ -2045,6 +2100,7 @@ function setupMitEventListeners() {
         const dutyFile = e.target.value;
         populateMitDutyDropdown(mitDutiesDatabase, dutyFile);
         if (!dutyFile) {
+            clearMitUndoStack();
             mitBossMechanics = [];
             renderMitTimeline();
             return;
@@ -2103,6 +2159,8 @@ function handleMitDrop(e, trackContent) {
             dropTime = Math.max(0, dropX / getPixelsPerSecond());
         }
 
+        pushMitUndoState();
+
         if (dragData.sourceType === 'sidebar') {
             // Drag a new mitigation from the list
             const newCast = {
@@ -2141,6 +2199,7 @@ function addNewBossMechanic() {
     const name = prompt('請輸入首領機制名稱:');
     if (!name || name.trim() === '') return;
     
+    pushMitUndoState();
     mitBossMechanics.push({
         id: `custom-mech-${Date.now()}`,
         time: time,

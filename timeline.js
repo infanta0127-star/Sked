@@ -241,6 +241,72 @@ const timelineToolbar = document.getElementById('timeline-toolbar');
 let activeDowntimeIntervals = [];
 window.activeDowntimeIntervals = activeDowntimeIntervals;
 
+// Personal Timeline Undo Stack (Max 10 steps)
+const MAX_PERSONAL_UNDO_STACK = 10;
+let personalUndoStack = [];
+
+function pushPersonalUndoState() {
+  const state = {
+    timelineSkills: JSON.parse(JSON.stringify(timelineSkills)),
+    bossMechanics: JSON.parse(JSON.stringify(bossMechanics)),
+    activeTimelinesCount: activeTimelinesCount,
+    timelinePlayers: JSON.parse(JSON.stringify(timelinePlayers))
+  };
+  personalUndoStack.push(state);
+  if (personalUndoStack.length > MAX_PERSONAL_UNDO_STACK) {
+    personalUndoStack.shift();
+  }
+  updatePersonalUndoButton();
+}
+
+function executePersonalUndo() {
+  if (personalUndoStack.length === 0) return;
+  const state = personalUndoStack.pop();
+  timelineSkills = state.timelineSkills || [];
+  bossMechanics = state.bossMechanics || [];
+  activeTimelinesCount = state.activeTimelinesCount || 1;
+  timelinePlayers = state.timelinePlayers || [null, null, null];
+  recalculateTimeline();
+  renderTimeline();
+  autoSave();
+  updatePersonalUndoButton();
+}
+
+function clearPersonalUndoStack() {
+  personalUndoStack = [];
+  updatePersonalUndoButton();
+}
+
+function updatePersonalUndoButton() {
+  const btn = document.getElementById('btn-undo');
+  if (btn) {
+    btn.disabled = (personalUndoStack.length === 0);
+  }
+}
+
+window.pushPersonalUndoState = pushPersonalUndoState;
+window.executePersonalUndo = executePersonalUndo;
+window.clearPersonalUndoStack = clearPersonalUndoStack;
+
+// Global keyboard shortcut for Ctrl+Z / Cmd+Z
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+    const activeElem = document.activeElement;
+    if (activeElem && (activeElem.tagName === 'INPUT' || activeElem.tagName === 'TEXTAREA' || activeElem.isContentEditable)) {
+      return;
+    }
+    
+    e.preventDefault();
+    if (typeof activeTab !== 'undefined' && activeTab === 'mit') {
+      if (typeof window.executeMitUndo === 'function') {
+        window.executeMitUndo();
+      }
+    } else {
+      executePersonalUndo();
+    }
+  }
+});
+
 // --- Report missing duty downtime to Supabase ---
 async function checkAndReportDutyDowntime(dutyKey, dutyName, encounterId, downtimeIntervals, fflogsUrl) {
   const sb = window.supabaseClient;
@@ -755,6 +821,7 @@ function setupEventListeners() {
     }
     
     try {
+      clearPersonalUndoStack();
       await loadDuty(dutyFile);
     } catch (err) {
       console.error(err);
@@ -909,8 +976,17 @@ function setupEventListeners() {
       downloadTimelineImage();
     });
   }
+
+  const btnUndo = document.getElementById('btn-undo');
+  if (btnUndo) {
+    btnUndo.addEventListener('click', () => {
+      executePersonalUndo();
+    });
+  }
+
   btnClear.addEventListener('click', () => {
     if (confirm('確定要清空時間軸嗎？')) {
+      clearPersonalUndoStack();
       timelineSkills = [];
       bossMechanics = [];
       importedPlayerName = null;
@@ -933,6 +1009,7 @@ function setupEventListeners() {
       time = Math.max(...bossMechanics.map(m => m.time)) + 5.0;
     }
     
+    pushPersonalUndoState();
     bossMechanics.push({
       id: 'mech_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
       time: Math.round(time),
@@ -976,6 +1053,7 @@ function setupEventListeners() {
         showToast('⚠️ 最多只能新增 3 條時間軸記錄');
         return;
       }
+      pushPersonalUndoState();
       activeTimelinesCount++;
       recalculateTimeline();
       renderTimeline();
@@ -1387,6 +1465,7 @@ function renderTimeline() {
         if (activeTimelinesCount === 1) {
           const ok = await window.showCustomConfirm('清空排軸', '確定要清空排軸 1 的所有技能紀錄嗎？');
           if (!ok) return;
+          pushPersonalUndoState();
           timelineSkills = timelineSkills.filter(s => (s.timelineId || 1) !== 1);
           timelinePlayers[0] = null;
           importedPlayerName = null;
@@ -1397,6 +1476,7 @@ function renderTimeline() {
         } else {
           const ok = await window.showCustomConfirm('刪除排軸', `確定要刪除「排軸 ${targetId}」及其所有的技能紀錄嗎？`);
           if (!ok) return;
+          pushPersonalUndoState();
 
           // Remove skills belonging to targetId
           timelineSkills = timelineSkills.filter(s => (s.timelineId || 1) !== targetId);
@@ -1726,6 +1806,7 @@ function scrollToTime(timeSeconds) {
 
 // 8. Handle Drag-and-Drop Drop logic
 function handleDrop(e, targetTrackType, targetTimelineId = 1) {
+  pushPersonalUndoState();
   const rect = timelineEditor.getBoundingClientRect();
   const mouseX = e.clientX - rect.left - TRACK_INFO_WIDTH;
   const rawTime = Math.max(-PREPULL_TIME, (mouseX / pixelsPerSecond) - PREPULL_TIME);
@@ -1817,6 +1898,7 @@ function handleDrop(e, targetTrackType, targetTimelineId = 1) {
 // Drop onto Trash Bin
 function handleTrashDrop(e) {
   if (draggedItem.source === 'timeline') {
+    pushPersonalUndoState();
     if (draggedItem.type === 'skill') {
       timelineSkills = timelineSkills.filter(s => s.instanceId !== draggedItem.instanceId);
       // Clean up parents for nested child oGCDs
@@ -3843,7 +3925,7 @@ window.syncCustomDropdown = syncCustomDropdown;
 //   次版本 +1：新增功能（右側歸零）                1.0.1 → 1.1.0
 //   主版本 +1：破壞性大改版（右側歸零）            1.9.0 → 2.0.0
 // 註：header 的「(Patch 7.1)」是遊戲版本，與此無關，需在 index.html 手動維護。
-const APP_VERSION = '1.6.4';
+const APP_VERSION = '1.7.0';
 let updatePopupShown = false;
 
 // Global Toast Notification Helper
