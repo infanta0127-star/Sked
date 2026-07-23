@@ -3575,43 +3575,44 @@ async function mitFflogsImport() {
 
         parsedEvents.sort((a, b) => a.timestamp - b.timestamp);
 
-        // Deduplicate begincast vs cast & ghost events per player/skill
+        // Deduplicate begincast vs cast & detect interrupted casts
         const uniqueEvents = [];
-        const castHistory = {};
-        const lastPushedTime = {};
+        const events = parsedEvents;
+        const n = events.length;
+        const processed = new Array(n).fill(false);
 
-        for (const pe of parsedEvents) {
-            const key = `${pe.slotIndex}_${pe.skill.id}`;
-            const castDuration = 0;
-            let eventTime = pe.relSec;
+        for (let i = 0; i < n; i++) {
+            if (processed[i]) continue;
+            const ev = events[i];
+            const key = `${ev.slotIndex}_${ev.skill.id}`;
 
-            if (pe.type === 'begincast') {
-                pe.completionTime = pe.relSec;
-            } else {
-                pe.completionTime = pe.relSec;
-                const lastBegin = castHistory[key];
-                let shouldSkip = false;
-                if (lastBegin !== undefined) {
-                    const diff = pe.relSec - lastBegin;
-                    if (diff >= 0 && diff <= castDuration + 0.5) {
-                        shouldSkip = true;
+            if (ev.type === 'begincast') {
+                let matchIdx = -1;
+                for (let j = i + 1; j < n; j++) {
+                    if (!processed[j] && events[j].type === 'cast' && `${events[j].slotIndex}_${events[j].skill.id}` === key) {
+                        const diff = events[j].relSec - ev.relSec;
+                        if (diff >= 0 && diff <= 3.0) {
+                            matchIdx = j;
+                            break;
+                        }
                     }
-                    castHistory[key] = undefined;
                 }
-                if (shouldSkip) continue;
-            }
 
-            const cdWindow = Math.max(12, (pe.skill.cooldown || 15) - 3);
-            if (lastPushedTime[key] !== undefined) {
-                const timeDiff = eventTime - lastPushedTime[key];
-                if (timeDiff >= 0 && timeDiff < cdWindow) continue;
+                if (matchIdx !== -1) {
+                    processed[matchIdx] = true;
+                    ev.completionTime = events[matchIdx].relSec;
+                    ev.isInterrupted = false;
+                    uniqueEvents.push(ev);
+                } else {
+                    ev.completionTime = ev.relSec;
+                    ev.isInterrupted = true;
+                    uniqueEvents.push(ev);
+                }
+            } else if (ev.type === 'cast') {
+                ev.completionTime = ev.relSec;
+                ev.isInterrupted = false;
+                uniqueEvents.push(ev);
             }
-
-            if (pe.type === 'begincast') {
-                castHistory[key] = pe.relSec;
-            }
-            lastPushedTime[key] = eventTime;
-            uniqueEvents.push(pe);
         }
 
         if (uniqueEvents.length === 0) {

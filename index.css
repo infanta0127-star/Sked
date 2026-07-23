@@ -854,6 +854,35 @@ body {
   overflow: hidden;
 }
 
+/* Interrupted cast styling */
+.placed-skill.interrupted-skill,
+.ogcd-pill.interrupted-skill {
+  border: 2px dashed #f87171 !important;
+  opacity: 0.8;
+  filter: saturate(70%);
+  position: relative;
+}
+
+.interrupted-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 15px;
+  height: 15px;
+  background: #ef4444;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 800;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.6);
+  z-index: 15;
+  pointer-events: none;
+  border: 1px solid #fff;
+}
+
 /* Cast and Recast indicators */
 .cast-indicator {
   position: absolute;

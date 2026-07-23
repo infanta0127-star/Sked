@@ -1531,6 +1531,15 @@ function renderTimeline() {
       <span class="placed-skill-name">${skill.name}</span>
     `;
     
+    if (skill.isInterrupted) {
+      el.classList.add('interrupted-skill');
+      const badge = document.createElement('span');
+      badge.className = 'interrupted-badge';
+      badge.textContent = '?';
+      badge.title = '施法中斷';
+      el.appendChild(badge);
+    }
+
     const castTime = parseTimeToSeconds(skill.cast);
     
     // Recast locking mesh
@@ -1600,6 +1609,15 @@ function renderTimeline() {
       <img src="${skill.icon}" alt="${skill.name}">
       <span class="ogcd-pill-name">${skill.name}</span>
     `;
+    
+    if (skill.isInterrupted) {
+      el.classList.add('interrupted-skill');
+      const badge = document.createElement('span');
+      badge.className = 'interrupted-badge';
+      badge.textContent = '?';
+      badge.title = '施法中斷';
+      el.appendChild(badge);
+    }
     
     // Drag handlers
     el.addEventListener('dragstart', (e) => {
@@ -3241,19 +3259,19 @@ function showTooltip(e, skill) {
   }
   
   tooltip.querySelector('.tooltip-icon').src = skill.icon;
-  tooltip.querySelector('.tooltip-name').textContent = skill.name;
-  tooltip.querySelector('.tooltip-badge').textContent = skill.classification;
-  tooltip.querySelector('.tooltip-lv').textContent = `Lv.${skill.level}`;
+  tooltip.querySelector('.tooltip-name').textContent = skill.isInterrupted ? `⚠️ [施法中斷] ${skill.name}` : skill.name;
+  tooltip.querySelector('.tooltip-badge').textContent = skill.isInterrupted ? '施法中斷' : skill.classification;
+  tooltip.querySelector('.tooltip-lv').textContent = `Lv.${skill.level || '?'}`;
   const mpLabel = tooltip.querySelector('#tooltip-mp-label');
   if (mpLabel) mpLabel.textContent = '消費 MP:';
   tooltip.querySelector('.tooltip-mp').textContent = skill.cost || '-';
-  tooltip.querySelector('.tooltip-times').textContent = `${skill.cast} / ${skill.recast}`;
-  tooltip.querySelector('.tooltip-range').textContent = skill.range;
-  tooltip.querySelector('.tooltip-description').textContent = skill.effect;
+  tooltip.querySelector('.tooltip-times').textContent = `${skill.cast || '-'} / ${skill.recast || '-'}`;
+  tooltip.querySelector('.tooltip-range').textContent = skill.range || '-';
+  tooltip.querySelector('.tooltip-description').textContent = skill.isInterrupted ? '（玩家於讀條過程中移動或取消，未完成施放）' : (skill.effect || '');
   
   // Set badge color based on type
   const badge = tooltip.querySelector('.tooltip-badge');
-  badge.style.backgroundColor = skill.classification === '能力' ? 'var(--color-ogcd)' : 'var(--color-gcd)';
+  badge.style.backgroundColor = skill.isInterrupted ? '#ef4444' : (skill.classification === '能力' ? 'var(--color-ogcd)' : 'var(--color-gcd)');
 
   // Hover guide and current time display
   const hoverGuide = document.getElementById('hover-guide');
@@ -3752,7 +3770,7 @@ window.syncCustomDropdown = syncCustomDropdown;
 //   次版本 +1：新增功能（右側歸零）                1.0.1 → 1.1.0
 //   主版本 +1：破壞性大改版（右側歸零）            1.9.0 → 2.0.0
 // 註：header 的「(Patch 7.1)」是遊戲版本，與此無關，需在 index.html 手動維護。
-const APP_VERSION = '1.5.2';
+const APP_VERSION = '1.5.3';
 let updatePopupShown = false;
 
 function initVersionCheck() {
@@ -4324,54 +4342,46 @@ async function fflogsApiImport() {
 
     parsedEvents.sort((a, b) => a.timestamp - b.timestamp);
 
-    // Deduplicate begins casting vs casts
+    // Deduplicate begins casting vs casts & detect interrupted casts
     const uniqueEvents = [];
-    const castHistory = {};
-    const lastPushedTime = {};
-    for (const pe of parsedEvents) {
-      const key = pe.skill.id;
-      const castDuration = parseTimeToSeconds(pe.skill.cast);
-      let eventTime = pe.relSec;
-      
-      if (pe.type === 'begincast') {
-        pe.completionTime = pe.relSec + castDuration;
-      } else {
-        pe.completionTime = pe.relSec;
-        const lastBegin = castHistory[key];
-        let shouldSkip = false;
-        if (lastBegin !== undefined) {
-          const diff = pe.relSec - lastBegin;
-          if (diff >= 0 && diff <= castDuration + 0.5) {
-            shouldSkip = true;
+    const events = parsedEvents;
+    const n = events.length;
+    const processed = new Array(n).fill(false);
+
+    for (let i = 0; i < n; i++) {
+      if (processed[i]) continue;
+      const ev = events[i];
+      const key = ev.skill.id;
+      const castDuration = parseTimeToSeconds(ev.skill.cast);
+
+      if (ev.type === 'begincast') {
+        let matchIdx = -1;
+        for (let j = i + 1; j < n; j++) {
+          if (!processed[j] && events[j].skill.id === key && events[j].type === 'cast') {
+            const diff = events[j].relSec - ev.relSec;
+            if (diff >= 0 && diff <= castDuration + 1.2) {
+              matchIdx = j;
+              break;
+            }
           }
-          // Clear history so we don't reuse it for subsequent instant casts
-          castHistory[key] = undefined;
         }
-        if (shouldSkip) {
-          continue;
-        }
-        const castDurationSec = castDuration;
-        let adjustedTime = pe.relSec;
-        if (castDurationSec > 0) {
-          adjustedTime = Math.max(-PREPULL_TIME, pe.relSec - castDurationSec);
-        }
-        eventTime = adjustedTime;
-        pe.relSec = adjustedTime;
-      }
 
-      // Skip ghost/duplicate events for the same skill within 1.0s
-      if (lastPushedTime[key] !== undefined) {
-        const timeDiff = Math.abs(eventTime - lastPushedTime[key]);
-        if (timeDiff < 1.0) {
-          continue;
+        if (matchIdx !== -1) {
+          processed[matchIdx] = true;
+          ev.completionTime = events[matchIdx].relSec;
+          ev.isInterrupted = false;
+          uniqueEvents.push(ev);
+        } else {
+          // Interrupted cast (施法中斷)
+          ev.completionTime = ev.relSec + (castDuration > 0 ? castDuration : 1.5);
+          ev.isInterrupted = true;
+          uniqueEvents.push(ev);
         }
+      } else if (ev.type === 'cast') {
+        ev.completionTime = ev.relSec;
+        ev.isInterrupted = false;
+        uniqueEvents.push(ev);
       }
-
-      if (pe.type === 'begincast') {
-        castHistory[key] = pe.relSec;
-      }
-      lastPushedTime[key] = eventTime;
-      uniqueEvents.push(pe);
     }
 
     // Build raw entries
@@ -4381,7 +4391,6 @@ async function fflogsApiImport() {
       const track = isGcd ? 'gcd' : 'ogcd';
       const castDur = parseTimeToSeconds(pe.skill.cast);
       const gcdDur = activeTab === 'compare' ? 2.50 : timelineGCDDuration;
-      // 依原始資料匯入：GCD 佔用時間用技能自身 recast（含繪靈 1.5/3.3/4/6 秒特殊 GCD）
       const gcdOccupancy = resolveGcdRecast(parseTimeToSeconds(pe.skill.recast), gcdDur);
       const duration = Math.max(castDur, isGcd ? gcdOccupancy : 0.6);
 
@@ -4397,6 +4406,7 @@ async function fflogsApiImport() {
         duration: duration,
         track: track,
         isGcd: isGcd,
+        isInterrupted: !!pe.isInterrupted,
         parentGcdId: null,
         relativeOffset: 0
       });
@@ -4961,6 +4971,15 @@ function renderCompareTimeline() {
         <span class="placed-skill-name">${skill.name}</span>
       `;
       
+      if (skill.isInterrupted) {
+        el.classList.add('interrupted-skill');
+        const badge = document.createElement('span');
+        badge.className = 'interrupted-badge';
+        badge.textContent = '?';
+        badge.title = '施法中斷';
+        el.appendChild(badge);
+      }
+      
       const castTime = parseTimeToSeconds(skill.cast);
       if (skill.duration > castTime) {
         const recastMesh = document.createElement('div');
@@ -4989,7 +5008,7 @@ function renderCompareTimeline() {
       }
       
       const originalSkill = skillsDatabase[p.jobId]?.skills.find(s => s.id === skill.skillId) || skill;
-      const tooltipSkill = { ...originalSkill, startTime: skill.startTime, playerName: p.name };
+      const tooltipSkill = { ...originalSkill, startTime: skill.startTime, playerName: p.name, isInterrupted: !!skill.isInterrupted };
       el.addEventListener('mousemove', (e) => showTooltip(e, tooltipSkill));
       el.addEventListener('mouseleave', hideTooltip);
       
@@ -5006,13 +5025,22 @@ function renderCompareTimeline() {
       const isRole = skill.skillId.includes('tank_action') || skill.skillId.includes('healer_action') || skill.skillId.includes('melee_action') || skill.skillId.includes('ranged_action') || skill.skillId.includes('caster_action');
       if (isRole) el.classList.add('role-type');
       
-      el.innerHTML = `
+      if (skill.isInterrupted) {
+        el.classList.add('interrupted-skill');
+        const badge = document.createElement('span');
+        badge.className = 'interrupted-badge';
+        badge.textContent = '?';
+        badge.title = '施法中斷';
+        el.appendChild(badge);
+      }
+
+      el.innerHTML += `
         <img src="${skill.icon}" alt="${skill.name}">
         <span class="ogcd-pill-name">${skill.name}</span>
       `;
       
       const originalSkill = skillsDatabase[p.jobId]?.skills.find(s => s.id === skill.skillId) || skill;
-      const tooltipSkill = { ...originalSkill, startTime: skill.startTime, playerName: p.name };
+      const tooltipSkill = { ...originalSkill, startTime: skill.startTime, playerName: p.name, isInterrupted: !!skill.isInterrupted };
       el.addEventListener('mousemove', (e) => showTooltip(e, tooltipSkill));
       el.addEventListener('mouseleave', hideTooltip);
       
