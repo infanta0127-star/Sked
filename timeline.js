@@ -1,4 +1,4 @@
-window.showCustomConfirm = function(title, message) {
+window.showCustomConfirm = function(title, message, cancelText = '取消', okText = '確定') {
   return new Promise((resolve) => {
     const overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.75); backdrop-filter:blur(6px); display:flex; align-items:center; justify-content:center; z-index:10000;';
@@ -7,15 +7,15 @@ window.showCustomConfirm = function(title, message) {
         <h3 style="margin:0 0 12px; font-size:16px; font-weight:700; color:#fff;">${title}</h3>
         <p style="margin:0 0 24px; font-size:14px; color:#aaa; line-height:1.5;">${message}</p>
         <div style="display:flex; justify-content:flex-end; gap:12px;">
-          <button id="custom-confirm-cancel" style="padding:8px 16px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; cursor:pointer; font-size:14px; transition:background 0.2s;">取消</button>
-          <button id="custom-confirm-ok" style="padding:8px 20px; background:linear-gradient(135deg,#4f6ef7,#7c9ef8); border:none; border-radius:8px; color:#fff; cursor:pointer; font-weight:600; font-size:14px; transition:opacity 0.2s;">確定</button>
+          <button id="custom-confirm-cancel" style="padding:8px 20px; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); border-radius:8px; color:#fff; cursor:pointer; font-size:14px; transition:background 0.2s;">${cancelText}</button>
+          <button id="custom-confirm-ok" style="padding:8px 20px; background:linear-gradient(135deg,#4f6ef7,#7c9ef8); border:none; border-radius:8px; color:#fff; cursor:font-weight:600; font-size:14px; transition:opacity 0.2s;">${okText}</button>
         </div>
       </div>
     `;
     document.body.appendChild(overlay);
     
     const cleanup = (val) => {
-      document.body.removeChild(overlay);
+      if (overlay.parentNode) document.body.removeChild(overlay);
       resolve(val);
     };
     
@@ -3146,11 +3146,13 @@ function importFflogsEvents(text, filterPlayer, clearTimeline, targetTimelineId 
 }
 
 // 14. Copy Text Rotation (Clipboard)
-function copyTextTimeline() {
+async function copyTextTimeline() {
   if (timelineSkills.length === 0) {
     alert('時間軸目前無任何技能！');
     return;
   }
+  
+  const includeMechanics = await window.showCustomConfirm('匯出文字軸', '是否要包含首領機制？', '否', '是');
   
   // Combine skills and mechanics, sorted by time
   const items = [];
@@ -3162,24 +3164,30 @@ function copyTextTimeline() {
     });
   });
   
-  bossMechanics.forEach(m => {
-    items.push({
-      time: m.time,
-      text: `==== 首領機制: ${m.name} ====`,
-      type: 'mechanic'
+  if (includeMechanics && bossMechanics && bossMechanics.length > 0) {
+    bossMechanics.forEach(m => {
+      items.push({
+        time: m.time,
+        text: `==== 首領機制: ${m.name} ====`,
+        type: 'mechanic'
+      });
     });
-  });
+  }
   
   items.sort((a, b) => a.time - b.time);
   
-  let result = `=== FFXIV 排軸文字檔 (${skillsDatabase[currentJobId]?.name} | GCD: ${timelineGCDDuration.toFixed(2)}s) ===\n`;
+  let result = `=== FFXIV 排軸文字檔 (${skillsDatabase[currentJobId]?.name || ''} | GCD: ${timelineGCDDuration.toFixed(2)}s) ===\n`;
   items.forEach(item => {
     const timeStr = formatTime(item.time);
     result += `${timeStr}  ${item.text}\n`;
   });
   
   navigator.clipboard.writeText(result).then(() => {
-    alert('複製文字排軸成功！您可以貼到 Discord 或記事本了！');
+    if (typeof showToast === 'function') {
+      showToast('✅ 複製文字排軸成功！已複製到剪貼簿。');
+    } else {
+      alert('複製文字排軸成功！您可以貼到 Discord 或記事本了！');
+    }
   }).catch(err => {
     console.error('Clipboard copy failed:', err);
     alert('複製失敗，瀏覽器拒絕了剪貼簿訪問。');
@@ -3993,7 +4001,7 @@ window.syncCustomDropdown = syncCustomDropdown;
 //   次版本 +1：新增功能（右側歸零）                1.0.1 → 1.1.0
 //   主版本 +1：破壞性大改版（右側歸零）            1.9.0 → 2.0.0
 // 註：header 的「(Patch 7.1)」是遊戲版本，與此無關，需在 index.html 手動維護。
-const APP_VERSION = '1.7.4';
+const APP_VERSION = '1.7.5';
 let updatePopupShown = false;
 
 // Global Toast Notification Helper
