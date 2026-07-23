@@ -16,6 +16,8 @@ let mitTimelineSkills = []; // [{ id, slotIndex, jobAbbrev, skillKey, startTime,
 let mitBossMechanics = [];
 let currentMitDutyFile = '';
 let mitLayoutMode = 'vertical'; // 'vertical' or 'horizontal'
+let mitGridExpanded = [false, false, false, false, false, false, false, false]; // whether player grid columns are expanded
+
 // Undo State Stack (Max 10 steps)
 const MAX_MIT_UNDO_STACK = 10;
 let mitUndoStack = [];
