@@ -1,5 +1,5 @@
 {
-    "name": "至天之座 M2S",
+    "name": "阿卡迪亞零式 M2S",
     "timeline": [
         {"phase": "OP", "castingTime": "00:00", "hitTime": "00:00", "skill": "戰鬥開始！", "damage": [], "type": ""},
         {"phase": "OP", "castingTime": "00:03", "hitTime": "00:03", "skill": "AA", "damage": [{"label": "普通攻擊", "amount": 67000, "type": "物理"}], "type": "物理"},

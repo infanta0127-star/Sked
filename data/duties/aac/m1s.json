@@ -1,5 +1,5 @@
 {
-  "name": "至天之座 M1S",
+  "name": "阿卡迪亞零式 M1S",
   "timeline": [
     { "phase": "OP", "castingTime": "", "hitTime": "0:00", "skill": "戰鬥開始！", "damage": [], "type": "" },
     { "phase": "OP", "castingTime": "", "hitTime": "0:03", "skill": "AA", "damage": [{ "label": "普通攻擊", "amount": 65000, "type": "物理" }], "type": "物理" },

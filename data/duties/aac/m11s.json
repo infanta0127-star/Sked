@@ -1,5 +1,5 @@
 {
-    "name": "至天之座 M11S",
+    "name": "阿卡迪亞零式 M11S",
     "timeline": [
         {"phase": "開幕", "castingTime": "00:00", "hitTime": "00:00", "skill": "Engage!", "damage": [], "type": ""},
         {"phase": "開幕", "castingTime": "00:00", "hitTime": "00:00", "skill": "AA", "damage": [{"label": "普通攻擊", "amount": 90000, "type": "物理"}], "type": "物理"},

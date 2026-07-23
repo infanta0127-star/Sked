@@ -1,5 +1,5 @@
 {
-    "name": "至天之座 M12S (後半)",
+    "name": "阿卡迪亞零式 M12S (後半)",
     "timeline": [
         {"phase": "開幕", "castingTime": "00:00", "hitTime": "00:00", "skill": "Engage!", "damage": [], "type": ""},
         {"phase": "開幕", "castingTime": "00:04", "hitTime": "00:04", "skill": "AA", "damage": [{"label": "普通攻擊", "amount": 105000, "type": "物理"}], "type": "物理"},
