@@ -298,6 +298,154 @@
         .user-table tr:last-child td { border-bottom: none; }
         .user-table tr:hover td { background: rgba(91,124,246,.04); }
 
+        /* ── Modal Backdrop & Dialog ── */
+        .portal-modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(5, 5, 12, 0.85);
+            backdrop-filter: blur(8px);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            animation: fadeIn 0.2s ease-out;
+        }
+
+        .portal-modal-content {
+            background: var(--bg2);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            width: 100%;
+            max-width: 680px;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.6), 0 0 20px rgba(91,124,246,0.15);
+            overflow: hidden;
+            animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes slideUp {
+            from { transform: translateY(20px) scale(0.96); opacity: 0; }
+            to { transform: translateY(0) scale(1); opacity: 1; }
+        }
+
+        .portal-modal-header {
+            padding: 18px 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--bg3);
+        }
+
+        .portal-modal-close {
+            background: none;
+            border: none;
+            color: var(--muted);
+            font-size: 24px;
+            line-height: 1;
+            cursor: pointer;
+            transition: color 0.15s;
+        }
+        .portal-modal-close:hover { color: var(--text); }
+
+        .portal-modal-body {
+            padding: 24px;
+            overflow-y: auto;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .portal-modal-footer {
+            padding: 14px 24px;
+            border-top: 1px solid var(--border);
+            background: var(--bg3);
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        /* ── SOP Steps ── */
+        .sop-step {
+            background: rgba(22, 22, 42, 0.6);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 14px 18px;
+        }
+
+        .sop-step-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 700;
+            font-size: 14px;
+            color: #fff;
+            margin-bottom: 8px;
+        }
+
+        .sop-step-num {
+            background: var(--accent);
+            color: #fff;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .sop-path-box {
+            background: var(--bg);
+            border: 1px dashed var(--border);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 13px;
+            color: var(--accent2);
+            margin-top: 6px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .sop-code-block {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            padding: 12px 14px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 12px;
+            color: var(--success);
+            margin-top: 8px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+
+        .sop-code-preview {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 12px;
+            color: var(--warning);
+            margin-top: 6px;
+            display: inline-block;
+        }
+
         .tag {
             display: inline-flex;
             align-items: center;
@@ -732,8 +880,11 @@
 
         <div class="section">
             <div class="section-header">
-                <div class="section-title">
+                <div class="section-title" style="display:flex; align-items:center; gap:8px;">
                     <i class="fa-solid fa-eye-slash"></i> 副本 Downtime (無敵/離場) 待處理清單
+                    <button class="btn btn-secondary btn-mini" id="btn-downtime-sop" title="查看 Downtime 處理 SOP" style="margin-left:8px; display:inline-flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;">
+                        <i class="fa-solid fa-circle-question" style="color:var(--accent2);"></i> 處理 SOP
+                    </button>
                 </div>
                 <div style="display:flex; align-items:center; gap:12px;">
                     <select id="downtime-status-filter" style="background:var(--bg3); color:var(--text); border:1px solid var(--border); padding:6px 12px; border-radius:8px; font-size:12px;">
@@ -1519,6 +1670,88 @@ async function updateDowntimeReportStatus(id, newStatus) {
 
 document.getElementById('btn-refresh-downtimes')?.addEventListener('click', loadDowntimeReports);
 document.getElementById('downtime-status-filter')?.addEventListener('change', renderDowntimeReports);
+
+// ── Downtime SOP Modal Listeners ──
+const sopModal = document.getElementById('downtime-sop-modal');
+const btnOpenSop = document.getElementById('btn-downtime-sop');
+const btnCloseSop = document.getElementById('btn-close-downtime-sop');
+const btnConfirmSop = document.getElementById('btn-confirm-downtime-sop');
+
+if (btnOpenSop && sopModal) {
+    btnOpenSop.addEventListener('click', () => {
+        sopModal.style.display = 'flex';
+    });
+}
+if (btnCloseSop && sopModal) {
+    btnCloseSop.addEventListener('click', () => {
+        sopModal.style.display = 'none';
+    });
+}
+if (btnConfirmSop && sopModal) {
+    btnConfirmSop.addEventListener('click', () => {
+        sopModal.style.display = 'none';
+    });
+}
+if (sopModal) {
+    sopModal.addEventListener('click', (e) => {
+        if (e.target === sopModal) {
+            sopModal.style.display = 'none';
+        }
+    });
+}
 </script>
+
+<!-- Downtime SOP Modal -->
+<div id="downtime-sop-modal" class="portal-modal-backdrop" style="display:none;">
+    <div class="portal-modal-content">
+        <div class="portal-modal-header">
+            <div style="display:flex; align-items:center; gap:10px; font-weight:700; font-size:15px;">
+                <i class="fa-solid fa-book-bookmark" style="color:var(--accent2);"></i> 副本 Downtime (無敵/離場) 處理標準流程 (SOP)
+            </div>
+            <button id="btn-close-downtime-sop" class="portal-modal-close">&times;</button>
+        </div>
+        <div class="portal-modal-body">
+            <div class="sop-step">
+                <div class="sop-step-title"><span class="sop-step-num">1</span> 複製 Downtime JSON</div>
+                <p>在下方待處理清單中找到目標副本，點擊該列的「<strong style="color:var(--accent2);"><i class="fa-solid fa-copy"></i> 複製 JSON</strong>」按鈕，將包含無敵時間段的 JSON 陣列複製至剪貼簿。</p>
+                <div class="sop-code-preview">[{"start": 120.5, "end": 145.0}]</div>
+            </div>
+
+            <div class="sop-step">
+                <div class="sop-step-title"><span class="sop-step-num">2</span> 開啟專案資料夾與對應 JSON 檔</div>
+                <p>開啟本地專案目錄，前往副本檔案存放路徑：</p>
+                <div class="sop-path-box"><i class="fa-regular fa-folder-open"></i> <code>data/duties/</code></div>
+                <p style="margin-top:8px;">開啟該副本對應的 JSON 檔案（例如 <code>m3s.json</code>、<code>u_eden_P1.json</code>）。若無獨立檔案，請開啟 <code style="color:var(--warning);">data/duties/index.json</code>。</p>
+            </div>
+
+            <div class="sop-step">
+                <div class="sop-step-title"><span class="sop-step-num">3</span> 貼上與編輯 <code>downtimes</code> 欄位</div>
+                <p>在該副本的 JSON 資料結構中，新增或貼上 <code>"downtimes"</code> 陣列：</p>
+                <pre class="sop-code-block">{
+  "id": "m3s",
+  "name": "M3S 副本名稱",
+  "downtimes": [
+    { "start": 120.5, "end": 145.0 }
+  ]
+}</pre>
+            </div>
+
+            <div class="sop-step">
+                <div class="sop-step-title"><span class="sop-step-num">4</span> 測試與發布更新</div>
+                <p>1. 本地開啟 <code>http://localhost:6142/</code>，切換至該副本確認時間軸呈現斜線灰色 Downtime 遮罩。<br>
+                2. 執行 <code>git commit</code> 與 <code>git push</code> 部署至 GitHub Pages。<br>
+                3. （可選）依 `GEMINI.md` 指南同步 Bump 版本號與新增 `changelog` 資料。</p>
+            </div>
+
+            <div class="sop-step">
+                <div class="sop-step-title"><span class="sop-step-num">5</span> 後台標記完成</div>
+                <p>完成後回到管理後台待處理清單，點擊該筆記錄的「<strong style="color:var(--success);"><i class="fa-solid fa-check"></i> 標記完成</strong>」按鈕即可更新狀態。</p>
+            </div>
+        </div>
+        <div class="portal-modal-footer">
+            <button id="btn-confirm-downtime-sop" class="btn btn-primary" style="padding:6px 20px;">了解</button>
+        </div>
+    </div>
+</div>
 </body>
 </html>
