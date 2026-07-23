@@ -1,5 +1,8 @@
 {
     "name": "至天之座 M4S",
+    "downtimes": [
+        { "start": 388.6, "end": 400.6 }
+    ],
     "timeline": [
         {"phase": "OP", "castingTime": "00:00", "hitTime": "00:00", "skill": "戰鬥開始！", "damage": [], "type": ""},
         {"phase": "OP", "castingTime": "00:00", "hitTime": "00:00", "skill": "AA", "damage": [{"label": "普通攻擊", "amount": 79000, "type": "魔法"}], "type": "魔法"},

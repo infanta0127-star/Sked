@@ -1,5 +1,9 @@
 {
     "name": "絕伊甸(P2)",
+    "downtimes": [
+        { "start": 35.8, "end": 81.0 },
+        { "start": 197.7, "end": 220.6 }
+    ],
     "timeline": [
         {"phase": "P2開幕", "castingTime": "02:52", "hitTime": "02:52", "skill": "四劍斬", "damage": [{"label": "死刑", "amount": 650000, "type": "物理"}], "type": "物理"},
         {"phase": "P2開幕", "castingTime": "02:56", "hitTime": "02:56", "skill": "四劍斬", "damage": [{"label": "死刑", "amount": 650000, "type": "物理"}], "type": "物理"},
