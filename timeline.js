@@ -234,6 +234,9 @@ const tabBtnMit = document.getElementById('tab-btn-mit');
 const tabBtnTimeline = document.getElementById('tab-btn-timeline');
 const tabBtnCompare = document.getElementById('tab-btn-compare');
 const mitPlanningView = document.getElementById('mit-planning-view');
+const timelineWorkspaceView = document.getElementById('timeline-workspace-view');
+const compareWorkspaceView = document.getElementById('compare-workspace-view');
+const timelineToolbar = document.getElementById('timeline-toolbar');
 // Active Downtime (Untargetable) Intervals: [{ start, end }, ...]
 let activeDowntimeIntervals = [];
 window.activeDowntimeIntervals = activeDowntimeIntervals;
@@ -3840,7 +3843,7 @@ window.syncCustomDropdown = syncCustomDropdown;
 //   次版本 +1：新增功能（右側歸零）                1.0.1 → 1.1.0
 //   主版本 +1：破壞性大改版（右側歸零）            1.9.0 → 2.0.0
 // 註：header 的「(Patch 7.1)」是遊戲版本，與此無關，需在 index.html 手動維護。
-const APP_VERSION = '1.6.2';
+const APP_VERSION = '1.6.3';
 let updatePopupShown = false;
 
 function initVersionCheck() {
