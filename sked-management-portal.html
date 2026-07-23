@@ -1615,6 +1615,7 @@ function renderDowntimeReports() {
             hour12: false, timeZone: 'Asia/Taipei'
         });
 
+        const fullPropStr = `"downtimes": ${JSON.stringify(report.downtime_periods || [], null, 2)},`;
         const jsonFormatted = JSON.stringify(report.downtime_periods || [], null, 2);
         const jsonCompact = JSON.stringify(report.downtime_periods || []);
         const fflogsLink = report.fflogs_url ? `<a href="${report.fflogs_url}" target="_blank" style="color:var(--accent2); text-decoration:underline;"><i class="fa-solid fa-arrow-up-right-from-square"></i> 開啟</a>` : '<span style="color:var(--muted);">-</span>';
@@ -1638,8 +1639,11 @@ function renderDowntimeReports() {
             <td>${fflogsLink}</td>
             <td>${statusBadge}</td>
             <td style="text-align:right; white-space:nowrap;">
-                <button class="btn btn-secondary btn-mini btn-copy-json" data-json='${jsonFormatted}' title="複製 JSON 供 data/duties/*.json 使用">
-                    <i class="fa-regular fa-copy"></i> 複製 JSON
+                <button class="btn btn-secondary btn-mini btn-copy-prop" data-json='${fullPropStr.replace(/'/g, "&apos;")}' title="複製完整 &quot;downtimes&quot;: [...] 欄位，可以直接貼在 JSON 的 &quot;name&quot; 宣告下方">
+                    <i class="fa-regular fa-copy"></i> 複製 downtimes 屬性
+                </button>
+                <button class="btn btn-secondary btn-mini btn-copy-json" data-json='${jsonFormatted.replace(/'/g, "&apos;")}' title="僅複製 [ { start, end } ] 陣列">
+                    <i class="fa-solid fa-code"></i> 僅複製陣列
                 </button>
                 ${report.status === 'pending' ? `
                     <button class="btn btn-success btn-mini btn-mark-completed" data-id="${report.id}">
@@ -1654,10 +1658,17 @@ function renderDowntimeReports() {
         tbody.appendChild(tr);
     });
 
+    tbody.querySelectorAll('.btn-copy-prop').forEach(btn => {
+        btn.addEventListener('click', () => {
+            navigator.clipboard.writeText(btn.dataset.json);
+            alert('已複製完整的 "downtimes": [...] 欄位！可以貼在 data/duties/*.json 的 "name" 宣告下方！');
+        });
+    });
+
     tbody.querySelectorAll('.btn-copy-json').forEach(btn => {
         btn.addEventListener('click', () => {
             navigator.clipboard.writeText(btn.dataset.json);
-            alert('已複製 Downtime JSON 到剪貼簿！');
+            alert('已複製 Downtime 陣列 JSON！');
         });
     });
 
@@ -1734,26 +1745,26 @@ if (sopModal) {
         </div>
         <div class="portal-modal-body">
             <div class="sop-step">
-                <div class="sop-step-title"><span class="sop-step-num">1</span> 複製 Downtime JSON</div>
-                <p>在下方待處理清單中找到目標副本，點擊該列的「<strong style="color:var(--accent2);"><i class="fa-solid fa-copy"></i> 複製 JSON</strong>」按鈕，將包含無敵時間段的 JSON 陣列複製至剪貼簿。</p>
-                <div class="sop-code-preview">[{"start": 120.5, "end": 145.0}]</div>
+                <div class="sop-step-title"><span class="sop-step-num">1</span> 複製 Downtime 屬性</div>
+                <p>在待處理清單中點擊該列的「<strong style="color:var(--accent2);"><i class="fa-regular fa-copy"></i> 複製 downtimes 屬性</strong>」按鈕，剪貼簿將自動包含帶有屬性名稱與逗號的語法：</p>
+                <div class="sop-code-preview">"downtimes": [{"start": 120.5, "end": 145.0}],</div>
             </div>
 
             <div class="sop-step">
-                <div class="sop-step-title"><span class="sop-step-num">2</span> 開啟專案資料夾與對應 JSON 檔</div>
-                <p>開啟本地專案目錄，前往副本檔案存放路徑：</p>
-                <div class="sop-path-box"><i class="fa-regular fa-folder-open"></i> <code>data/duties/</code></div>
-                <p style="margin-top:8px;">開啟該副本對應的 JSON 檔案（例如 <code>m3s.json</code>、<code>u_eden_P1.json</code>）。若無獨立檔案，請開啟 <code style="color:var(--warning);">data/duties/index.json</code>。</p>
+                <div class="sop-step-title"><span class="sop-step-num">2</span> 開啟對應副本 JSON 檔案</div>
+                <p>開啟本地專案目錄前往 <code>data/duties/</code>（例如 <code>data/duties/aac/m1s.json</code> 或 <code>data/duties/u_eden/eden_P2.json</code>）。</p>
             </div>
 
             <div class="sop-step">
-                <div class="sop-step-title"><span class="sop-step-num">3</span> 貼上與編輯 <code>downtimes</code> 欄位</div>
-                <p>在該副本的 JSON 資料結構中，新增或貼上 <code>"downtimes"</code> 陣列：</p>
+                <div class="sop-step-title"><span class="sop-step-num">3</span> 貼在 <code>"name": "..."</code> 宣告下方</div>
+                <p>將複製的代碼直接貼在 JSON 物件頂部的 <code>"name"</code> 宣告下方（請勿貼在檔案最外層括號 <code>}</code> 之後）：</p>
                 <pre class="sop-code-block">{
-  "id": "m3s",
-  "name": "M3S 副本名稱",
-  "downtimes": [
+  "name": "至天之座 M1S",
+  <span style="color:#7c9ef8; font-weight:bold;">"downtimes": [
     { "start": 120.5, "end": 145.0 }
+  ],</span>
+  "timeline": [
+    ...
   ]
 }</pre>
             </div>
