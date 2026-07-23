@@ -3982,7 +3982,7 @@ window.syncCustomDropdown = syncCustomDropdown;
 //   次版本 +1：新增功能（右側歸零）                1.0.1 → 1.1.0
 //   主版本 +1：破壞性大改版（右側歸零）            1.9.0 → 2.0.0
 // 註：header 的「(Patch 7.1)」是遊戲版本，與此無關，需在 index.html 手動維護。
-const APP_VERSION = '1.7.2';
+const APP_VERSION = '1.7.3';
 let updatePopupShown = false;
 
 // Global Toast Notification Helper
@@ -4192,7 +4192,11 @@ function openFFLogsApiModal() {
   document.getElementById('fflogs-api-fight-section').style.display = 'none';
   document.getElementById('fflogs-api-player-section').style.display = 'none';
   document.getElementById('fflogs-api-options-section').style.display = 'none';
-  document.getElementById('fflogs-api-import').style.display = 'none';
+  const importBtn = document.getElementById('fflogs-api-import');
+  if (importBtn) {
+    importBtn.style.display = 'none';
+    importBtn.disabled = false;
+  }
   fflogsApiSetStatus('');
   fflogsApiReportCode = null;
   modal.classList.add('active');
@@ -4813,6 +4817,8 @@ async function fflogsApiImport() {
 
     const modal = document.getElementById('fflogs-api-modal');
     if (modal) modal.classList.remove('active');
+    const importBtn = document.getElementById('fflogs-api-import');
+    if (importBtn) importBtn.disabled = false;
     showToast(`✅ 成功匯入 ${rawSkills.length} 個技能事件`);
 
   } catch (err) {
