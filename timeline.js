@@ -2533,7 +2533,12 @@ async function importFfxivMitigationPlan(data) {
 
   const dutyKey = data.duty;
   window.trackEvent('personal_planner', 'import_from_team', { duty: dutyKey });
-  const dutyObj = dutiesDatabase.duties ? dutiesDatabase.duties.find(d => d.key === dutyKey || d.file === dutyKey) : null;
+  const dutyObj = dutiesDatabase.duties ? dutiesDatabase.duties.find(d => 
+    d.key === dutyKey || 
+    d.file === dutyKey || 
+    (dutyKey && d.key.toLowerCase() === dutyKey.toLowerCase()) || 
+    (dutyKey && d.file.toLowerCase() === dutyKey.toLowerCase())
+  ) : null;
 
   const activePartyMembers = [];
   data.party.forEach((jobAbbrev, idx) => {
@@ -2566,10 +2571,16 @@ async function importFfxivMitigationPlan(data) {
     if (dutyObj) {
       await loadDuty(dutyObj.file, false);
       officialMechs = JSON.parse(JSON.stringify(bossMechanics));
+      if (dutySelect) {
+        dutySelect.value = dutyObj.file;
+        populateDutyDropdown(dutiesDatabase, dutyObj.file);
+      }
     } else {
       currentDutyFile = '';
-      dutySelect.value = '';
-      populateDutyDropdown(dutiesDatabase, '');
+      if (dutySelect) {
+        dutySelect.value = '';
+        populateDutyDropdown(dutiesDatabase, '');
+      }
       bossMechanics = [];
     }
     
@@ -3982,7 +3993,7 @@ window.syncCustomDropdown = syncCustomDropdown;
 //   次版本 +1：新增功能（右側歸零）                1.0.1 → 1.1.0
 //   主版本 +1：破壞性大改版（右側歸零）            1.9.0 → 2.0.0
 // 註：header 的「(Patch 7.1)」是遊戲版本，與此無關，需在 index.html 手動維護。
-const APP_VERSION = '1.7.3';
+const APP_VERSION = '1.7.4';
 let updatePopupShown = false;
 
 // Global Toast Notification Helper
