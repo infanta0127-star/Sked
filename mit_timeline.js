@@ -54,7 +54,7 @@ const tabBtnMit = document.getElementById('tab-btn-mit');
 const tabBtnTimeline = document.getElementById('tab-btn-timeline');
 
 // ── 4. Initialize Application ──
-document.addEventListener('DOMContentLoaded', async () => {
+async function initMitTimelineApp() {
     try {
         // Fetch Mitigation Skills database
         const skillsResp = await fetch('./data/mit_skills.json');
@@ -118,7 +118,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (err) {
         console.error('Initialization error in mit_timeline.js:', err);
     }
-});
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initMitTimelineApp);
+} else {
+    initMitTimelineApp();
+}
 
 // ── 5. Auth UI Helpers ──
 function updateAuthUI() {

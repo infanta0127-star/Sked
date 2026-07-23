@@ -303,12 +303,13 @@ const fflogsClearTimeline = document.getElementById('fflogs-clear-timeline');
 
 
 // Load Data and Initialize
-document.addEventListener('DOMContentLoaded', async () => {
+async function initTimelineApp() {
   try {
     const response = await fetch('./data/jobs_skills.json');
     if (!response.ok) throw new Error('無法讀取技能資料庫！請先執行 scraper.js');
     skillsDatabase = await response.json();
     window.skillsDatabase = skillsDatabase;
+    window.bossMechanics = bossMechanics;
     
     // Inject general Potion skill to all jobs
     const potionSkill = {
@@ -373,9 +374,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupEventListeners();
   } catch (error) {
     console.error(error);
-    skillsList.innerHTML = `<div class="empty-state"><i class="fa-solid fa-triangle-exclamation"></i><p>${error.message}</p></div>`;
+    if (skillsList) skillsList.innerHTML = `<div class="empty-state"><i class="fa-solid fa-triangle-exclamation"></i><p>${error.message}</p></div>`;
   }
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initTimelineApp);
+} else {
+  initTimelineApp();
+}
 
 // Helper: Parse time string to seconds
 function parseTimeToSeconds(timeStr) {
@@ -3833,7 +3840,7 @@ window.syncCustomDropdown = syncCustomDropdown;
 //   次版本 +1：新增功能（右側歸零）                1.0.1 → 1.1.0
 //   主版本 +1：破壞性大改版（右側歸零）            1.9.0 → 2.0.0
 // 註：header 的「(Patch 7.1)」是遊戲版本，與此無關，需在 index.html 手動維護。
-const APP_VERSION = '1.6.1';
+const APP_VERSION = '1.6.2';
 let updatePopupShown = false;
 
 function initVersionCheck() {
