@@ -53,10 +53,22 @@
 
     // Public tracking function exposed on window
     window.trackEvent = function(category, name, data = {}) {
+        const isLocal = typeof window !== 'undefined' && window.location && (
+            window.location.hostname === 'localhost' ||
+            window.location.hostname === '127.0.0.1' ||
+            window.location.hostname === '0.0.0.0' ||
+            window.location.protocol === 'file:'
+        );
+
+        let eventData = (typeof data === 'object' && data !== null) ? { ...data } : { detail: data };
+        if (isLocal) {
+            eventData.is_local = true;
+        }
+
         const ev = {
             category,
             name,
-            data,
+            data: eventData,
             timestamp: new Date().toISOString()
         };
         

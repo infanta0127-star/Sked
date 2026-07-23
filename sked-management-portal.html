@@ -1198,51 +1198,74 @@ function renderFilteredAnalytics() {
     } else {
         function formatEventAction(ev) {
             const data = ev.event_data || {};
+            const isLocal = data.is_local || data._is_local || data.isLocal;
+            const prefix = isLocal ? '<span style="color:var(--warning); font-weight:700; margin-right:6px;">[本地測試]</span>' : '';
+
+            let mainText = '';
             switch (ev.event_name) {
                 case 'tab_switch':
                     const targetName = data.target || (data.code === 'team' ? '團隊技能排軸' : data.code === 'compare' ? '多人施法比較' : '個人技能排軸');
-                    return `切換至 <strong>${targetName}</strong> 頁籤`;
+                    mainText = `切換至 <strong>${targetName}</strong> 頁籤`;
+                    break;
                 case 'import_fflogs': {
                     const url = data['FFLogs 報告連結'] || data.url || data.reportCode || '';
                     const urlLink = url ? `<a href="${url}" target="_blank" style="color:var(--accent2); text-decoration:underline;">[報告連結]</a>` : '(無連結)';
                     if (ev.event_category === 'team_planner') {
                         const scope = data.scope ? ` <span style="color:var(--accent2); font-weight:600;">[${data.scope}]</span>` : '';
-                        return `從 FFLogs 匯入${scope}: ${urlLink}`;
+                        mainText = `從 FFLogs 匯入${scope}: ${urlLink}`;
+                    } else {
+                        const fight = data['選擇戰鬥段落'] || data.fightId || '未知段落';
+                        const player = data['選擇玩家'] || data.player || '未知玩家';
+                        mainText = `從 FFLogs 匯入: <strong>${player}</strong> (${fight}) ${urlLink}`;
                     }
-                    const fight = data['選擇戰鬥段落'] || data.fightId || '未知段落';
-                    const player = data['選擇玩家'] || data.player || '未知玩家';
-                    return `從 FFLogs 匯入: <strong>${player}</strong> (${fight}) ${urlLink}`;
+                    break;
                 }
-                case 'click_import_fflogs_btn':
+                case 'click_import_fflogs_btn': {
                     const mode = (ev.event_category === '多人比較' || ev.event_category === 'compare_planner' || data.target === 'compare') ? '多人施法比較' : '個人技能排軸';
-                    return `點擊【從 FFLogs 匯入】按鈕 (${mode})`;
+                    mainText = `點擊【從 FFLogs 匯入】按鈕 (${mode})`;
+                    break;
+                }
                 case 'change_party_slot':
-                    return `調整 <strong>${data.slot || ''}</strong> 職業 從 <strong>${data.from || '?'}</strong> 到 <strong>${data.to || '?'}</strong>`;
+                    mainText = `調整 <strong>${data.slot || ''}</strong> 職業 從 <strong>${data.from || '?'}</strong> 到 <strong>${data.to || '?'}</strong>`;
+                    break;
                 case 'save_cloud':
-                    return `保存雲端存檔: <strong>${data.name || '未命名'}</strong> (${data.type === 'new' ? '新存檔' : '覆蓋'})`;
+                    mainText = `保存雲端存檔: <strong>${data.name || '未命名'}</strong> (${data.type === 'new' ? '新存檔' : '覆蓋'})`;
+                    break;
                 case 'load_cloud':
-                    return `讀取雲端存檔: <strong>${data.name || '未命名'}</strong>`;
+                    mainText = `讀取雲端存檔: <strong>${data.name || '未命名'}</strong>`;
+                    break;
                 case 'share_link':
-                    return `生成分享連結權限: <strong>${data.type === 'edit' ? '可編輯' : '唯讀'}</strong>`;
+                    mainText = `生成分享連結權限: <strong>${data.type === 'edit' ? '可編輯' : '唯讀'}</strong>`;
+                    break;
                 case 'import_json':
-                    return `匯入排軸 JSON (副本/職業: ${data.duty || data.job || '未知'})`;
+                    mainText = `匯入排軸 JSON (副本/職業: ${data.duty || data.job || '未知'})`;
+                    break;
                 case 'export_json':
-                    return `導出 JSON 檔案 (副本/職業: ${data.duty || data.job || '未知'})`;
+                    mainText = `導出 JSON 檔案 (副本/職業: ${data.duty || data.job || '未知'})`;
+                    break;
                 case 'export_image':
-                    return `匯出個人排軸為圖片`;
+                    mainText = `匯出個人排軸為圖片`;
+                    break;
                 case 'import_from_team':
-                    return `匯入團隊計畫至個人排軸`;
+                    mainText = `匯入團隊計畫至個人排軸`;
+                    break;
                 case 'click_import_from_team_btn':
-                    return `點擊【從團隊排軸匯入】按鈕`;
+                    mainText = `點擊【從團隊排軸匯入】按鈕`;
+                    break;
                 case 'login':
-                    return `登入帳號 (${data.email || ''})`;
+                    mainText = `登入帳號 (${data.email || ''})`;
+                    break;
                 case 'register':
-                    return `註冊新帳號 (${data.email || ''})`;
+                    mainText = `註冊新帳號 (${data.email || ''})`;
+                    break;
                 case 'logout':
-                    return `登出帳號`;
+                    mainText = `登出帳號`;
+                    break;
                 default:
-                    return typeof data === 'object' ? JSON.stringify(data) : String(data);
+                    mainText = typeof data === 'object' ? JSON.stringify(data) : String(data);
+                    break;
             }
+            return prefix + mainText;
         }
 
         displayLogs.forEach(log => {

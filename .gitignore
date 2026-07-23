@@ -1,3 +1,6 @@
 node_modules/
 .DS_Store
 .env
+
+# 本機用的雙擊啟動/關閉 Dev server 腳本
+*.command
