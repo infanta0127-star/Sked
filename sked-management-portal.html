@@ -237,17 +237,31 @@
             align-items: center;
             gap: 8px;
             padding: 9px 18px;
-            border: none;
+            border: 1px solid var(--border);
             border-radius: 10px;
             font-size: 13px;
             font-weight: 600;
             cursor: pointer;
             transition: all .2s;
+            background: var(--bg3);
+            color: var(--text);
+        }
+
+        .btn-secondary {
+            background: var(--bg3);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+        .btn-secondary:hover {
+            background: rgba(91, 124, 246, 0.15);
+            border-color: var(--accent);
+            color: #fff;
         }
 
         .btn-primary {
             background: linear-gradient(135deg, var(--accent), var(--accent2));
             color: #fff;
+            border: none;
         }
         .btn-primary:hover { opacity: .85; transform: translateY(-1px); }
 
@@ -269,6 +283,12 @@
             padding: 5px 12px;
             font-size: 12px;
             border-radius: 7px;
+        }
+
+        .btn-mini {
+            padding: 4px 10px;
+            font-size: 12px;
+            border-radius: 6px;
         }
 
         /* ── User Table ── */
@@ -454,10 +474,12 @@
             border-radius: 20px;
             font-size: 11px;
             font-weight: 600;
+            white-space: nowrap;
         }
 
-        .tag-active { background: rgba(74,222,128,.1); color: var(--success); }
-        .tag-inactive { background: rgba(248,113,113,.1); color: var(--danger); }
+        .tag-active { background: rgba(74,222,128,.15); color: var(--success); border: 1px solid rgba(74,222,128,.3); }
+        .tag-inactive { background: rgba(248,113,113,.15); color: var(--danger); border: 1px solid rgba(248,113,113,.3); }
+        .tag-pending { background: rgba(251,191,36,.15); color: var(--warning); border: 1px solid rgba(251,191,36,.3); }
         .tag-admin { background: rgba(251,191,36,.1); color: var(--warning); }
         .tag-user { background: rgba(100,116,139,.1); color: var(--muted); }
 
@@ -888,10 +910,10 @@
                 </div>
                 <div style="display:flex; align-items:center; gap:12px;">
                     <select id="downtime-status-filter" style="background:var(--bg3); color:var(--text); border:1px solid var(--border); padding:6px 12px; border-radius:8px; font-size:12px;">
-                        <option value="pending">⏳ 待處理 (Pending)</option>
-                        <option value="completed">✅ 已完成 (Completed)</option>
-                        <option value="ignored">🚫 已忽略 (Ignored)</option>
-                        <option value="all">🌐 全部狀態</option>
+                        <option value="pending">待處理 (Pending)</option>
+                        <option value="completed">已完成 (Completed)</option>
+                        <option value="ignored">已忽略 (Ignored)</option>
+                        <option value="all">全部狀態</option>
                     </select>
                     <button class="btn btn-secondary btn-mini" id="btn-refresh-downtimes">
                         <i class="fa-solid fa-arrows-rotate"></i> 重新整理
@@ -1597,11 +1619,11 @@ function renderDowntimeReports() {
         const jsonCompact = JSON.stringify(report.downtime_periods || []);
         const fflogsLink = report.fflogs_url ? `<a href="${report.fflogs_url}" target="_blank" style="color:var(--accent2); text-decoration:underline;"><i class="fa-solid fa-arrow-up-right-from-square"></i> 開啟</a>` : '<span style="color:var(--muted);">-</span>';
 
-        let statusBadge = '<span class="tag tag-inactive">⏳ 待處理</span>';
+        let statusBadge = '<span class="tag tag-pending">待處理</span>';
         if (report.status === 'completed') {
-            statusBadge = '<span class="tag tag-active" style="background:rgba(74,222,128,0.15); color:var(--success); border:1px solid rgba(74,222,128,0.3);">✅ 已完成</span>';
+            statusBadge = '<span class="tag tag-active">已完成</span>';
         } else if (report.status === 'ignored') {
-            statusBadge = '<span class="tag tag-inactive" style="opacity:0.6;">🚫 已忽略</span>';
+            statusBadge = '<span class="tag tag-inactive">已忽略</span>';
         }
 
         tr.innerHTML = `
@@ -1620,10 +1642,10 @@ function renderDowntimeReports() {
                     <i class="fa-regular fa-copy"></i> 複製 JSON
                 </button>
                 ${report.status === 'pending' ? `
-                    <button class="btn btn-secondary btn-mini btn-mark-completed" data-id="${report.id}" style="color:var(--success); border-color:rgba(74,222,128,0.3);">
+                    <button class="btn btn-success btn-mini btn-mark-completed" data-id="${report.id}">
                         <i class="fa-solid fa-check"></i> 完成
                     </button>
-                    <button class="btn btn-secondary btn-mini btn-mark-ignored" data-id="${report.id}" style="color:var(--muted);">
+                    <button class="btn btn-danger btn-mini btn-mark-ignored" data-id="${report.id}">
                         <i class="fa-solid fa-xmark"></i> 忽略
                     </button>
                 ` : ''}
