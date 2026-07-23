@@ -2769,6 +2769,58 @@ body {
   transform: translateX(2px);
 }
 
+/* ── Global Toast Notifications ── */
+.global-toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 100000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.global-toast-item {
+  background: rgba(20, 24, 36, 0.95);
+  color: #fff;
+  border: 1px solid rgba(0, 240, 255, 0.4);
+  padding: 12px 18px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), 0 0 10px rgba(0, 240, 255, 0.15);
+  backdrop-filter: blur(8px);
+  animation: toastSlideIn 0.3s ease-out forwards;
+  pointer-events: auto;
+}
+
+.global-toast-item.fade-out {
+  animation: toastFadeOut 0.4s ease-in forwards;
+}
+
+@keyframes toastSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes toastFadeOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.95);
+  }
+}
+
 
 
 

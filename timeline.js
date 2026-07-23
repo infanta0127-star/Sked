@@ -3843,8 +3843,30 @@ window.syncCustomDropdown = syncCustomDropdown;
 //   次版本 +1：新增功能（右側歸零）                1.0.1 → 1.1.0
 //   主版本 +1：破壞性大改版（右側歸零）            1.9.0 → 2.0.0
 // 註：header 的「(Patch 7.1)」是遊戲版本，與此無關，需在 index.html 手動維護。
-const APP_VERSION = '1.6.3';
+const APP_VERSION = '1.6.4';
 let updatePopupShown = false;
+
+// Global Toast Notification Helper
+function showToast(message, duration = 3000) {
+  let toastContainer = document.getElementById('global-toast-container');
+  if (!toastContainer) {
+    toastContainer = document.createElement('div');
+    toastContainer.id = 'global-toast-container';
+    toastContainer.className = 'global-toast-container';
+    document.body.appendChild(toastContainer);
+  }
+
+  const toast = document.createElement('div');
+  toast.className = 'global-toast-item';
+  toast.textContent = message;
+  toastContainer.appendChild(toast);
+
+  setTimeout(() => {
+    toast.classList.add('fade-out');
+    setTimeout(() => toast.remove(), 400);
+  }, duration);
+}
+window.showToast = showToast;
 
 function initVersionCheck() {
   console.log('[Version Check] Current app version:', APP_VERSION);
