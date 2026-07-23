@@ -3547,7 +3547,7 @@ async function mitFflogsImport() {
 
         const parsedEvents = [];
         for (const ev of events) {
-            if (ev.type !== 'cast') continue;
+            if (ev.type !== 'cast' && ev.type !== 'begincast') continue;
             const playerInfo = playerSlotMap[ev.sourceID];
             if (!playerInfo) continue;
 

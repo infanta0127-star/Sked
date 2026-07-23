@@ -3752,7 +3752,7 @@ window.syncCustomDropdown = syncCustomDropdown;
 //   次版本 +1：新增功能（右側歸零）                1.0.1 → 1.1.0
 //   主版本 +1：破壞性大改版（右側歸零）            1.9.0 → 2.0.0
 // 註：header 的「(Patch 7.1)」是遊戲版本，與此無關，需在 index.html 手動維護。
-const APP_VERSION = '1.5.1';
+const APP_VERSION = '1.5.2';
 let updatePopupShown = false;
 
 function initVersionCheck() {
@@ -4290,7 +4290,7 @@ async function fflogsApiImport() {
 
     const parsedEvents = [];
     for (const ev of events) {
-      if (ev.type !== 'cast') continue;
+      if (ev.type !== 'cast' && ev.type !== 'begincast') continue;
       
       const abilityName = abilityMap[ev.abilityGameID];
       if (!abilityName) continue;
