@@ -234,9 +234,42 @@ const tabBtnMit = document.getElementById('tab-btn-mit');
 const tabBtnTimeline = document.getElementById('tab-btn-timeline');
 const tabBtnCompare = document.getElementById('tab-btn-compare');
 const mitPlanningView = document.getElementById('mit-planning-view');
-const timelineWorkspaceView = document.getElementById('timeline-workspace-view');
-const compareWorkspaceView = document.getElementById('compare-workspace-view');
-const timelineToolbar = document.getElementById('timeline-toolbar');
+// Active Downtime (Untargetable) Intervals: [{ start, end }, ...]
+let activeDowntimeIntervals = [];
+window.activeDowntimeIntervals = activeDowntimeIntervals;
+
+// --- Report missing duty downtime to Supabase ---
+async function checkAndReportDutyDowntime(dutyKey, dutyName, encounterId, downtimeIntervals, fflogsUrl) {
+  const sb = window.supabaseClient;
+  if (!sb || downtimeIntervals.length === 0) return;
+
+  try {
+    const key = dutyKey || 'custom_duty';
+    const localDuty = (typeof mitDutiesDatabase !== 'undefined' && mitDutiesDatabase[key]) ? mitDutiesDatabase[key] : null;
+    const hasLocalDowntime = localDuty && localDuty.downtimes && localDuty.downtimes.length > 0;
+
+    if (!hasLocalDowntime) {
+      const { error } = await sb
+        .from('duty_downtime_reports')
+        .insert([{
+          duty_key: key,
+          duty_name: dutyName || key,
+          encounter_id: encounterId || null,
+          downtime_periods: downtimeIntervals,
+          fflogs_url: fflogsUrl || null,
+          status: 'pending'
+        }]);
+      if (error) {
+        console.log('[Downtime Report] Notice:', error.message);
+      } else {
+        console.log('[Downtime Report] Reported missing downtime for duty:', key);
+      }
+    }
+  } catch (err) {
+    console.error('[Downtime Report] Error:', err);
+  }
+}
+window.checkAndReportDutyDowntime = checkAndReportDutyDowntime;
 
 // Tooltip & Modals
 const tooltip = document.getElementById('skill-tooltip');
@@ -1498,6 +1531,24 @@ function renderTimeline() {
   startLabel.innerHTML = '<i class="fa-solid fa-flag-checkered"></i> 開怪 (Pull)';
   startLine.appendChild(startLabel);
   timelineEditor.appendChild(startLine);
+  
+  // 3c. Draw Downtime (Untargetable) Overlays
+  const existingDowntimes = timelineEditor.querySelectorAll('.downtime-overlay');
+  existingDowntimes.forEach(el => el.remove());
+
+  activeDowntimeIntervals.forEach((dt) => {
+    const dtEl = document.createElement('div');
+    dtEl.className = 'downtime-overlay';
+    dtEl.style.left = `${180 + (dt.start + PREPULL_TIME) * pixelsPerSecond}px`;
+    dtEl.style.width = `${(dt.end - dt.start) * pixelsPerSecond}px`;
+    
+    dtEl.innerHTML = `
+      <div class="downtime-overlay-label">
+        <i class="fa-solid fa-eye-slash"></i> BOSS 無敵 (${dt.start.toFixed(1)}s ~ ${dt.end.toFixed(1)}s)
+      </div>
+    `;
+    timelineEditor.appendChild(dtEl);
+  });
   
   // 4. Draw Buff Track Overlays
   timelineSkills.forEach(skill => {
@@ -3782,7 +3833,7 @@ window.syncCustomDropdown = syncCustomDropdown;
 //   次版本 +1：新增功能（右側歸零）                1.0.1 → 1.1.0
 //   主版本 +1：破壞性大改版（右側歸零）            1.9.0 → 2.0.0
 // 註：header 的「(Patch 7.1)」是遊戲版本，與此無關，需在 index.html 手動維護。
-const APP_VERSION = '1.5.4';
+const APP_VERSION = '1.6.0';
 let updatePopupShown = false;
 
 function initVersionCheck() {
@@ -4280,6 +4331,13 @@ async function fflogsApiImport() {
                 name
               }
             }
+            targetabilityEvents: events(
+              fightIDs: [$fightId]
+              dataType: All
+              hostilityType: Enemies
+              filterExpression: "type = 'targetabilityupdate'"
+              limit: 10000
+            ) { data }
             events(
               fightIDs: [$fightId]
               dataType: Casts
@@ -4297,11 +4355,53 @@ async function fflogsApiImport() {
       filterExpr: filterExpr || null
     });
 
-    const events = data.reportData.report.events.data || [];
+    const events = data.reportData?.report?.events?.data || [];
     if (events.length === 0) {
       fflogsApiSetStatus('⚠️ 沒有找到施放事件，請確認玩家選擇是否正確', true);
       document.getElementById('fflogs-api-import').disabled = false;
       return;
+    }
+
+    // Process Targetability (Downtime) Events
+    const rawTargetability = data.reportData?.report?.targetabilityEvents?.data || [];
+    const downtimeIntervals = [];
+    let downtimeStart = null;
+
+    rawTargetability.forEach(ev => {
+      const relSec = Math.max(0, (ev.timestamp - fightStart) / 1000);
+      const isUntargetable = (ev.targetable === 0 || ev.targetable === false || ev.targetable === '0');
+      
+      if (isUntargetable && downtimeStart === null) {
+        downtimeStart = relSec;
+      } else if (!isUntargetable && downtimeStart !== null) {
+        if (relSec > downtimeStart + 0.5) {
+          downtimeIntervals.push({
+            start: Math.round(downtimeStart * 1000) / 1000,
+            end: Math.round(relSec * 1000) / 1000
+          });
+        }
+        downtimeStart = null;
+      }
+    });
+
+    if (downtimeStart !== null) {
+      const fightEndRel = Math.max(0, (fight.endTime - fightStart) / 1000);
+      if (fightEndRel > downtimeStart + 0.5) {
+        downtimeIntervals.push({
+          start: Math.round(downtimeStart * 1000) / 1000,
+          end: Math.round(fightEndRel * 1000) / 1000
+        });
+      }
+    }
+
+    if (downtimeIntervals.length > 0) {
+      activeDowntimeIntervals = downtimeIntervals;
+      window.activeDowntimeIntervals = activeDowntimeIntervals;
+      const dutySel = document.getElementById('duty-select');
+      const currentDutyKey = dutySel ? dutySel.value : '';
+      const selectedFightSel = document.getElementById('fflogs-api-fight-select');
+      const selectedFightTxt = selectedFightSel && selectedFightSel.selectedIndex !== -1 ? selectedFightSel.options[selectedFightSel.selectedIndex].text : '';
+      checkAndReportDutyDowntime(currentDutyKey, selectedFightTxt, fightId, downtimeIntervals, urlInput);
     }
 
     // Build ability ID -> name map
@@ -4752,6 +4852,27 @@ function renderCompareTimeline() {
     container.innerHTML = '';
     lengthDisplay.innerHTML = `<i class="fa-regular fa-clock"></i> 軸總長: 0s`;
     return;
+  }
+
+  // Draw Downtime Overlays in Compare View
+  const compareEditor = document.getElementById('compare-timeline-editor');
+  if (compareEditor) {
+    const existingDowntimes = compareEditor.querySelectorAll('.downtime-overlay');
+    existingDowntimes.forEach(el => el.remove());
+
+    activeDowntimeIntervals.forEach((dt) => {
+      const dtEl = document.createElement('div');
+      dtEl.className = 'downtime-overlay';
+      dtEl.style.left = `${180 + (dt.start + PREPULL_TIME) * pixelsPerSecond}px`;
+      dtEl.style.width = `${(dt.end - dt.start) * pixelsPerSecond}px`;
+      
+      dtEl.innerHTML = `
+        <div class="downtime-overlay-label">
+          <i class="fa-solid fa-eye-slash"></i> BOSS 無敵 (${dt.start.toFixed(1)}s ~ ${dt.end.toFixed(1)}s)
+        </div>
+      `;
+      compareEditor.appendChild(dtEl);
+    });
   }
   
   // Render player cards in sidebar

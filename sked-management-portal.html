@@ -538,6 +538,9 @@
         <button class="portal-tab-btn" data-target="tab-analytics">
             <i class="fa-solid fa-chart-line"></i> 數據流量與分析
         </button>
+        <button class="portal-tab-btn" data-target="tab-downtimes">
+            <i class="fa-solid fa-eye-slash"></i> 副本 Downtime 待處理
+        </button>
     </div>
 
     <!-- TAB 1: Settings -->
@@ -703,6 +706,62 @@
                         <tr>
                             <td colspan="5" class="empty-state" style="text-align: center;">載入數據中...</td>
                         </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 3: Downtimes -->
+    <div id="tab-downtimes" class="portal-tab-content hidden">
+        <!-- Stats -->
+        <div class="stats-row">
+            <div class="stat-card">
+                <div class="stat-value" id="stat-downtimes-pending" style="color: var(--warning);">—</div>
+                <div class="stat-label">待處理事項</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-downtimes-completed" style="color: var(--success);">—</div>
+                <div class="stat-label">已處理標記</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-downtimes-total">—</div>
+                <div class="stat-label">總上報筆數</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-header">
+                <div class="section-title">
+                    <i class="fa-solid fa-eye-slash"></i> 副本 Downtime (無敵/離場) 待處理清單
+                </div>
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <select id="downtime-status-filter" style="background:var(--bg3); color:var(--text); border:1px solid var(--border); padding:6px 12px; border-radius:8px; font-size:12px;">
+                        <option value="pending">⏳ 待處理 (Pending)</option>
+                        <option value="completed">✅ 已完成 (Completed)</option>
+                        <option value="ignored">🚫 已忽略 (Ignored)</option>
+                        <option value="all">🌐 全部狀態</option>
+                    </select>
+                    <button class="btn btn-secondary btn-mini" id="btn-refresh-downtimes">
+                        <i class="fa-solid fa-arrows-rotate"></i> 重新整理
+                    </button>
+                </div>
+            </div>
+
+            <div style="overflow-x:auto;">
+                <table class="user-table">
+                    <thead>
+                        <tr>
+                            <th style="width:140px;">上報時間</th>
+                            <th style="width:180px;">副本名稱 / Key</th>
+                            <th>Downtime 時段 (JSON)</th>
+                            <th style="width:140px;">來源 FFLogs</th>
+                            <th style="width:100px;">狀態</th>
+                            <th style="width:180px; text-align:right;">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="downtimes-tbody">
+                        <tr><td colspan="6" class="empty-state">載入數據中...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -971,6 +1030,8 @@ document.querySelectorAll('.portal-tab-btn').forEach(btn => {
         
         if (target === 'tab-analytics') {
             loadAnalytics();
+        } else if (target === 'tab-downtimes') {
+            loadDowntimeReports();
         }
     });
 });
@@ -1326,6 +1387,138 @@ document.getElementById('log-range-filter')?.addEventListener('change', renderFi
 document.getElementById('log-category-filter')?.addEventListener('change', renderFilteredAnalytics);
 document.getElementById('log-show-admins-toggle')?.addEventListener('change', renderFilteredAnalytics);
 document.getElementById('btn-refresh-analytics').addEventListener('click', loadAnalytics);
+
+// ── Duty Downtimes Management ──
+let allDowntimeReports = [];
+
+async function loadDowntimeReports() {
+    const tbody = document.getElementById('downtimes-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-state"><i class="fa-solid fa-spinner fa-spin"></i> 載入數據中...</td></tr>';
+
+    try {
+        const { data, error } = await sb
+            .from('duty_downtime_reports')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        allDowntimeReports = data || [];
+
+        const pendingCount = allDowntimeReports.filter(r => r.status === 'pending').length;
+        const completedCount = allDowntimeReports.filter(r => r.status === 'completed').length;
+        document.getElementById('stat-downtimes-pending').textContent = pendingCount;
+        document.getElementById('stat-downtimes-completed').textContent = completedCount;
+        document.getElementById('stat-downtimes-total').textContent = allDowntimeReports.length;
+
+        renderDowntimeReports();
+    } catch (err) {
+        console.error('Failed to load downtime reports:', err);
+        tbody.innerHTML = `<tr><td colspan="6" class="empty-state" style="color:var(--danger);">載入失敗: ${err.message}</td></tr>`;
+    }
+}
+
+function renderDowntimeReports() {
+    const tbody = document.getElementById('downtimes-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    const filterVal = document.getElementById('downtime-status-filter')?.value || 'pending';
+    let filtered = allDowntimeReports;
+    if (filterVal !== 'all') {
+        filtered = filtered.filter(r => r.status === filterVal);
+    }
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="empty-state" style="text-align:center; padding: 24px; color: var(--muted);">此篩選條件下目前無上報紀錄</td></tr>';
+        return;
+    }
+
+    filtered.forEach(report => {
+        const tr = document.createElement('tr');
+        const timeStr = new Date(report.created_at).toLocaleString('zh-TW', {
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit',
+            hour12: false, timeZone: 'Asia/Taipei'
+        });
+
+        const jsonFormatted = JSON.stringify(report.downtime_periods || [], null, 2);
+        const jsonCompact = JSON.stringify(report.downtime_periods || []);
+        const fflogsLink = report.fflogs_url ? `<a href="${report.fflogs_url}" target="_blank" style="color:var(--accent2); text-decoration:underline;"><i class="fa-solid fa-arrow-up-right-from-square"></i> 開啟</a>` : '<span style="color:var(--muted);">-</span>';
+
+        let statusBadge = '<span class="tag tag-inactive">⏳ 待處理</span>';
+        if (report.status === 'completed') {
+            statusBadge = '<span class="tag tag-active" style="background:rgba(74,222,128,0.15); color:var(--success); border:1px solid rgba(74,222,128,0.3);">✅ 已完成</span>';
+        } else if (report.status === 'ignored') {
+            statusBadge = '<span class="tag tag-inactive" style="opacity:0.6;">🚫 已忽略</span>';
+        }
+
+        tr.innerHTML = `
+            <td style="white-space:nowrap; color:var(--muted); font-size:12px;">${timeStr}</td>
+            <td>
+                <strong style="color:var(--text); font-size:13px;">${report.duty_name || '未知副本'}</strong>
+                <div style="font-size:11px; color:var(--muted); font-family:monospace; margin-top:2px;">key: ${report.duty_key}</div>
+            </td>
+            <td>
+                <pre style="font-family:monospace; font-size:11px; color:#a5b4fc; background:rgba(0,0,0,0.3); padding:6px 10px; border-radius:6px; max-width:450px; max-height:80px; overflow:auto; margin:0; border:1px solid var(--border);">${jsonCompact}</pre>
+            </td>
+            <td>${fflogsLink}</td>
+            <td>${statusBadge}</td>
+            <td style="text-align:right; white-space:nowrap;">
+                <button class="btn btn-secondary btn-mini btn-copy-json" data-json='${jsonFormatted}' title="複製 JSON 供 data/duties/*.json 使用">
+                    <i class="fa-regular fa-copy"></i> 複製 JSON
+                </button>
+                ${report.status === 'pending' ? `
+                    <button class="btn btn-secondary btn-mini btn-mark-completed" data-id="${report.id}" style="color:var(--success); border-color:rgba(74,222,128,0.3);">
+                        <i class="fa-solid fa-check"></i> 完成
+                    </button>
+                    <button class="btn btn-secondary btn-mini btn-mark-ignored" data-id="${report.id}" style="color:var(--muted);">
+                        <i class="fa-solid fa-xmark"></i> 忽略
+                    </button>
+                ` : ''}
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll('.btn-copy-json').forEach(btn => {
+        btn.addEventListener('click', () => {
+            navigator.clipboard.writeText(btn.dataset.json);
+            alert('已複製 Downtime JSON 到剪貼簿！');
+        });
+    });
+
+    tbody.querySelectorAll('.btn-mark-completed').forEach(btn => {
+        btn.addEventListener('click', () => updateDowntimeReportStatus(btn.dataset.id, 'completed'));
+    });
+
+    tbody.querySelectorAll('.btn-mark-ignored').forEach(btn => {
+        btn.addEventListener('click', () => updateDowntimeReportStatus(btn.dataset.id, 'ignored'));
+    });
+}
+
+async function updateDowntimeReportStatus(id, newStatus) {
+    try {
+        const { error } = await sb.rpc('admin_update_downtime_report_status', {
+            p_id: id,
+            p_status: newStatus
+        });
+        if (error) {
+            // Fallback direct update
+            const { error: directErr } = await sb
+                .from('duty_downtime_reports')
+                .update({ status: newStatus, updated_at: new Date().toISOString() })
+                .eq('id', id);
+            if (directErr) throw directErr;
+        }
+        await loadDowntimeReports();
+    } catch (err) {
+        alert('更新失敗: ' + err.message);
+    }
+}
+
+document.getElementById('btn-refresh-downtimes')?.addEventListener('click', loadDowntimeReports);
+document.getElementById('downtime-status-filter')?.addEventListener('change', renderDowntimeReports);
 </script>
 </body>
 </html>

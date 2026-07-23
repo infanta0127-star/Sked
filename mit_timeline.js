@@ -3517,6 +3517,13 @@ async function mitFflogsImport() {
                                 name
                             }
                         }
+                        targetabilityEvents: events(
+                            fightIDs: [$fightId]
+                            dataType: All
+                            hostilityType: Enemies
+                            filterExpression: "type = 'targetabilityupdate'"
+                            limit: 10000
+                        ) { data }
                         events(
                             fightIDs: [$fightId]
                             dataType: Casts
@@ -3532,11 +3539,51 @@ async function mitFflogsImport() {
             filterExpr: filterExpr || null
         });
 
-        const events = eventsData.reportData.report.events.data || [];
+        const events = eventsData.reportData?.report?.events?.data || [];
         if (events.length === 0) {
             mitFflogsSetStatus('⚠️ 沒有找到施放事件', true);
             importBtn.disabled = false;
             return;
+        }
+
+        // Process Targetability (Downtime) Events
+        const rawTargetability = eventsData.reportData?.report?.targetabilityEvents?.data || [];
+        const downtimeIntervals = [];
+        let downtimeStart = null;
+
+        rawTargetability.forEach(ev => {
+            const relSec = Math.max(0, (ev.timestamp - fightStart) / 1000);
+            const isUntargetable = (ev.targetable === 0 || ev.targetable === false || ev.targetable === '0');
+            
+            if (isUntargetable && downtimeStart === null) {
+                downtimeStart = relSec;
+            } else if (!isUntargetable && downtimeStart !== null) {
+                if (relSec > downtimeStart + 0.5) {
+                    downtimeIntervals.push({
+                        start: Math.round(downtimeStart * 1000) / 1000,
+                        end: Math.round(relSec * 1000) / 1000
+                    });
+                }
+                downtimeStart = null;
+            }
+        });
+
+        if (downtimeStart !== null) {
+            const fightEndRel = Math.max(0, (fight.endTime - fightStart) / 1000);
+            if (fightEndRel > downtimeStart + 0.5) {
+                downtimeIntervals.push({
+                    start: Math.round(downtimeStart * 1000) / 1000,
+                    end: Math.round(fightEndRel * 1000) / 1000
+                });
+            }
+        }
+
+        if (downtimeIntervals.length > 0) {
+            window.activeDowntimeIntervals = downtimeIntervals;
+            if (typeof window.checkAndReportDutyDowntime === 'function') {
+                const currentDutyKey = mitDutySelect ? mitDutySelect.value : '';
+                window.checkAndReportDutyDowntime(currentDutyKey, selectedFightText, fightId, downtimeIntervals, urlInput);
+            }
         }
 
         const abilities = eventsData.reportData.report.masterData?.abilities || [];
