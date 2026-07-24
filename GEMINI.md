@@ -33,7 +33,8 @@
 
 點擊 header 版本號會開啟「更新日誌」彈窗，內容讀自 Supabase `changelog` 表（最近 10 筆，`add-changelog-table.sql`）。**發新版時，請在 `changelog` 表新增一筆對應版本號的資料**（或作者自行進 DB 編修）。
 
-- 內容寫「一般使用者看得懂的功能更新」，以及**與一般使用者有關的 bug 修復**（例如某技能顯示錯誤、匯入漏東西）；**不要**列上報、除錯、內部技術調整等管理性/開發性項目。
+- 內容寫「一般使用者看得懂的功能更新」，以及**與一般使用者有關的 bug 修復**（例如某技能顯示錯誤、匯入漏東西）；**不要**列上報、除錯、內部技術調整、管理後台 (`sked-management-portal.html`) 等管理性/開發性項目。
+- ⚠️ **管理後台 (sked-management-portal.html)、除錯上報、內部技術調整等項目不屬於前台功能更新，不需要 Bump 版本號，也不需要產出 Changelog / SQL。**
 - `content` 每一行 = 一條項目（換行分隔）。前端唯讀，寫入僅透過 Supabase Dashboard / service_role。
 - 每次發版 Bump 版本號時，務必主動提供一份對應新版本號的 SQL `INSERT INTO public.changelog (version, released_at, content) VALUES ('...', 'YYYY-MM-DD HH:MI+08', '...');` 語法給作者至 Supabase 執行。
 
