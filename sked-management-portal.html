@@ -1486,6 +1486,19 @@ function renderFilteredAnalytics() {
                 case 'click_import_from_team_btn':
                     mainText = `點擊【從團隊排軸匯入】按鈕`;
                     break;
+                case 'macromate_btn_click':
+                    mainText = `點擊【巨集小幫手】按鈕`;
+                    break;
+                case 'macromate_confirm':
+                    mainText = `確認跳轉前往【FFXIV 巨集小幫手】外部網站`;
+                    break;
+                case 'macromate_cancel':
+                    mainText = `取消跳轉【FFXIV 巨集小幫手】`;
+                    break;
+                case 'fetch_fflogs_error':
+                case 'import_fflogs_error':
+                    mainText = `<span style="color:var(--danger);"><i class="fa-solid fa-triangle-exclamation"></i> FFLogs 匯入失敗 (${data.error || '未知錯誤'})</span>`;
+                    break;
                 case 'login':
                     mainText = `登入帳號 (${data.email || ''})`;
                     break;
@@ -1495,9 +1508,15 @@ function renderFilteredAnalytics() {
                 case 'logout':
                     mainText = `登出帳號`;
                     break;
-                default:
-                    mainText = typeof data === 'object' ? JSON.stringify(data) : String(data);
+                default: {
+                    const cleanData = { ...data };
+                    delete cleanData.is_local;
+                    delete cleanData._is_local;
+                    delete cleanData.isLocal;
+                    const jsonStr = Object.keys(cleanData).length > 0 ? JSON.stringify(cleanData) : '';
+                    mainText = jsonStr ? `觸發事件: ${jsonStr}` : `執行 ${ev.event_name}`;
                     break;
+                }
             }
             return prefix + mainText;
         }
