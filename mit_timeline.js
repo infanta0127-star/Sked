@@ -3683,11 +3683,33 @@ async function mitFflogsImport() {
                 relSec,
                 slotIndex: playerInfo.slotIndex,
                 jobAbbrev: playerInfo.jobAbbrev,
-                skill: matched
+                skill: matched,
+                sourceID: ev.sourceID,
+                abilityGameID: ev.abilityGameID
             });
         }
 
         parsedEvents.sort((a, b) => a.timestamp - b.timestamp);
+
+        // 從「原始施放事件流」判斷斷讀條（依玩家 sourceID 分組）：一次硬讀條會送出 begincast，
+        // 緊接同一 abilityGameID 的 cast（完成）；若某 begincast 的下一個 cast 是不同技能或不存在，
+        // 代表讀條被中斷。以未過濾的原始事件計算，才能涵蓋打斷用的即時技不在資料庫的情況。
+        const rawBySource = {};
+        for (const e of events) {
+            if (e.type !== 'cast' && e.type !== 'begincast') continue;
+            (rawBySource[e.sourceID] = rawBySource[e.sourceID] || []).push(e);
+        }
+        const interruptedBeginKeys = new Set();
+        for (const sid of Object.keys(rawBySource)) {
+            const stream = rawBySource[sid].sort((a, b) => a.timestamp - b.timestamp);
+            for (let i = 0; i < stream.length; i++) {
+                const e = stream[i];
+                if (e.type !== 'begincast') continue;
+                const next = stream[i + 1];
+                const completed = next && next.type === 'cast' && next.abilityGameID === e.abilityGameID;
+                if (!completed) interruptedBeginKeys.add(`${sid}_${e.timestamp}_${e.abilityGameID}`);
+            }
+        }
 
         // Deduplicate begincast vs cast & detect interrupted casts
         const uniqueEvents = [];
@@ -3701,25 +3723,21 @@ async function mitFflogsImport() {
             const key = `${ev.slotIndex}_${ev.skill.id}`;
 
             if (ev.type === 'begincast') {
-                let matchIdx = -1;
-                for (let j = i + 1; j < n; j++) {
-                    if (!processed[j] && sortedEventsList[j].type === 'cast' && `${sortedEventsList[j].slotIndex}_${sortedEventsList[j].skill.id}` === key) {
-                        const diff = sortedEventsList[j].relSec - ev.relSec;
-                        if (diff >= 0 && diff <= 3.0) {
-                            matchIdx = j;
+                if (interruptedBeginKeys.has(`${ev.sourceID}_${ev.timestamp}_${ev.abilityGameID}`)) {
+                    ev.completionTime = ev.relSec;
+                    ev.isInterrupted = true;
+                    uniqueEvents.push(ev);
+                } else {
+                    // Completed cast: consume the matching completion `cast` so it isn't rendered twice
+                    ev.isInterrupted = false;
+                    ev.completionTime = ev.relSec;
+                    for (let j = i + 1; j < n; j++) {
+                        if (!processed[j] && sortedEventsList[j].type === 'cast' && `${sortedEventsList[j].slotIndex}_${sortedEventsList[j].skill.id}` === key) {
+                            processed[j] = true;
+                            ev.completionTime = sortedEventsList[j].relSec;
                             break;
                         }
                     }
-                }
-
-                if (matchIdx !== -1) {
-                    processed[matchIdx] = true;
-                    ev.completionTime = sortedEventsList[matchIdx].relSec;
-                    ev.isInterrupted = false;
-                    uniqueEvents.push(ev);
-                } else {
-                    ev.completionTime = ev.relSec;
-                    ev.isInterrupted = true;
                     uniqueEvents.push(ev);
                 }
             } else if (ev.type === 'cast') {

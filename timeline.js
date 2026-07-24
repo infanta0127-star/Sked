@@ -4032,7 +4032,7 @@ window.syncCustomDropdown = syncCustomDropdown;
 //   次版本 +1：新增功能（右側歸零）                1.0.1 → 1.1.0
 //   主版本 +1：破壞性大改版（右側歸零）            1.9.0 → 2.0.0
 // 註：header 的「(Patch 7.1)」是遊戲版本，與此無關，需在 index.html 手動維護。
-const APP_VERSION = '1.8.0';
+const APP_VERSION = '1.8.1';
 let updatePopupShown = false;
 
 // Global Toast Notification Helper
@@ -4673,11 +4673,28 @@ async function fflogsApiImport() {
         type: ev.type,
         timestamp: ev.timestamp,
         relSec,
-        skill: matched
+        skill: matched,
+        abilityGameID: ev.abilityGameID
       });
     }
 
     parsedEvents.sort((a, b) => a.timestamp - b.timestamp);
+
+    // 從「原始施放事件流」判斷斷讀條：FFLogs 中一次硬讀條會送出 begincast，緊接著送出
+    // 同一個 abilityGameID 的 cast（讀條完成）。若某個 begincast 的下一個 cast 事件是
+    // 「不同技能」（玩家改放了即時技）或根本沒有下一個 cast，代表這次讀條被中斷了。
+    // 用原始（未過濾）事件流計算，才能涵蓋「打斷讀條的即時技不在資料庫」的情況。
+    const rawCastStream = events
+      .filter(e => e.type === 'cast' || e.type === 'begincast')
+      .sort((a, b) => a.timestamp - b.timestamp);
+    const interruptedBeginKeys = new Set();
+    for (let i = 0; i < rawCastStream.length; i++) {
+      const e = rawCastStream[i];
+      if (e.type !== 'begincast') continue;
+      const next = rawCastStream[i + 1];
+      const completed = next && next.type === 'cast' && next.abilityGameID === e.abilityGameID;
+      if (!completed) interruptedBeginKeys.add(e.timestamp + '_' + e.abilityGameID);
+    }
 
     // Deduplicate begins casting vs casts & detect interrupted casts
     const uniqueEvents = [];
@@ -4688,30 +4705,25 @@ async function fflogsApiImport() {
     for (let i = 0; i < n; i++) {
       if (processed[i]) continue;
       const ev = sortedEvList[i];
-      const key = ev.skill.id;
       const castDuration = parseTimeToSeconds(ev.skill.cast);
 
       if (ev.type === 'begincast') {
-        let matchIdx = -1;
-        for (let j = i + 1; j < n; j++) {
-          if (!processed[j] && sortedEvList[j].skill.id === key && sortedEvList[j].type === 'cast') {
-            const diff = sortedEvList[j].relSec - ev.relSec;
-            if (diff >= 0 && diff <= castDuration + 1.2) {
-              matchIdx = j;
-              break;
-            }
-          }
-        }
-
-        if (matchIdx !== -1) {
-          processed[matchIdx] = true;
-          ev.completionTime = sortedEvList[matchIdx].relSec;
-          ev.isInterrupted = false;
-          uniqueEvents.push(ev);
-        } else {
+        if (interruptedBeginKeys.has(ev.timestamp + '_' + ev.abilityGameID)) {
           // Interrupted cast (施法中斷)
           ev.completionTime = ev.relSec + (castDuration > 0 ? castDuration : 1.5);
           ev.isInterrupted = true;
+          uniqueEvents.push(ev);
+        } else {
+          // Completed cast: consume the matching completion `cast` so it isn't rendered twice
+          ev.isInterrupted = false;
+          ev.completionTime = ev.relSec + castDuration;
+          for (let j = i + 1; j < n; j++) {
+            if (!processed[j] && sortedEvList[j].type === 'cast' && sortedEvList[j].skill.id === ev.skill.id) {
+              processed[j] = true;
+              ev.completionTime = sortedEvList[j].relSec;
+              break;
+            }
+          }
           uniqueEvents.push(ev);
         }
       } else if (ev.type === 'cast') {
