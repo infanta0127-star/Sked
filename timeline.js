@@ -103,6 +103,9 @@ const TRACK_INFO_WIDTH = 180; // Width of the sticky left track info panel in pi
 //  - 一般 GCD（約 2.5 秒）對齊玩家設定的 GCD（可能因技速而異）
 //  - 短 GCD（< 1.8 秒，如各種彩繪 1.5 秒）照技能自身 recast
 function resolveGcdRecast(parsedRecast, standardGcd) {
+  // 充能 / 冷卻型 GCD（如發炎40秒、鑽頭20秒、迴轉飛鋸60秒、大宇宙180秒…）的 recast 欄位
+  // 記的是「冷卻時間」，但施放時仍只佔用一個一般 GCD，故超過合理 GCD 長度者一律以標準 GCD 計算。
+  if (parsedRecast > 4.5) return standardGcd;
   if (parsedRecast >= 3.0) return parsedRecast;
   if (parsedRecast >= 1.8) return standardGcd;
   return parsedRecast;
@@ -755,6 +758,26 @@ function setupEventListeners() {
       
       renderCompareTimeline();
       window.trackEvent('navigation', 'tab_switch', { target: '多人施法比較', code: 'compare' });
+    });
+  }
+
+  // MacroMate 巨集小幫手 入口按鈕
+  const macromateBtn = document.getElementById('macromate-btn');
+  if (macromateBtn) {
+    macromateBtn.addEventListener('click', async () => {
+      window.trackEvent?.('navigation', 'macromate_btn_click');
+      const ok = await window.showCustomConfirm(
+        '是否要前往巨集小幫手？',
+        '點擊確定將另開視窗',
+        '取消',
+        '確定'
+      );
+      if (ok) {
+        window.trackEvent?.('navigation', 'macromate_confirm');
+        window.open('https://infanta0127-star.github.io/MacroMate/', '_blank', 'noopener');
+      } else {
+        window.trackEvent?.('navigation', 'macromate_cancel');
+      }
     });
   }
 
@@ -1747,9 +1770,9 @@ function renderTimeline() {
     }
 
     const castTime = (skill.effectiveCast !== undefined) ? skill.effectiveCast : parseTimeToSeconds(skill.cast);
-    
-    // Recast locking mesh
-    if (skill.duration > castTime) {
+
+    // Recast locking mesh（中斷的施放只顯示開頭，不畫 recast 條）
+    if (skill.duration > castTime && !skill.isInterrupted) {
       const recastMesh = document.createElement('div');
       recastMesh.className = 'recast-lock-indicator';
       recastMesh.style.left = `${castTime * pixelsPerSecond}px`;
@@ -4009,7 +4032,7 @@ window.syncCustomDropdown = syncCustomDropdown;
 //   次版本 +1：新增功能（右側歸零）                1.0.1 → 1.1.0
 //   主版本 +1：破壞性大改版（右側歸零）            1.9.0 → 2.0.0
 // 註：header 的「(Patch 7.1)」是遊戲版本，與此無關，需在 index.html 手動維護。
-const APP_VERSION = '1.7.6';
+const APP_VERSION = '1.8.0';
 let updatePopupShown = false;
 
 // Global Toast Notification Helper
@@ -5320,7 +5343,7 @@ function renderCompareTimeline() {
       }
       
       const castTime = (skill.effectiveCast !== undefined) ? skill.effectiveCast : parseTimeToSeconds(skill.cast);
-      if (skill.duration > castTime) {
+      if (skill.duration > castTime && !skill.isInterrupted) {
         const recastMesh = document.createElement('div');
         recastMesh.className = 'recast-lock-indicator';
         recastMesh.style.left = `${castTime * pixelsPerSecond}px`;
