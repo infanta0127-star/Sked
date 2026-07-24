@@ -38,6 +38,9 @@
 - `content` 每一行 = 一條項目（換行分隔）。前端唯讀，寫入僅透過 Supabase Dashboard / service_role。
 - 每次發版 Bump 版本號時，務必主動提供一份對應新版本號的 SQL `INSERT INTO public.changelog (version, released_at, content) VALUES ('...', 'YYYY-MM-DD HH:MI+08', '...');` 語法給作者至 Supabase 執行。
 
-## 開發前務必先同步
+## 開發前務必先同步與權威狀態確認
 
-作者以多台電腦、多個 AI 代理交替開發。**每次開工前先 `git pull`**，避免落後遠端造成衝突。
+作者以多台電腦、多個 AI 代理、多個對話視窗交替開發。
+
+1. **開工前務必先 `git pull`**，避免落後遠端造成衝突。
+2. ⚠️ **禁止憑對話紀錄/摘要推算版本號與專案狀態**：在更新版本號（`version.json` / `timeline.js` 的 `APP_VERSION`）或修改關鍵指標前，**務必先執行 `git log` 或直接檢視實體檔案確認當前最新狀態**，絕不能單憑聊天紀錄或上下文摘要推算！
