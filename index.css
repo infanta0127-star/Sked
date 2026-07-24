@@ -1198,6 +1198,9 @@ body {
 .skill-tooltip {
   position: fixed;
   width: 280px;
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+  box-sizing: border-box;
   background-color: rgba(18, 22, 32, 0.95);
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 12px;

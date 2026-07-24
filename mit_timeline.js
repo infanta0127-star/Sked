@@ -1574,18 +1574,7 @@ function showMitTooltip(e, skill, jobName) {
         return;
     }
     
-    tooltip.style.display = 'block';
-    tooltip.style.left = `${e.clientX + 15}px`;
-    tooltip.style.top = `${e.clientY + 15}px`;
-    
-    const rect = tooltip.getBoundingClientRect();
-    if (rect.right > window.innerWidth) {
-        tooltip.style.left = `${e.clientX - rect.width - 15}px`;
-    }
-    if (rect.bottom > window.innerHeight) {
-        tooltip.style.top = `${e.clientY - rect.height - 15}px`;
-    }
-    
+    // Populate DOM content first to ensure correct rect dimensions
     tooltip.querySelector('.tooltip-icon').src = skill.icon || '';
     tooltip.querySelector('.tooltip-name').textContent = skill.name || '';
     
@@ -1608,6 +1597,27 @@ function showMitTooltip(e, skill, jobName) {
     tooltip.querySelector('.tooltip-description').textContent = skill.title || '無詳細效果說明。';
     
     const badge = tooltip.querySelector('.tooltip-badge');
+    badge.style.backgroundColor = classification === '能力' ? 'var(--color-ogcd)' : 'var(--color-gcd)';
+
+    tooltip.style.display = 'block';
+    
+    // Prevent tooltip from overflowing the viewport (Clamping with min top/left = 10px)
+    const rect = tooltip.getBoundingClientRect();
+    let targetLeft = e.clientX + 15;
+    let targetTop = e.clientY + 15;
+
+    if (targetLeft + rect.width > window.innerWidth - 10) {
+        targetLeft = e.clientX - rect.width - 15;
+    }
+    if (targetTop + rect.height > window.innerHeight - 10) {
+        targetTop = e.clientY - rect.height - 15;
+    }
+
+    targetLeft = Math.max(10, Math.min(targetLeft, window.innerWidth - rect.width - 10));
+    targetTop = Math.max(10, Math.min(targetTop, window.innerHeight - rect.height - 10));
+
+    tooltip.style.left = `${targetLeft}px`;
+    tooltip.style.top = `${targetTop}px`;
     badge.style.backgroundColor = classification === '能力' ? 'var(--color-ogcd)' : 'var(--color-gcd)';
 }
 
@@ -3591,6 +3601,11 @@ async function mitFflogsImport() {
                             filterExpression: "type = 'targetabilityupdate'"
                             limit: 10000
                         ) { data }
+                        firstDamageEvents: events(
+                            fightIDs: [$fightId]
+                            dataType: DamageDone
+                            limit: 1
+                        ) { data }
                         events(
                             fightIDs: [$fightId]
                             dataType: Casts
@@ -3613,13 +3628,17 @@ async function mitFflogsImport() {
             return;
         }
 
+        // Determine the base timestamp for alignment (DamageDone 第一筆打到王的時間 + 2ms 校正，對齊 FF Logs 網頁前台顯示)
+        const firstDamage = eventsData.reportData?.report?.firstDamageEvents?.data?.[0];
+        let alignmentStart = (firstDamage ? firstDamage.timestamp : fightStart) + 2;
+
         // Process Targetability (Downtime) Events
         const rawTargetability = eventsData.reportData?.report?.targetabilityEvents?.data || [];
         const downtimeIntervals = [];
         let downtimeStart = null;
 
         rawTargetability.forEach(ev => {
-            const relSec = Math.max(0, (ev.timestamp - fightStart) / 1000);
+            const relSec = Math.max(0, (ev.timestamp - alignmentStart) / 1000);
             const isUntargetable = (ev.targetable === 0 || ev.targetable === false || ev.targetable === '0');
             
             if (isUntargetable && downtimeStart === null) {
@@ -3636,7 +3655,7 @@ async function mitFflogsImport() {
         });
 
         if (downtimeStart !== null) {
-            const fightEndRel = Math.max(0, (fight.endTime - fightStart) / 1000);
+            const fightEndRel = Math.max(0, (fight.endTime - alignmentStart) / 1000);
             if (fightEndRel > downtimeStart + 0.5) {
                 downtimeIntervals.push({
                     start: Math.round(downtimeStart * 1000) / 1000,
@@ -3656,8 +3675,6 @@ async function mitFflogsImport() {
         const abilities = eventsData.reportData.report.masterData?.abilities || [];
         const abilityMap = {};
         abilities.forEach(a => { abilityMap[a.gameID] = a.name; });
-
-        let alignmentStart = fightStart;
 
         const parsedEvents = [];
         for (const ev of events) {

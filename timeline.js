@@ -1394,13 +1394,16 @@ function recalculateTimeline() {
       // 2. Position all oGCDs parented to this GCD block
       const myOgcds = ogcds.filter(o => o.parentGcdId === gcd.instanceId).sort((a, b) => a.relativeOffset - b.relativeOffset);
       
-      let currentLockEnd = gcd.startTime + parsedCast;
+      const castUnlockTime = (gcd.completionTime !== undefined && gcd.completionTime <= gcd.startTime + 0.1) 
+        ? gcd.completionTime 
+        : (gcd.startTime + parsedCast);
+      let currentLockEnd = Math.max(gcd.startTime, castUnlockTime);
       
       for (const ogcd of myOgcds) {
         ogcd.startTime = gcd.startTime + ogcd.relativeOffset;
         
-        if (ogcd.startTime < gcd.startTime + parsedCast) {
-          ogcd.startTime = gcd.startTime + parsedCast;
+        if (ogcd.startTime < castUnlockTime) {
+          ogcd.startTime = castUnlockTime;
           ogcd.relativeOffset = ogcd.startTime - gcd.startTime;
         }
         
@@ -3505,19 +3508,7 @@ function showTooltip(e, skill) {
     return;
   }
   
-  tooltip.style.display = 'block';
-  tooltip.style.left = `${e.clientX + 15}px`;
-  tooltip.style.top = `${e.clientY + 15}px`;
-  
-  // Prevent tooltip from overflowing the viewport
-  const rect = tooltip.getBoundingClientRect();
-  if (rect.right > window.innerWidth) {
-    tooltip.style.left = `${e.clientX - rect.width - 15}px`;
-  }
-  if (rect.bottom > window.innerHeight) {
-    tooltip.style.top = `${e.clientY - rect.height - 15}px`;
-  }
-  
+  // Populate DOM content first to ensure correct rect dimensions
   tooltip.querySelector('.tooltip-icon').src = skill.icon;
   tooltip.querySelector('.tooltip-name').textContent = skill.isInterrupted ? `⚠️ [施法中斷] ${skill.name}` : skill.name;
   tooltip.querySelector('.tooltip-badge').textContent = skill.isInterrupted ? '施法中斷' : skill.classification;
@@ -3557,6 +3548,26 @@ function showTooltip(e, skill) {
     if (activeHoverGuide) activeHoverGuide.style.display = 'none';
     if (tooltipTime) tooltipTime.style.display = 'none';
   }
+
+  tooltip.style.display = 'block';
+
+  // Prevent tooltip from overflowing the viewport (Clamping with min top/left = 10px)
+  const rect = tooltip.getBoundingClientRect();
+  let targetLeft = e.clientX + 15;
+  let targetTop = e.clientY + 15;
+
+  if (targetLeft + rect.width > window.innerWidth - 10) {
+    targetLeft = e.clientX - rect.width - 15;
+  }
+  if (targetTop + rect.height > window.innerHeight - 10) {
+    targetTop = e.clientY - rect.height - 15;
+  }
+
+  targetLeft = Math.max(10, Math.min(targetLeft, window.innerWidth - rect.width - 10));
+  targetTop = Math.max(10, Math.min(targetTop, window.innerHeight - rect.height - 10));
+
+  tooltip.style.left = `${targetLeft}px`;
+  tooltip.style.top = `${targetTop}px`;
 }
 
 function hideTooltip() {
@@ -4030,7 +4041,7 @@ window.syncCustomDropdown = syncCustomDropdown;
 //   次版本 +1：新增功能（右側歸零）                1.0.1 → 1.1.0
 //   主版本 +1：破壞性大改版（右側歸零）            1.9.0 → 2.0.0
 // 註：header 的「(Patch 7.1)」是遊戲版本，與此無關，需在 index.html 手動維護。
-const APP_VERSION = '1.8.5';
+const APP_VERSION = '1.8.6';
 let updatePopupShown = false;
 
 // Global Toast Notification Helper
@@ -4561,6 +4572,11 @@ async function fflogsApiImport() {
               filterExpression: "type = 'targetabilityupdate'"
               limit: 10000
             ) { data }
+            firstDamageEvents: events(
+              fightIDs: [$fightId]
+              dataType: DamageDone
+              limit: 1
+            ) { data }
             events(
               fightIDs: [$fightId]
               dataType: Casts
@@ -4585,13 +4601,17 @@ async function fflogsApiImport() {
       return;
     }
 
+    // Determine the base timestamp for alignment (DamageDone 第一筆打到王的時間 + 2ms 校正，對齊 FF Logs 網頁前台顯示)
+    const firstDamage = data.reportData?.report?.firstDamageEvents?.data?.[0];
+    let alignmentStart = (firstDamage ? firstDamage.timestamp : fightStart) + 2;
+
     // Process Targetability (Downtime) Events
     const rawTargetability = data.reportData?.report?.targetabilityEvents?.data || [];
     const downtimeIntervals = [];
     let downtimeStart = null;
 
     rawTargetability.forEach(ev => {
-      const relSec = Math.max(0, (ev.timestamp - fightStart) / 1000);
+      const relSec = Math.max(0, (ev.timestamp - alignmentStart) / 1000);
       const isUntargetable = (ev.targetable === 0 || ev.targetable === false || ev.targetable === '0');
       
       if (isUntargetable && downtimeStart === null) {
@@ -4608,7 +4628,7 @@ async function fflogsApiImport() {
     });
 
     if (downtimeStart !== null) {
-      const fightEndRel = Math.max(0, (fight.endTime - fightStart) / 1000);
+      const fightEndRel = Math.max(0, (fight.endTime - alignmentStart) / 1000);
       if (fightEndRel > downtimeStart + 0.5) {
         downtimeIntervals.push({
           start: Math.round(downtimeStart * 1000) / 1000,
@@ -4633,9 +4653,6 @@ async function fflogsApiImport() {
     abilities.forEach(a => {
       abilityMap[a.gameID] = a.name;
     });
-
-    // Determine the base timestamp for alignment
-    let alignmentStart = fightStart;
 
     // Match skills to database
     const targetJobData = activeTab === 'compare' ? skillsDatabase[selectedPlayer.type.toLowerCase()] : skillsDatabase[currentJobId];
@@ -5012,13 +5029,16 @@ function recalculatePlayerTimeline(player) {
     
     const myOgcds = ogcds.filter(o => o.parentGcdId === gcd.instanceId).sort((a, b) => a.relativeOffset - b.relativeOffset);
     
-    let currentLockEnd = gcd.startTime + parsedCast;
+    const castUnlockTime = (gcd.completionTime !== undefined && gcd.completionTime <= gcd.startTime + 0.1) 
+      ? gcd.completionTime 
+      : (gcd.startTime + parsedCast);
+    let currentLockEnd = Math.max(gcd.startTime, castUnlockTime);
     
     for (const ogcd of myOgcds) {
       ogcd.startTime = gcd.startTime + ogcd.relativeOffset;
       
-      if (ogcd.startTime < gcd.startTime + parsedCast) {
-        ogcd.startTime = gcd.startTime + parsedCast;
+      if (ogcd.startTime < castUnlockTime) {
+        ogcd.startTime = castUnlockTime;
         ogcd.relativeOffset = ogcd.startTime - gcd.startTime;
       }
       
