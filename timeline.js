@@ -1815,7 +1815,7 @@ function renderTimeline() {
     
     // Tooltip
     const originalSkill = skillsDatabase[currentJobId].skills.find(s => s.id === skill.skillId);
-    const tooltipSkill = originalSkill ? { ...originalSkill, startTime: skill.startTime } : skill;
+    const tooltipSkill = originalSkill ? { ...originalSkill, startTime: skill.startTime, isInterrupted: !!skill.isInterrupted } : skill;
     el.addEventListener('mousemove', (e) => showTooltip(e, tooltipSkill));
     el.addEventListener('mouseleave', hideTooltip);
     
@@ -1861,7 +1861,7 @@ function renderTimeline() {
     
     // Tooltip
     const originalSkill = skillsDatabase[currentJobId].skills.find(s => s.id === skill.skillId);
-    const tooltipSkill = originalSkill ? { ...originalSkill, startTime: skill.startTime } : skill;
+    const tooltipSkill = originalSkill ? { ...originalSkill, startTime: skill.startTime, isInterrupted: !!skill.isInterrupted } : skill;
     el.addEventListener('mousemove', (e) => showTooltip(e, tooltipSkill));
     el.addEventListener('mouseleave', hideTooltip);
     
@@ -4032,7 +4032,7 @@ window.syncCustomDropdown = syncCustomDropdown;
 //   次版本 +1：新增功能（右側歸零）                1.0.1 → 1.1.0
 //   主版本 +1：破壞性大改版（右側歸零）            1.9.0 → 2.0.0
 // 註：header 的「(Patch 7.1)」是遊戲版本，與此無關，需在 index.html 手動維護。
-const APP_VERSION = '1.8.2';
+const APP_VERSION = '1.8.3';
 let updatePopupShown = false;
 
 // Global Toast Notification Helper

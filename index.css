@@ -860,15 +860,20 @@ body {
   border: 2px dashed #f87171 !important;
   opacity: 0.8;
   filter: saturate(70%);
-  position: relative;
+  /* 沿用 .placed-skill / .ogcd-pill 的 position: absolute（時間軸定位用），
+     絕對定位本身即可作為「？」徽章的定位基準，切勿覆寫成 relative，否則會脫離
+     時間軸定位、往下堆疊到錯誤位置。 */
+  /* 讓左上角的「？」徽章可以突出框外、不被裁切 */
+  overflow: visible;
 }
 
-/* 中斷的 GCD 只顯示開頭一小段（不佔滿整個 GCD），並疊到最上層避免被下一招蓋住 */
+/* 中斷的 GCD 只顯示開頭一小段（不佔滿整個 GCD）。z-index 需高於同軌其他技能(auto=0)
+   以免被蓋住，但必須低於左側固定欄 .track-info(z-index:5)，否則捲動時會蓋到左欄。 */
 .placed-skill.interrupted-skill {
   width: 42px !important;
   min-width: 42px;
   padding-right: 4px;
-  z-index: 6;
+  z-index: 4;
 }
 
 .placed-skill.interrupted-skill .placed-skill-name {
@@ -890,8 +895,9 @@ body {
   align-items: center;
   justify-content: center;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.6);
-  z-index: 15;
-  pointer-events: none;
+  z-index: 30;
+  pointer-events: auto;
+  cursor: help;
   border: 1px solid #fff;
 }
 
