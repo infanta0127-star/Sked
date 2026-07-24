@@ -1676,6 +1676,7 @@ function renderMitPlayerTracks() {
 }
 
 function renderMitTimeline() {
+    window.isDraggingInProgress = false;
     const pps = getPixelsPerSecond();
     
     // Ensure grid container exists
@@ -1924,6 +1925,7 @@ function setupMitEventListeners() {
     mitDragTrash.addEventListener('dragover', (e) => e.preventDefault());
     mitDragTrash.addEventListener('drop', (e) => {
         e.preventDefault();
+        window.isDraggingInProgress = false;
         try {
             const dragData = JSON.parse(e.dataTransfer.getData('text/plain'));
             if (dragData.sourceType === 'timeline') {
@@ -2195,7 +2197,9 @@ function handleMitDrop(e, trackContent) {
                 renderMitTimeline();
             }
         }
+        window.isDraggingInProgress = false;
     } catch (err) {
+        window.isDraggingInProgress = false;
         console.error('Error handling drop on mitigation track:', err);
     }
 }

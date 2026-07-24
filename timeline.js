@@ -687,13 +687,17 @@ async function loadDuty(dutyFile, forceScroll = true) {
 
 // 2. Setup Event Listeners
 function setupEventListeners() {
-  // Global dragstart and dragend listeners to manage dragging status
+  // Global dragstart, dragend, and drop listeners to manage dragging status
   document.addEventListener('dragstart', () => {
     window.isDraggingInProgress = true;
     const tooltipEl = document.getElementById('skill-tooltip');
     if (tooltipEl) tooltipEl.style.display = 'none';
   });
   document.addEventListener('dragend', () => {
+    window.isDraggingInProgress = false;
+    draggedItem = null;
+  });
+  document.addEventListener('drop', () => {
     window.isDraggingInProgress = false;
     draggedItem = null;
   });
@@ -1328,6 +1332,10 @@ function calculateGcdEffectiveCastTimes(gcds, ogcds) {
     .map(o => ({ start: o.startTime, end: o.startTime + 15.0, charges: 3 }));
 
   for (const gcd of gcds) {
+    if (gcd.onlyEndTime) {
+      gcd.effectiveCast = 0;
+      continue;
+    }
     const rawCast = parseTimeToSeconds(gcd.cast);
     if (rawCast <= 0) {
       gcd.effectiveCast = 0;
@@ -1387,8 +1395,8 @@ function recalculateTimeline() {
       gcd.startTime = Math.round(gcd.startTime * 1000) / 1000;
       
       const parsedRecast = parseTimeToSeconds(gcd.recast);
-      const parsedCast = (gcd.effectiveCast !== undefined) ? gcd.effectiveCast : parseTimeToSeconds(gcd.cast);
       const recastVal = resolveGcdRecast(parsedRecast, timelineGCDDuration);
+      const parsedCast = (gcd.effectiveCast !== undefined) ? gcd.effectiveCast : parseTimeToSeconds(gcd.cast);
       gcd.duration = Math.max(parsedCast, recastVal);
       
       // 2. Position all oGCDs parented to this GCD block
@@ -1464,6 +1472,7 @@ function recalculateTimeline() {
 
 // 7. Core Rendering Engine
 function renderTimeline() {
+  window.isDraggingInProgress = false;
   document.documentElement.style.setProperty('--pixels-per-second', `${pixelsPerSecond}px`);
   
   // Update the Add Track button state
@@ -1677,7 +1686,7 @@ function renderTimeline() {
     
     // Drag handlers
     el.addEventListener('dragstart', (e) => {
-      isDraggingInProgress = true;
+      window.isDraggingInProgress = true;
       hideTooltip();
       draggedItem = { source: 'timeline', instanceId: mech.id, type: 'mechanic' };
       e.dataTransfer.setData('text/plain', mech.id);
@@ -1809,7 +1818,7 @@ function renderTimeline() {
     
     // Drag handlers
     el.addEventListener('dragstart', (e) => {
-      isDraggingInProgress = true;
+      window.isDraggingInProgress = true;
       hideTooltip();
       draggedItem = { source: 'timeline', instanceId: skill.instanceId, type: 'skill' };
       e.dataTransfer.setData('text/plain', skill.instanceId);
@@ -1817,7 +1826,7 @@ function renderTimeline() {
     
     // Tooltip
     const originalSkill = skillsDatabase[currentJobId].skills.find(s => s.id === skill.skillId);
-    const tooltipSkill = originalSkill ? { ...originalSkill, startTime: skill.startTime, isInterrupted: !!skill.isInterrupted } : skill;
+    const tooltipSkill = originalSkill ? { ...originalSkill, startTime: skill.startTime, completionTime: skill.completionTime, cast: skill.cast, effectiveCast: skill.effectiveCast, onlyEndTime: skill.onlyEndTime, isInterrupted: !!skill.isInterrupted } : skill;
     el.addEventListener('mousemove', (e) => showTooltip(e, tooltipSkill));
     el.addEventListener('mouseleave', hideTooltip);
     
@@ -1854,7 +1863,7 @@ function renderTimeline() {
     
     // Drag handlers
     el.addEventListener('dragstart', (e) => {
-      isDraggingInProgress = true;
+      window.isDraggingInProgress = true;
       hideTooltip();
       draggedItem = { source: 'timeline', instanceId: skill.instanceId, type: 'skill' };
       e.dataTransfer.setData('text/plain', skill.instanceId);
@@ -1862,7 +1871,7 @@ function renderTimeline() {
     
     // Tooltip
     const originalSkill = skillsDatabase[currentJobId].skills.find(s => s.id === skill.skillId);
-    const tooltipSkill = originalSkill ? { ...originalSkill, startTime: skill.startTime, isInterrupted: !!skill.isInterrupted } : skill;
+    const tooltipSkill = originalSkill ? { ...originalSkill, startTime: skill.startTime, completionTime: skill.completionTime, cast: skill.cast, effectiveCast: skill.effectiveCast, onlyEndTime: skill.onlyEndTime, isInterrupted: !!skill.isInterrupted } : skill;
     el.addEventListener('mousemove', (e) => showTooltip(e, tooltipSkill));
     el.addEventListener('mouseleave', hideTooltip);
     
@@ -1979,6 +1988,8 @@ function handleDrop(e, targetTrackType, targetTimelineId = 1) {
     }
   }
   
+  window.isDraggingInProgress = false;
+  draggedItem = null;
   recalculateTimeline();
   renderTimeline();
   autoSave();
@@ -1986,7 +1997,7 @@ function handleDrop(e, targetTrackType, targetTimelineId = 1) {
 
 // Drop onto Trash Bin
 function handleTrashDrop(e) {
-  if (draggedItem.source === 'timeline') {
+  if (draggedItem && draggedItem.source === 'timeline') {
     pushPersonalUndoState();
     if (draggedItem.type === 'skill') {
       timelineSkills = timelineSkills.filter(s => s.instanceId !== draggedItem.instanceId);
@@ -2000,9 +2011,14 @@ function handleTrashDrop(e) {
       bossMechanics = bossMechanics.filter(m => m.id !== draggedItem.instanceId);
     }
     
+    window.isDraggingInProgress = false;
+    draggedItem = null;
     recalculateTimeline();
     renderTimeline();
     autoSave();
+  } else {
+    window.isDraggingInProgress = false;
+    draggedItem = null;
   }
 }
 
@@ -3082,7 +3098,9 @@ function importFflogsEvents(text, filterPlayer, clearTimeline, targetTimelineId 
           // Yes, already recorded when it started casting, skip
           return;
         }
-        // No starts-casting event found, we insert it starting at (ev.time - castTime)
+        // No starts-casting event found, we insert it starting at ev.time (end time)
+        const gcdOccupancy = resolveGcdRecast(parseTimeToSeconds(skill.recast), timelineGCDDuration);
+        const remainingGcdDuration = Math.max(0.6, gcdOccupancy - castTime);
         finalSkills.push({
           skillId: skill.id,
           name: skill.name,
@@ -3090,14 +3108,16 @@ function importFflogsEvents(text, filterPlayer, clearTimeline, targetTimelineId 
           classification: skill.classification,
           cast: skill.cast,
           recast: skill.recast,
-          startTime: ev.time - castTime,
+          startTime: ev.time,
           completionTime: ev.time,
-          duration: Math.max(castTime, isGcd ? timelineGCDDuration : 0.6),
+          effectiveCast: 0,
+          duration: isGcd ? remainingGcdDuration : 0.6,
           track: isGcd ? 'gcd' : 'ogcd',
           isGcd: isGcd,
           parentGcdId: null,
           relativeOffset: 0,
-          isStartCast: false
+          isStartCast: false,
+          onlyEndTime: true
         });
       } else {
         // Instant cast
@@ -3542,7 +3562,24 @@ function showTooltip(e, skill) {
     if (tooltipTime && tooltipTimeVal) {
       tooltipTime.style.display = 'block';
       const playerSuffix = skill.playerName ? ` [${skill.playerName}]` : '';
-      tooltipTimeVal.textContent = `開始時間：${formatTime(skill.startTime)}${playerSuffix}`;
+
+      const rawCast = parseTimeToSeconds(skill.cast);
+      const effectiveCast = (skill.effectiveCast !== undefined) ? skill.effectiveCast : rawCast;
+
+      let castStart = skill.startTime;
+      let castEnd = skill.startTime;
+
+      if (typeof skill.completionTime === 'number' && skill.completionTime > skill.startTime) {
+        castEnd = skill.completionTime;
+      } else if (effectiveCast > 0) {
+        castEnd = skill.startTime + effectiveCast;
+      }
+
+      if (castStart !== castEnd) {
+        tooltipTimeVal.textContent = `開始：${formatTime(castStart)} | 結束：${formatTime(castEnd)}${playerSuffix}`;
+      } else {
+        tooltipTimeVal.textContent = `時間：${formatTime(castStart)}${playerSuffix}`;
+      }
     }
   } else {
     if (activeHoverGuide) activeHoverGuide.style.display = 'none';
@@ -4041,7 +4078,7 @@ window.syncCustomDropdown = syncCustomDropdown;
 //   次版本 +1：新增功能（右側歸零）                1.0.1 → 1.1.0
 //   主版本 +1：破壞性大改版（右側歸零）            1.9.0 → 2.0.0
 // 註：header 的「(Patch 7.1)」是遊戲版本，與此無關，需在 index.html 手動維護。
-const APP_VERSION = '1.8.6';
+const APP_VERSION = '1.9.0';
 let updatePopupShown = false;
 
 // Global Toast Notification Helper
@@ -4577,6 +4614,12 @@ async function fflogsApiImport() {
               dataType: DamageDone
               limit: 1
             ) { data }
+            firstRealDamageEvents: events(
+              fightIDs: [$fightId]
+              dataType: All
+              filterExpression: "type in ('damage', 'limitbreakupdate')"
+              limit: 1
+            ) { data }
             events(
               fightIDs: [$fightId]
               dataType: Casts
@@ -4601,9 +4644,21 @@ async function fflogsApiImport() {
       return;
     }
 
-    // Determine the base timestamp for alignment (DamageDone 第一筆打到王的時間 + 2ms 校正，對齊 FF Logs 網頁前台顯示)
+    // Build ability ID -> name map
+    const abilities = data.reportData.report.masterData?.abilities || [];
+    const abilityMap = {};
+    abilities.forEach(a => {
+      abilityMap[a.gameID] = a.name;
+    });
+
+    // Match skills to database
+    const targetJobData = activeTab === 'compare' ? skillsDatabase[selectedPlayer.type.toLowerCase()] : skillsDatabase[currentJobId];
+    if (!targetJobData) throw new Error('找不到該玩家職業的技能資料');
+
+    // Determine the base timestamp for alignment (對齊 FFLogs 網頁前台 00:00.000 開怪線：優先取 limitbreakupdate / real damage 時間戳)
+    const firstRealDamage = data.reportData?.report?.firstRealDamageEvents?.data?.[0];
     const firstDamage = data.reportData?.report?.firstDamageEvents?.data?.[0];
-    let alignmentStart = (firstDamage ? firstDamage.timestamp : fightStart) + 2;
+    const alignmentStart = firstRealDamage ? firstRealDamage.timestamp : (firstDamage ? firstDamage.timestamp : fightStart);
 
     // Process Targetability (Downtime) Events
     const rawTargetability = data.reportData?.report?.targetabilityEvents?.data || [];
@@ -4646,17 +4701,6 @@ async function fflogsApiImport() {
       const selectedFightTxt = selectedFightSel && selectedFightSel.selectedIndex !== -1 ? selectedFightSel.options[selectedFightSel.selectedIndex].text : '';
       checkAndReportDutyDowntime(currentDutyKey, selectedFightTxt, fightId, downtimeIntervals, urlInput);
     }
-
-    // Build ability ID -> name map
-    const abilities = data.reportData.report.masterData?.abilities || [];
-    const abilityMap = {};
-    abilities.forEach(a => {
-      abilityMap[a.gameID] = a.name;
-    });
-
-    // Match skills to database
-    const targetJobData = activeTab === 'compare' ? skillsDatabase[selectedPlayer.type.toLowerCase()] : skillsDatabase[currentJobId];
-    if (!targetJobData) throw new Error('找不到該玩家職業的技能資料');
 
     const parsedEvents = [];
     for (const ev of events) {
@@ -4717,6 +4761,19 @@ async function fflogsApiImport() {
     const n = sortedEvList.length;
     const processed = new Array(n).fill(false);
 
+    // Track instant cast buffs to handle spells under Lightspeed, Swiftcast, or Triplecast
+    const lightspeedIntervals = sortedEvList
+      .filter(e => (e.skill.id && e.skill.id.includes('lightspeed')) || (e.skill.name && e.skill.name.includes('光速')))
+      .map(e => ({ start: e.relSec, end: e.relSec + 15.0 }));
+
+    const swiftcastIntervals = sortedEvList
+      .filter(e => (e.skill.id && e.skill.id.includes('swiftcast')) || (e.skill.name && e.skill.name.includes('即刻詠唱')))
+      .map(e => ({ start: e.relSec, end: e.relSec + 10.0, used: false }));
+
+    const triplecastIntervals = sortedEvList
+      .filter(e => (e.skill.id && e.skill.id.includes('triplecast')) || (e.skill.name && e.skill.name.includes('三重詠唱')))
+      .map(e => ({ start: e.relSec, end: e.relSec + 15.0, charges: 3 }));
+
     for (let i = 0; i < n; i++) {
       if (processed[i]) continue;
       const ev = sortedEvList[i];
@@ -4744,6 +4801,24 @@ async function fflogsApiImport() {
       } else if (ev.type === 'cast') {
         ev.completionTime = ev.relSec;
         ev.isInterrupted = false;
+        
+        let calcCast = castDuration;
+        if (calcCast > 0) {
+          if (lightspeedIntervals.some(ls => ev.relSec >= (ls.start - 0.05) && ev.relSec < ls.end)) {
+            calcCast = Math.max(0, calcCast - 2.5);
+          }
+          if (calcCast > 0) {
+            const tc = triplecastIntervals.find(t => t.charges > 0 && ev.relSec >= (t.start - 0.05) && ev.relSec < t.end);
+            if (tc) { calcCast = 0; tc.charges--; }
+          }
+          if (calcCast > 0) {
+            const sc = swiftcastIntervals.find(s => !s.used && ev.relSec >= (s.start - 0.05) && ev.relSec < s.end);
+            if (sc) { calcCast = 0; sc.used = true; }
+          }
+        }
+        
+        ev.effectiveCast = calcCast;
+        ev.onlyEndTime = (calcCast > 0);
         uniqueEvents.push(ev);
       }
     }
@@ -4753,9 +4828,13 @@ async function fflogsApiImport() {
     uniqueEvents.forEach(pe => {
       const isGcd = (pe.skill.classification === '戰技' || pe.skill.classification === '魔法');
       const track = isGcd ? 'gcd' : 'ogcd';
-      const castDur = parseTimeToSeconds(pe.skill.cast);
+      const castDur = pe.effectiveCast !== undefined ? pe.effectiveCast : parseTimeToSeconds(pe.skill.cast);
       const gcdDur = activeTab === 'compare' ? 2.50 : timelineGCDDuration;
       const gcdOccupancy = resolveGcdRecast(parseTimeToSeconds(pe.skill.recast), gcdDur);
+      
+      const isPrecastCompletionOnly = pe.onlyEndTime && castDur > 0;
+      const startTime = isPrecastCompletionOnly ? (pe.relSec - castDur) : pe.relSec;
+      const completionTime = pe.completionTime || pe.relSec;
       const duration = Math.max(castDur, isGcd ? gcdOccupancy : 0.6);
 
       rawSkills.push({
@@ -4765,12 +4844,14 @@ async function fflogsApiImport() {
         classification: pe.skill.classification,
         cast: pe.skill.cast,
         recast: pe.skill.recast,
-        startTime: pe.relSec,
-        completionTime: pe.completionTime,
+        startTime: Math.round(startTime * 1000) / 1000,
+        completionTime: Math.round(completionTime * 1000) / 1000,
+        effectiveCast: castDur,
         duration: duration,
         track: track,
         isGcd: isGcd,
         isInterrupted: !!pe.isInterrupted,
+        onlyEndTime: !!pe.onlyEndTime,
         parentGcdId: null,
         relativeOffset: 0
       });
@@ -4838,7 +4919,10 @@ async function fflogsApiImport() {
           relativeOffset: Math.round(s.relativeOffset * 1000) / 1000,
           clip: 0,
           idle: 0,
-          isInterrupted: !!s.isInterrupted
+          isInterrupted: !!s.isInterrupted,
+          completionTime: s.completionTime,
+          effectiveCast: s.effectiveCast,
+          onlyEndTime: !!s.onlyEndTime
         }))
       };
 
@@ -4882,7 +4966,10 @@ async function fflogsApiImport() {
           clip: 0,
           idle: 0,
           isInterrupted: !!s.isInterrupted,
-          timelineId: targetTimelineId
+          timelineId: targetTimelineId,
+          completionTime: s.completionTime,
+          effectiveCast: s.effectiveCast,
+          onlyEndTime: !!s.onlyEndTime
         });
       });
 
@@ -5023,9 +5110,9 @@ function recalculatePlayerTimeline(player) {
     gcd.startTime = Math.round(gcd.startTime * 1000) / 1000;
     
     const parsedRecast = parseTimeToSeconds(gcd.recast);
-    const parsedCast = (gcd.effectiveCast !== undefined) ? gcd.effectiveCast : parseTimeToSeconds(gcd.cast);
     const recastVal = resolveGcdRecast(parsedRecast, playerGcdDuration);
-    gcd.duration = Math.max(parsedCast, recastVal);
+      const parsedCast = (gcd.effectiveCast !== undefined) ? gcd.effectiveCast : parseTimeToSeconds(gcd.cast);
+      gcd.duration = Math.max(parsedCast, recastVal);
     
     const myOgcds = ogcds.filter(o => o.parentGcdId === gcd.instanceId).sort((a, b) => a.relativeOffset - b.relativeOffset);
     
@@ -5401,7 +5488,7 @@ function renderCompareTimeline() {
       }
       
       const originalSkill = skillsDatabase[p.jobId]?.skills.find(s => s.id === skill.skillId) || skill;
-      const tooltipSkill = { ...originalSkill, startTime: skill.startTime, playerName: p.name, isInterrupted: !!skill.isInterrupted };
+      const tooltipSkill = { ...originalSkill, startTime: skill.startTime, completionTime: skill.completionTime, cast: skill.cast, effectiveCast: skill.effectiveCast, onlyEndTime: skill.onlyEndTime, playerName: p.name, isInterrupted: !!skill.isInterrupted };
       el.addEventListener('mousemove', (e) => showTooltip(e, tooltipSkill));
       el.addEventListener('mouseleave', hideTooltip);
       
@@ -5432,7 +5519,7 @@ function renderCompareTimeline() {
       `;
       
       const originalSkill = skillsDatabase[p.jobId]?.skills.find(s => s.id === skill.skillId) || skill;
-      const tooltipSkill = { ...originalSkill, startTime: skill.startTime, playerName: p.name, isInterrupted: !!skill.isInterrupted };
+      const tooltipSkill = { ...originalSkill, startTime: skill.startTime, completionTime: skill.completionTime, cast: skill.cast, effectiveCast: skill.effectiveCast, onlyEndTime: skill.onlyEndTime, playerName: p.name, isInterrupted: !!skill.isInterrupted };
       el.addEventListener('mousemove', (e) => showTooltip(e, tooltipSkill));
       el.addEventListener('mouseleave', hideTooltip);
       
