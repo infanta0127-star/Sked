@@ -457,10 +457,21 @@ if (document.readyState === 'loading') {
 }
 
 // Helper: Parse time string to seconds
-function parseTimeToSeconds(timeStr) {
-  if (!timeStr) return 0;
-  if (timeStr.includes('即時')) return 0;
-  const match = timeStr.match(/([0-9.]+)\s*秒/);
+function parseTimeToSeconds(val) {
+  if (val === null || val === undefined) return 0;
+  if (typeof val === 'number') return val;
+  const str = String(val).trim();
+  if (!str) return 0;
+
+  // Handles compound formats like "即時 / 30秒" or "1.5秒 / 2.5秒"
+  if (str.includes('/')) {
+    const parts = str.split('/');
+    const recastPart = parts[1] || parts[0];
+    const match = recastPart.match(/([0-9.]+)/);
+    return match ? parseFloat(match[1]) : 0;
+  }
+
+  const match = str.match(/([0-9.]+)/);
   return match ? parseFloat(match[1]) : 0;
 }
 
@@ -1468,10 +1479,63 @@ function recalculateTimeline() {
       ogcd.startTime = Math.round(ogcd.startTime * 1000) / 1000;
     }
   }
+
+  detectDelayedSkills(timelineSkills);
+}
+
+// Helper: Detect skill casting delay (recast > 5s and delay >= 1.0s)
+function detectDelayedSkills(skillsList) {
+  if (!skillsList || skillsList.length === 0) return;
+  
+  const sorted = skillsList.slice().sort((a, b) => a.startTime - b.startTime);
+  const lastCastMap = {};
+
+  // Build global skillId -> recast lookup map
+  const globalRecastMap = {};
+  if (typeof skillsDatabase !== 'undefined') {
+    Object.values(skillsDatabase).forEach(job => {
+      if (job && job.skills) {
+        job.skills.forEach(s => {
+          if (s.id && s.recast) {
+            globalRecastMap[s.id] = s.recast;
+          }
+        });
+      }
+    });
+  }
+
+  sorted.forEach(skill => {
+    skill.isDelayed = false;
+    skill.delaySeconds = 0;
+    skill.lastCastTime = null;
+
+    const rawRecast = skill.recast || globalRecastMap[skill.skillId];
+    const recastSec = parseTimeToSeconds(rawRecast);
+
+    if (recastSec > 5.0 && !skill.isInterrupted) {
+      const key = (skill.timelineId || 1) + '_' + skill.skillId;
+      const lastSkill = lastCastMap[key];
+
+      if (lastSkill) {
+        const delta = skill.startTime - lastSkill.startTime;
+        const delay = delta - recastSec;
+        if (delay >= 0.1) {
+          skill.isDelayed = true;
+          let delaySec = Math.round(delay * 10) / 10;
+          if (delaySec === 0) delaySec = Math.round(delay * 100) / 100;
+          skill.delaySeconds = delaySec;
+          skill.lastCastTime = lastSkill.startTime;
+        }
+      }
+
+      lastCastMap[key] = skill;
+    }
+  });
 }
 
 // 7. Core Rendering Engine
 function renderTimeline() {
+  detectDelayedSkills(timelineSkills);
   window.isDraggingInProgress = false;
   document.documentElement.style.setProperty('--pixels-per-second', `${pixelsPerSecond}px`);
   
@@ -1778,6 +1842,12 @@ function renderTimeline() {
       badge.className = 'interrupted-badge';
       badge.textContent = '!';
       el.appendChild(badge);
+    } else if (skill.isDelayed) {
+      el.classList.add('delayed-skill');
+      const badge = document.createElement('span');
+      badge.className = 'delayed-badge';
+      badge.textContent = '!';
+      el.appendChild(badge);
     }
 
     const castTime = (skill.effectiveCast !== undefined) ? skill.effectiveCast : parseTimeToSeconds(skill.cast);
@@ -1826,7 +1896,7 @@ function renderTimeline() {
     
     // Tooltip
     const originalSkill = skillsDatabase[currentJobId].skills.find(s => s.id === skill.skillId);
-    const tooltipSkill = originalSkill ? { ...originalSkill, startTime: skill.startTime, completionTime: skill.completionTime, cast: skill.cast, effectiveCast: skill.effectiveCast, onlyEndTime: skill.onlyEndTime, isInterrupted: !!skill.isInterrupted } : skill;
+    const tooltipSkill = originalSkill ? { ...originalSkill, startTime: skill.startTime, completionTime: skill.completionTime, cast: skill.cast, recast: skill.recast, effectiveCast: skill.effectiveCast, onlyEndTime: skill.onlyEndTime, isInterrupted: !!skill.isInterrupted, isDelayed: !!skill.isDelayed, delaySeconds: skill.delaySeconds, lastCastTime: skill.lastCastTime } : skill;
     el.addEventListener('mousemove', (e) => showTooltip(e, tooltipSkill));
     el.addEventListener('mouseleave', hideTooltip);
     
@@ -1859,6 +1929,12 @@ function renderTimeline() {
       badge.className = 'interrupted-badge';
       badge.textContent = '!';
       el.appendChild(badge);
+    } else if (skill.isDelayed) {
+      el.classList.add('delayed-skill');
+      const badge = document.createElement('span');
+      badge.className = 'delayed-badge';
+      badge.textContent = '!';
+      el.appendChild(badge);
     }
     
     // Drag handlers
@@ -1871,7 +1947,7 @@ function renderTimeline() {
     
     // Tooltip
     const originalSkill = skillsDatabase[currentJobId].skills.find(s => s.id === skill.skillId);
-    const tooltipSkill = originalSkill ? { ...originalSkill, startTime: skill.startTime, completionTime: skill.completionTime, cast: skill.cast, effectiveCast: skill.effectiveCast, onlyEndTime: skill.onlyEndTime, isInterrupted: !!skill.isInterrupted } : skill;
+    const tooltipSkill = originalSkill ? { ...originalSkill, startTime: skill.startTime, completionTime: skill.completionTime, cast: skill.cast, recast: skill.recast, effectiveCast: skill.effectiveCast, onlyEndTime: skill.onlyEndTime, isInterrupted: !!skill.isInterrupted, isDelayed: !!skill.isDelayed, delaySeconds: skill.delaySeconds, lastCastTime: skill.lastCastTime } : skill;
     el.addEventListener('mousemove', (e) => showTooltip(e, tooltipSkill));
     el.addEventListener('mouseleave', hideTooltip);
     
@@ -3530,19 +3606,51 @@ function showTooltip(e, skill) {
   
   // Populate DOM content first to ensure correct rect dimensions
   tooltip.querySelector('.tooltip-icon').src = skill.icon;
-  tooltip.querySelector('.tooltip-name').textContent = skill.isInterrupted ? `⚠️ [施法中斷] ${skill.name}` : skill.name;
-  tooltip.querySelector('.tooltip-badge').textContent = skill.isInterrupted ? '施法中斷' : skill.classification;
+  
+  let titleName = skill.name;
+  if (skill.isInterrupted) {
+    titleName = `⚠️ [施法中斷] ${skill.name}`;
+  } else if (skill.isDelayed) {
+    titleName = `⚠️ [延遲施放] ${skill.name}`;
+  }
+  tooltip.querySelector('.tooltip-name').textContent = titleName;
+
+  const badge = tooltip.querySelector('.tooltip-badge');
+  if (skill.isInterrupted) {
+    badge.textContent = '施法中斷';
+    badge.style.backgroundColor = '#ef4444';
+  } else if (skill.isDelayed) {
+    badge.textContent = '延遲施放';
+    badge.style.backgroundColor = '#f59e0b';
+  } else {
+    badge.textContent = skill.classification;
+    badge.style.backgroundColor = (skill.classification === '能力' ? 'var(--color-ogcd)' : 'var(--color-gcd)');
+  }
+
   tooltip.querySelector('.tooltip-lv').textContent = `Lv.${skill.level || '?'}`;
   const mpLabel = tooltip.querySelector('#tooltip-mp-label');
   if (mpLabel) mpLabel.textContent = '消費 MP:';
   tooltip.querySelector('.tooltip-mp').textContent = skill.cost || '-';
   tooltip.querySelector('.tooltip-times').textContent = `${skill.cast || '-'} / ${skill.recast || '-'}`;
   tooltip.querySelector('.tooltip-range').textContent = skill.range || '-';
-  tooltip.querySelector('.tooltip-description').textContent = skill.isInterrupted ? '（玩家於讀條過程中移動或取消，未完成施放）' : (skill.effect || '');
-  
-  // Set badge color based on type
-  const badge = tooltip.querySelector('.tooltip-badge');
-  badge.style.backgroundColor = skill.isInterrupted ? '#ef4444' : (skill.classification === '能力' ? 'var(--color-ogcd)' : 'var(--color-gcd)');
+
+  const descEl = tooltip.querySelector('.tooltip-description');
+  if (skill.isInterrupted) {
+    descEl.style.color = '#f87171';
+    descEl.innerHTML = '<i class="fa-solid fa-circle-exclamation" style="margin-right:4px;"></i> 玩家於讀條過程中移動或取消，未完成施放';
+  } else if (skill.isDelayed) {
+    const lastTimeStr = typeof skill.lastCastTime === 'number' ? formatTime(skill.lastCastTime) : '-';
+    const isMinorDelay = skill.delaySeconds < 1.0;
+    const badgeColor = isMinorDelay ? '#f59e0b' : '#ef4444';
+    const badgeBg = isMinorDelay ? 'rgba(245,158,11,0.18)' : 'rgba(239,68,68,0.18)';
+    const badgeBorder = isMinorDelay ? 'rgba(245,158,11,0.4)' : 'rgba(239,68,68,0.4)';
+
+    descEl.style.color = '#fbbf24';
+    descEl.innerHTML = `<i class="fa-solid fa-triangle-exclamation" style="color:#f59e0b; margin-right:4px;"></i> 上次：<span style="color:#93c5fd; font-weight:600;">${lastTimeStr}</span>，延遲 <span style="color:${badgeColor}; font-weight:bold; font-size:13px; background:${badgeBg}; padding:1px 6px; border-radius:4px; border:1px solid ${badgeBorder}; margin:0 2px;">${skill.delaySeconds} 秒</span> 施放`;
+  } else {
+    descEl.style.color = '';
+    descEl.textContent = skill.effect || '';
+  }
 
   // Hover guide and current time display
   const hoverGuide = document.getElementById('hover-guide');
@@ -4078,7 +4186,7 @@ window.syncCustomDropdown = syncCustomDropdown;
 //   次版本 +1：新增功能（右側歸零）                1.0.1 → 1.1.0
 //   主版本 +1：破壞性大改版（右側歸零）            1.9.0 → 2.0.0
 // 註：header 的「(Patch 7.1)」是遊戲版本，與此無關，需在 index.html 手動維護。
-const APP_VERSION = '1.9.0';
+const APP_VERSION = '1.10.0';
 let updatePopupShown = false;
 
 // Global Toast Notification Helper
@@ -5183,6 +5291,7 @@ function recalculatePlayerTimeline(player) {
 }
 
 function renderCompareTimeline() {
+  comparePlayers.forEach(p => detectDelayedSkills(p.skills));
   const container = document.getElementById('compare-timeline-tracks-container');
   const playerListEl = document.getElementById('compare-players-list');
   const lengthDisplay = document.getElementById('compare-timeline-length-display');
@@ -5458,6 +5567,12 @@ function renderCompareTimeline() {
         badge.className = 'interrupted-badge';
         badge.textContent = '!';
         el.appendChild(badge);
+      } else if (skill.isDelayed) {
+        el.classList.add('delayed-skill');
+        const badge = document.createElement('span');
+        badge.className = 'delayed-badge';
+        badge.textContent = '!';
+        el.appendChild(badge);
       }
       
       const castTime = (skill.effectiveCast !== undefined) ? skill.effectiveCast : parseTimeToSeconds(skill.cast);
@@ -5488,7 +5603,7 @@ function renderCompareTimeline() {
       }
       
       const originalSkill = skillsDatabase[p.jobId]?.skills.find(s => s.id === skill.skillId) || skill;
-      const tooltipSkill = { ...originalSkill, startTime: skill.startTime, completionTime: skill.completionTime, cast: skill.cast, effectiveCast: skill.effectiveCast, onlyEndTime: skill.onlyEndTime, playerName: p.name, isInterrupted: !!skill.isInterrupted };
+      const tooltipSkill = { ...originalSkill, startTime: skill.startTime, completionTime: skill.completionTime, cast: skill.cast, recast: skill.recast, effectiveCast: skill.effectiveCast, onlyEndTime: skill.onlyEndTime, playerName: p.name, isInterrupted: !!skill.isInterrupted, isDelayed: !!skill.isDelayed, delaySeconds: skill.delaySeconds, lastCastTime: skill.lastCastTime };
       el.addEventListener('mousemove', (e) => showTooltip(e, tooltipSkill));
       el.addEventListener('mouseleave', hideTooltip);
       
@@ -5511,6 +5626,12 @@ function renderCompareTimeline() {
         badge.className = 'interrupted-badge';
         badge.textContent = '!';
         el.appendChild(badge);
+      } else if (skill.isDelayed) {
+        el.classList.add('delayed-skill');
+        const badge = document.createElement('span');
+        badge.className = 'delayed-badge';
+        badge.textContent = '!';
+        el.appendChild(badge);
       }
 
       el.innerHTML += `
@@ -5519,7 +5640,7 @@ function renderCompareTimeline() {
       `;
       
       const originalSkill = skillsDatabase[p.jobId]?.skills.find(s => s.id === skill.skillId) || skill;
-      const tooltipSkill = { ...originalSkill, startTime: skill.startTime, completionTime: skill.completionTime, cast: skill.cast, effectiveCast: skill.effectiveCast, onlyEndTime: skill.onlyEndTime, playerName: p.name, isInterrupted: !!skill.isInterrupted };
+      const tooltipSkill = { ...originalSkill, startTime: skill.startTime, completionTime: skill.completionTime, cast: skill.cast, recast: skill.recast, effectiveCast: skill.effectiveCast, onlyEndTime: skill.onlyEndTime, playerName: p.name, isInterrupted: !!skill.isInterrupted, isDelayed: !!skill.isDelayed, delaySeconds: skill.delaySeconds, lastCastTime: skill.lastCastTime };
       el.addEventListener('mousemove', (e) => showTooltip(e, tooltipSkill));
       el.addEventListener('mouseleave', hideTooltip);
       
